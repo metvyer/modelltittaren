@@ -66,7 +66,7 @@ const DB = (() => {
 
 // ---------- Tillstand ----------
 let visaOmr = lasa("mt:visaOmr") !== "nej";   // ramar runt hamtade omraden
-const P = { dtg: null, tid: [], omr: null, data: new Map(), index: [], upptagen: false, varden: null };
+const P = { senast: null, ny: false, finns: new Set(), dtg: null, tid: [], omr: null, data: new Map(), index: [], upptagen: false, varden: null };
 // index: [{ dtg, v, s, y0, y1, x0, x1, tider: [t...] }] – vilka omraden och timmar som finns sparade
 
 async function laddaIndex() {
@@ -113,17 +113,46 @@ function zoomaTillOmrade(o) {
 }
 
 // ---------- Korning ----------
+// Senaste kompletta ensemblekorning (letar bakat var 3:e timme, slutar vid den senast kanda).
 async function sokEnsKorning() {
   const d = new Date(); d.setUTCMinutes(0, 0, 0); d.setUTCHours(d.getUTCHours() - d.getUTCHours() % 3);
   for (let i = 0; i <= 6; i++) {
     const dtg = dtgText(new Date(d.getTime() - i * 3 * 3600e3));
-    if (P.dtg && dtgDatum(dtg) <= dtgDatum(P.dtg)) return P.dtg;
+    if (P.senast && dtgDatum(dtg) <= dtgDatum(P.senast)) return P.senast;
     status("Letar senaste ensemblekörning " + dtg + " …");
-    const r = await hamta(BAS + ENS_FIL(dtg) + ".ascii?time", false);
-    const m = r.st === 200 ? r.txt.match(/\ntime\[(\d+)\]/) : null;
-    if (m && +m[1] >= ENS_TIDER) { P.dtg = dtg; lagra("mt:ensSenast", dtg); return dtg; }
+    if (await ensFinns(dtg)) { P.ny = !!P.senast; P.senast = dtg; lagra("mt:ensSenast", dtg); return dtg; }
   }
-  return P.dtg;
+  return P.senast;
+}
+// Finns korningen komplett pa servern? Svaret sparas under besoket.
+async function ensFinns(dtg) {
+  if (P.finns.has(dtg)) return true;
+  const r = await hamta(BAS + ENS_FIL(dtg) + ".ascii?time", false);
+  const m = r.st === 200 ? r.txt.match(/\ntime\[(\d+)\]/) : null;
+  if (m && +m[1] >= ENS_TIDER) { P.finns.add(dtg); return true; }
+  return false;
+}
+// Byter aktiv korning och behaller samma KLOCKSLAG for Fran/Till (inte samma prognostimme).
+function bytKorning(nyDtg) {
+  if (!nyDtg || nyDtg === P.dtg) { P.dtg = nyDtg || P.dtg; fyllTider(); return; }
+  const gam = P.dtg, flytt = gam ? (dtgDatum(gam) - dtgDatum(nyDtg)) / 3600e3 : 0, kl = v => Math.max(0, Math.min(ENS_TIDER - 1, v + flytt));
+  const a = +$("pFran").value + 0, b = +$("pTill").value + 0;
+  P.dtg = nyDtg; fyllTider(); $("pFran").value = kl(a); $("pTill").value = kl(b);
+}
+// Korningslistan: "senaste" plus korningarna det senaste dygnet (var 3:e timme).
+function korningsListaP() {
+  const sel = $("pKorningVal"), val = sel.value || lasa("mt:pKorningVal") || "senaste";
+  const d = new Date(); d.setUTCMinutes(0, 0, 0); d.setUTCHours(d.getUTCHours() - d.getUTCHours() % 3);
+  sel.innerHTML = ""; sel.add(new Option("senaste", "senaste"));
+  for (let i = 0; i <= 8; i++) { const s = dtgText(new Date(d.getTime() - i * 3 * 3600e3)); sel.add(new Option(s, s)); }
+  sel.value = val; if (!sel.value) sel.value = "senaste";
+}
+// Vilken korning ska anvandas nu? (hamtar listan over korningar fran servern vid behov)
+async function aktivKorning() {
+  const val = $("pKorningVal").value;
+  if (val === "senaste") { const s = await sokEnsKorning(); if (s) bytKorning(s); return s; }
+  if (!await ensFinns(val)) throw new Error("Körningen " + val + " finns inte (längre eller ännu) på servern.");
+  bytKorning(val); return val;
 }
 function tidText(t) {
   if (!P.dtg) return "+" + t;
@@ -135,7 +164,9 @@ function fyllTider() {
   f.innerHTML = ""; t.innerHTML = "";
   for (let i = 0; i < ENS_TIDER; i++) { f.add(new Option(tidText(i), i)); t.add(new Option(tidText(i), i)); }
   f.value = fv || "0"; t.value = tv || "12";
-  $("pKorning").textContent = P.dtg ? P.dtg + " (30 medlemmar, +0 till +" + (ENS_TIDER - 1) + " h)" : "–";
+  const k = $("pKorning"); k.textContent = P.dtg ? P.dtg + " (30 medlemmar, +0 till +" + (ENS_TIDER - 1) + " h) " : "–";
+  if (P.dtg && $("pKorningVal").value !== "senaste") k.insertAdjacentHTML("beforeend", '<span class="vald">– vald körning</span>');
+  else if (P.dtg && P.ny) k.insertAdjacentHTML("beforeend", '<span class="ny">– NY KÖRNING</span>');
 }
 
 // ---------- Hamta ----------
@@ -160,8 +191,8 @@ async function probHamta(auto) {
   P.fragar = false; P.upptagen = true; stoppad = false; $("pHamta").disabled = true; $("pStopp").disabled = false;
   const t0 = performance.now(); let kb = 0; const tider = [];
   try {
-    if (!await sokEnsKorning()) throw new Error("Hittade ingen komplett ensemblekörning.");
-    fyllTider(); const o = { ...o0, dtg: P.dtg }; ritaOmrade(); if (!auto) zoomaTillOmrade(o);
+    if (!await aktivKorning()) throw new Error("Hittade ingen komplett ensemblekörning.");
+    const o = { ...o0, dtg: P.dtg }; ritaOmrade(); if (!auto) zoomaTillOmrade(o);
     const { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
     const antV = sakn.length * ENS_MEDL * o.ny * o.nx, mb = antV * ENS_BYTE[ensFormat] / 1048576;
     if (antV > ENS_MAX_VARDEN) { status("För stort: " + Math.round(antV / 1e6) + " miljoner värden får inte plats i webbläsaren. Välj glesare upplösning, mindre område, kortare period eller var 3:e timme.", "fel"); P.fragar = true; return; }
@@ -222,6 +253,7 @@ async function probHamta(auto) {
     status(tider.length ? "Klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + (kb / 1024).toFixed(1) + " MB " + (ensFormat === "bin" ? "binärt" : "text") + "." : "Klart: allt fanns redan sparat (" + tot + " s).");
   } catch (err) {
     status(stoppad || err.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas." : err.message, stoppad ? "" : "fel");
+    if (!stoppad) P.fragar = true;   // felmeddelandet ska synas tills nagot andras
   } finally {
     P.upptagen = false; P.autoVantar = false; $("pHamta").disabled = false; $("pStopp").disabled = true; $("pForlopp").hidden = true; ritaOmrade(); await probVisa();
     if (P.autoIgen) { P.autoIgen = false; autoHamta(); }
@@ -396,7 +428,17 @@ function bytLage(nytt) {
   sel.value = lasa("mt:pParam") || "by"; if (!sel.value) sel.value = "by";
   sattParam(); const st = lasa("mt:pTrosk:" + sel.value); if (st) { $("pTrosk").value = st; sattParam(true); }
   $("pStorlek").value = lasa("mt:pStorlek") || "150"; $("pUppl").value = lasa("mt:pUppl") || "2";
-  P.dtg = lasa("mt:ensSenast"); if (P.dtg && Date.now() - dtgDatum(P.dtg).getTime() > 864e5) P.dtg = null;
+  P.senast = lasa("mt:ensSenast"); if (P.senast && Date.now() - dtgDatum(P.senast).getTime() > 864e5) P.senast = null;
+  korningsListaP();
+  const kv = $("pKorningVal").value; P.dtg = kv === "senaste" ? P.senast : kv;
+  $("pKorningVal").addEventListener("change", async () => {
+    lagra("mt:pKorningVal", $("pKorningVal").value); P.fragar = false;
+    const kv = $("pKorningVal").value;
+    if (kv !== "senaste") bytKorning(kv);
+    else if (P.senast) bytKorning(P.senast);
+    ritaOmrade(); await probVisa();
+    if (!P.varden && !P.upptagen) status("Tryck Hämta fält för att hämta i körningen " + (P.dtg || kv) + ".", "");
+  });
   fyllTider();
   sel.addEventListener("change", () => { P.fragar = false; lagra("mt:pParam", sel.value); const st = lasa("mt:pTrosk:" + sel.value); $("pTrosk").value = st || PPARAM[sel.value].std; sattParam(true); ritaOmrade(); probVisa(); });
   $("pTrosk").addEventListener("input", () => { lagra("mt:pTrosk:" + sel.value, $("pTrosk").value); sattParam(true); probVisa(); });
