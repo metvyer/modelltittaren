@@ -61,6 +61,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #karta .sjo { fill: var(--hav); stroke: var(--kust); }
 #karta .grans { fill: none; stroke: var(--grans); }
 #karta .grad { fill: none; stroke: var(--gradnat); }
+#kProb { opacity: .78; shape-rendering: crispEdges; }
 #karta .mk { cursor: pointer; }
 #karta.fri .mk { cursor: crosshair; }   /* fri punkt: markeringar ar inte klickbara */
 #karta .mk text { fill: var(--mkfg); paint-order: stroke; stroke: var(--land); font-family: var(--font); font-weight: 600; }
@@ -76,6 +77,22 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .forlopp { margin: 0 0 10px; display: grid; gap: 5px; }
 .forlopp[hidden] { display: none; }
 .forklaring[hidden] { display: none; }
+.flikar { display: flex; gap: 4px; margin: 0 0 10px; border-bottom: 1px solid var(--line); }
+.flikar button { background: transparent; color: var(--dim); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 14px; font-weight: 600; }
+.flikar button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
+body.p .baraTH { display: none; }
+body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
+@media (max-width: 860px) { body.p .arbete { grid-template-columns: minmax(0, 1fr); } }
+#vyP[hidden], #vyTH[hidden] { display: none; }
+.pkontroller { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.pkontroller .rad { display: flex; gap: 6px; align-items: center; }
+.enhet { color: var(--dim); font-size: 13px; }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.chips button { padding: 3px 9px; font-size: 13px; background: transparent; color: var(--acc); }
+.chips button[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
+.psam { margin: 4px 2px 8px; font-weight: 600; }
+.psam:empty { display: none; }
+.pruta { display: inline-block; width: 16px; height: 11px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
 .lagerad { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; flex-wrap: wrap; }
 .vaxel { display: inline-flex; border: 1px solid var(--acc); border-radius: 6px; overflow: hidden; }
 .vaxel button { border: 0; border-radius: 0; background: transparent; color: var(--acc); padding: 4px 16px; }
@@ -99,17 +116,20 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 </style>
 </head>
 <body>
-<h1>Modelltittaren <small>Tid-höjd · AROME 2,5 km (MEPS medlem 0)</small></h1>
+<h1>Modelltittaren <small id="underrubrik">Tid-höjd · AROME 2,5 km (MEPS medlem 0)</small></h1>
+<div class="flikar" role="tablist" aria-label="Vy">
+  <button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button>
+</div>
 
 <div class="kontroller">
   <div class="falt"><label for="punkt">Punkt</label><select id="punkt"></select></div>
   <div class="falt"><label for="lat">Lat</label><input id="lat" class="koord" inputmode="decimal"></div>
   <div class="falt"><label for="lon">Lon</label><input id="lon" class="koord" inputmode="decimal"></div>
   <div class="falt"><label for="klistra">Klistra in "lat, lon"</label><input id="klistra" placeholder="59.65, 17.92" style="width:140px"></div>
-  <div class="falt"><label for="topp">Topp</label><select id="topp"><option value="450">FL450</option><option value="250">FL250</option><option value="150">FL150</option><option value="90">FL90</option><option value="30">FL30</option></select></div>
-  <div class="falt"><label for="korning">Körning</label><select id="korning"></select></div>
-  <button id="hamta">Hämta</button>
-  <button id="stopp" class="sek" disabled>Stopp</button>
+  <div class="falt baraTH"><label for="topp">Topp</label><select id="topp"><option value="450">FL450</option><option value="250">FL250</option><option value="150">FL150</option><option value="90">FL90</option><option value="30">FL30</option></select></div>
+  <div class="falt baraTH"><label for="korning">Körning</label><select id="korning"></select></div>
+  <button id="hamta" class="baraTH">Hämta</button>
+  <button id="stopp" class="sek baraTH" disabled>Stopp</button>
 </div>
 
 <div class="arbete">
@@ -123,7 +143,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
   </div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kMark"></g>
+    <g id="kGeo"></g><g id="kProb"></g><g id="kOmr"></g><g id="kMark"></g>
   </svg>
   <div class="kartforklaring">
     <span><i class="mk tom"></i>ej hämtad</span><span><i class="mk halv"></i>påbörjad</span><span><i class="mk full"></i>hämtad</span><span><i class="mk vald"></i>vald</span>
@@ -132,6 +152,31 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 </section>
 
 <section class="hoger">
+<div id="vyP" hidden>
+  <div class="pkontroller">
+    <div class="falt"><label for="pParam">Parameter</label><select id="pParam"></select></div>
+    <div class="falt"><label for="pTrosk" id="pTroskEtikett">Tröskel</label><div class="rad"><input id="pTrosk" class="koord" inputmode="decimal"><span id="pEnhet" class="enhet"></span></div></div>
+    <div class="falt"><label>Snabbval</label><div class="chips" id="pChips"></div></div>
+  </div>
+  <div class="pkontroller">
+    <div class="falt"><label for="pFran">Från</label><select id="pFran"></select></div>
+    <div class="falt"><label for="pTill">Till</label><select id="pTill"></select></div>
+    <div class="falt"><label>Flytta perioden</label><div class="rad"><button class="sek liten" id="pBak" title="Föregående period">◀</button><button class="sek liten" id="pFram" title="Nästa period">▶</button></div></div>
+    <div class="falt"><label for="pStorlek">Område</label><select id="pStorlek"><option value="75">75 km</option><option value="150" selected>150 km</option><option value="300">300 km</option><option value="600">600 km</option></select></div>
+    <div class="falt"><label for="pUppl">Upplösning</label><select id="pUppl"><option value="1">2,5 km</option><option value="2" selected>5 km</option><option value="4">10 km</option><option value="8">20 km</option></select></div>
+    <button id="pHamta">Hämta fält</button><button id="pStopp" class="sek" disabled>Stopp</button>
+  </div>
+  <dl class="info">
+    <dt>Körning</dt><dd id="pKorning">–</dd>
+    <dt>Område</dt><dd id="pOmrade">–</dd>
+    <dt>Status</dt><dd id="pStatus">Klicka på kartan för områdets mitt, välj parameter och tryck Hämta fält.</dd>
+  </dl>
+  <div class="forlopp" id="pForlopp" hidden><div class="stapel" id="pStapel"></div><div class="forlopptext" id="pForloppText" aria-live="polite"></div></div>
+  <p class="psam" id="pSam"></p>
+  <div class="forklaring" id="pForkl"></div>
+  <p class="karttips">Varje färgad ruta är en hämtad punkt. Sannolikheten = andel av de 30 medlemmarna som når tröskeln någon gång under perioden (nederbörd: summan över perioden). Håll muspekaren över kartan för medlemmarnas värden. Data äldre än ett dygn rensas.</p>
+</div>
+<div id="vyTH">
 <dl class="info">
   <dt>Körning</dt><dd id="iKorning">–</dd>
   <dt>Modellruta</dt><dd id="iRuta">–</dd>
@@ -166,6 +211,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
   <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt i synoptisk kod VV (80 = 30 km)</span>
 </div>
+</div>
 </section>
 </div>
 <div class="tips" id="tips" hidden></div>
@@ -193,9 +239,9 @@ const PUNKTER = [
   ["Landvetter", "ESGG", 57.6628, 12.2798], ["Sturup", "ESMS", 55.5363, 13.3762], ["Visby", "ESSV", 57.6628, 18.3462],
   ["Kallax", "ESPA", 65.5438, 22.122], ["Vidsel", "ESPE", 65.8753, 20.15]];
 const G0 = 9.80665, RD = 287.05, FOT = 3.28084, KT = 1.943844;
-// Vind (hamtas forst nar man valjer Vind): var 3:e timme. Modellnivaer (varannan) upp till ca 1600 m,
-// darover tryckytorna (800, 700, 500 ... hPa) som racker for vindflaggor hogre upp.
-const VIND_DT = 3, VIND_DK = 2, VIND_ZML = 1600, VIND_AVST = 20, VIND_UNDER = 18;   // VIND_UNDER: extra plats under diagrammet sa att nedersta flaggan syns hel
+// Vind (hamtas forst nar man valjer Vind): var 3:e timme. Modellnivaer (varannan) upp till ca 4600 m (FL150),
+// darover tryckytorna (500, 400 ... 150 hPa) som racker for vindflaggor hogre upp.
+const VIND_DT = 3, VIND_DK = 2, VIND_ZML = 4600, VIND_AVST = 20, VIND_UNDER = 18;   // VIND_UNDER: extra plats under diagrammet sa att nedersta flaggan syns hel
 // Fargskala for vindflaggor (kt) – fran lugnt (gratt) till hard vind (lila)
 const VINDFARG = [[0, "#7f8b97"], [10, "#2f7fc1"], [20, "#1f9e6e"], [30, "#c9a000"], [45, "#e0601b"], [60, "#c4122f"], [80, "#8a2bb5"]];
 
@@ -214,7 +260,7 @@ function lagra(k, v) { try { localStorage.setItem(k, v); return true; } catch (e
 function lasa(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function rensaGammalCache() {
   try {
-    const gr = Date.now() - 3 * 864e5;
+    const gr = Date.now() - 864e5;   // ett dygn racker
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
       const m = k && k.match(/^mt:(\d{8}T\d{2}Z):/);
@@ -222,7 +268,8 @@ function rensaGammalCache() {
     }
   } catch (e) {}
 }
-function status(t, klass) { const e = $("iStatus"); e.textContent = t; e.className = klass || ""; }
+let lage = "th";   // "th" = tid-hojd, "p" = sannolikhet
+function status(t, klass) { const e = $(lage === "p" ? "pStatus" : "iStatus"); e.textContent = t; e.className = klass || ""; }
 
 // Hamtar en URL. Ett anrop i taget, tidsgrans, omforsok vid 429/5xx.
 async function hamta(url, medRetry = true) {
@@ -950,6 +997,7 @@ function visaKTips(text, x, y) {
 // Namn och status for en markering visas bara vid hovring, och inte i fri-punkt-lage (Skift/knapp)
 function kartTips(e) {
   const mk = e.target && e.target.closest ? e.target.closest(".mk") : null;
+  if (!mk && lage === "p" && e.pointerType !== "touch") { probTips(e); return; }
   if (!mk || friPunkt || e.shiftKey || e.pointerType === "touch") { $("kTips").hidden = true; return; }
   visaKTips(mk.dataset.tips, e.clientX + 14, e.clientY + 14);
 }
@@ -963,7 +1011,8 @@ function kartKlick(e, mal) {
     const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y);
     $("lat").value = ll.lat.toFixed(4); $("lon").value = ll.lon.toFixed(4); sel.value = "egen";
   }
-  lagra("mt:punkt", sel.value); valjOchHamta();
+  lagra("mt:punkt", sel.value);
+  if (lage === "p") { ritaMarkorer(); probOmradeAndrat(); } else valjOchHamta();
 }
 
 // ===================================================================
@@ -1008,5 +1057,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
+<script src="sannolikhet.js"></script>
 </body>
 </html>
