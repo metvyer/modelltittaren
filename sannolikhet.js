@@ -381,6 +381,7 @@ function bytLage(nytt) {
   sel.addEventListener("change", () => { P.fragar = false; lagra("mt:pParam", sel.value); const st = lasa("mt:pTrosk:" + sel.value); $("pTrosk").value = st || PPARAM[sel.value].std; sattParam(true); ritaOmrade(); probVisa(); });
   $("pTrosk").addEventListener("input", () => { lagra("mt:pTrosk:" + sel.value, $("pTrosk").value); sattParam(true); probVisa(); });
   ["pFran", "pTill"].forEach(id => $(id).addEventListener("change", () => probVisa()));
+  $("pEnTimme").addEventListener("click", () => { $("pTill").value = $("pFran").value; probVisa(); });   // en enda timme
   $("pSteg").value = lasa("mt:pSteg") || "per"; $("pDt").value = lasa("mt:pDt") || "1";
   $("pSteg").addEventListener("change", () => lagra("mt:pSteg", $("pSteg").value));
   $("pDt").addEventListener("change", () => { lagra("mt:pDt", $("pDt").value); probVisa(); });
