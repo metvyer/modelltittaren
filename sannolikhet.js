@@ -17,15 +17,27 @@ const PPARAM = {
   // Lagring: heltal (kod) * steg i visningsenheten. 8 bitar for byvind (1 kt, 0-254), annars 16 bitar.
   by:   { namn: "Byvind", var: "wind_speed_of_gust", enhet: "kt", konv: v => v * KT, villkor: "≥", agg: "max", std: 32, snabb: [25, 32, 35, 45, 50], bitar: 8, steg: 1 },
   nb:   { namn: "Nederbörd, summa i perioden", var: "precipitation_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 5, snabb: [1, 5, 10, 20, 40], bitar: 16, steg: 0.1 },
-  sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [5000, 1500, 800, 300], bitar: 16, steg: 10 },
-  bas:  { namn: "Molnbas", var: "cloud_base_altitude", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 1000, snabb: [1500, 1000, 500, 200], bitar: 16, steg: 10 }
+  sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [5000, 1500, 800, 300], bitar: 8,
+          tabell: skala([[0, 200, 10], [225, 500, 25], [550, 1000, 50], [1100, 5000, 100], [5200, 10000, 200], [11000, 75000, 1000]]) },
+  bas:  { namn: "Molnbas", var: "cloud_base_altitude", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 1000, snabb: [1500, 1000, 500, 200], bitar: 8,
+          tabell: skala([[0, 200, 10], [250, 1000, 50], [1100, 5000, 100], [5500, 20000, 500], [25000, 25000, 1]]) }   // 25000 = "over 20 000 ft"
 };
+// Olinjar skala for 1 byte (Jakobs forslag 16/11): fint steg dar trosklarna finns, grovt dar det inte spelar roll.
+// [fran, till, steg] -> lista med alla tillatna varden. Koden ar platsen i listan.
+function skala(delar) { const ut = []; for (const [a, b, s] of delar) for (let v = a; v <= b + 1e-9; v += s) ut.push(Math.round(v)); return ut; }
 // Kompakt lagring: varde i visningsenhet -> heltal. Hogsta koden betyder "saknas".
 const SAKN = { 8: 255, 16: 65535 };
 const nyKod = (pa, n) => pa.bitar === 8 ? new Uint8Array(n).fill(255) : new Uint16Array(n).fill(65535);
 function koda(pa, ut, i, raa) {
   if (!isFinite(raa)) return;   // fyllnadsvarde -> saknas (koden ar redan "saknas")
-  const k = Math.round(pa.konv(raa) / pa.steg); ut[i] = Math.max(0, Math.min(SAKN[pa.bitar] - 1, k));
+  const v = pa.konv(raa);
+  if (pa.tabell) {   // narmast LAGRE varde i tabellen (binarsokning) – da blir "<" troskel exakt for trosklar som ligger i tabellen
+    const T = pa.tabell; let lo = 0, hi = T.length - 1;
+    if (v >= T[hi]) { ut[i] = hi; return; } if (v <= T[0]) { ut[i] = 0; return; }
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (T[m] <= v) lo = m; else hi = m; }
+    ut[i] = lo; return;
+  }
+  const k = Math.round(v / pa.steg); ut[i] = Math.max(0, Math.min(SAKN[pa.bitar] - 1, k));
 }
 // Sannolikhetsklasser (%) och farger
 const PKLASS = [[5, "#fde68a"], [10, "#fbbf24"], [30, "#f97316"], [50, "#dc2626"], [70, "#9f1239"], [90, "#581c87"]];
@@ -35,8 +47,8 @@ const DB = (() => {
   const minne = new Map(); let dbp = null;
   const oppna = () => dbp || (dbp = new Promise((ok, fel) => {
     try {
-      try { indexedDB.deleteDatabase("modelltittaren"); } catch (e) {}   // gammal databas med flyttal (fore 16/11 kvall)
-      const r = indexedDB.open("modelltittaren-kod", 1);
+      try { for (const g of ["modelltittaren", "modelltittaren-kod"]) indexedDB.deleteDatabase(g); } catch (e) {}   // aldre lagringsformat
+      const r = indexedDB.open("modelltittaren-kod2", 1);
       r.onupgradeneeded = () => r.result.createObjectStore("ens");
       r.onsuccess = () => ok(r.result); r.onerror = () => fel(r.error);
     } catch (e) { fel(e); }
@@ -272,7 +284,8 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk, lista) {
     for (const t of lista) {
       const d = await timData(o, t); if (!d) return null;
       const ms = SAKN[pa.bitar];
-      for (let i = 0; i < agg.length; i++) { const k = d[i]; if (k === ms) continue; const w = k * pa.steg;
+      const T = pa.tabell;
+      for (let i = 0; i < agg.length; i++) { const k = d[i]; if (k === ms) continue; const w = T ? T[k] : k * pa.steg;
         if (pa.agg === "max" ? w > agg[i] : w < agg[i]) agg[i] = w; }
     }
   }
