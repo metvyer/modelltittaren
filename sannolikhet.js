@@ -404,6 +404,19 @@ function autoHamta() {
   }, 500);
 }
 
+// Den troskel som ett inskrivet varde i praktiken motsvarar, givet hur vardena lagras:
+// "≥" med jamna steg: uppat till narmaste steg (31,6 kt -> 32 kt).
+// "<" med tabell (avrundat nedat vid lagring): uppat till narmaste tabellvarde (1 450 m -> 1 500 m).
+function effektivTrosk(pa, t) {
+  if (pa.tabell) { const T = pa.tabell; for (const v of T) if (v >= t - 1e-9) return v; return T[T.length - 1]; }
+  return Math.round(Math.ceil(t / pa.steg - 1e-9) * pa.steg * 1000) / 1000;
+}
+function stegText(pa, v) {
+  if (!pa.tabell) return pa.steg.toLocaleString("sv-SE") + " " + pa.enhet;
+  const T = pa.tabell, i = T.indexOf(v), d = i > 0 ? T[i] - T[i - 1] : T[1] - T[0];
+  return d.toLocaleString("sv-SE") + " " + pa.enhet + " här";
+}
+
 // ---------- Kontroller ----------
 function sattParam(behallTrosk) {
   const pa = PPARAM[$("pParam").value];
@@ -442,6 +455,13 @@ function bytLage(nytt) {
   fyllTider();
   sel.addEventListener("change", () => { P.fragar = false; lagra("mt:pParam", sel.value); const st = lasa("mt:pTrosk:" + sel.value); $("pTrosk").value = st || PPARAM[sel.value].std; sattParam(true); ritaOmrade(); probVisa(); });
   $("pTrosk").addEventListener("input", () => { lagra("mt:pTrosk:" + sel.value, $("pTrosk").value); sattParam(true); probVisa(); });
+  // Nar man ar klar (Enter eller lamnar rutan) andras troskeln till det varde den i praktiken blir.
+  $("pTrosk").addEventListener("change", () => {
+    const pa = PPARAM[sel.value], t = parseFloat($("pTrosk").value.replace(",", ".")); if (!isFinite(t)) return;
+    const e = effektivTrosk(pa, t);
+    if (Math.abs(e - t) > 1e-9) { $("pTrosk").value = e; lagra("mt:pTrosk:" + sel.value, String(e)); sattParam(true); probVisa();
+      status("Tröskeln blev " + e.toLocaleString("sv-SE") + " " + pa.enhet + " – värdena sparas i steg om " + stegText(pa, e) + ", så " + t.toLocaleString("sv-SE") + " ger samma resultat som " + e.toLocaleString("sv-SE") + ".", ""); }
+  });
   ["pFran", "pTill"].forEach(id => $(id).addEventListener("change", () => probVisa()));
   $("pEnTimme").addEventListener("click", () => { $("pTill").value = $("pFran").value; probVisa(); autoHamta(); });   // en enda timme
   $("pSteg").value = lasa("mt:pSteg") || "per"; $("pDt").value = lasa("mt:pDt") || "1";
