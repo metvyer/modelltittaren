@@ -462,7 +462,9 @@ function bytLage(nytt) {
     if (Math.abs(e - t) > 1e-9) { $("pTrosk").value = e; lagra("mt:pTrosk:" + sel.value, String(e)); sattParam(true); probVisa();
       status("Tröskeln blev " + e.toLocaleString("sv-SE") + " " + pa.enhet + " – värdena sparas i steg om " + stegText(pa, e) + ", så " + t.toLocaleString("sv-SE") + " ger samma resultat som " + e.toLocaleString("sv-SE") + ".", ""); }
   });
-  ["pFran", "pTill"].forEach(id => $(id).addEventListener("change", () => probVisa()));
+  // Fran efter Till -> Till flyttas till samma timme. Till fore Fran -> Fran flyttas till samma timme.
+  $("pFran").addEventListener("change", () => { if (+$("pFran").value > +$("pTill").value) $("pTill").value = $("pFran").value; probVisa(); });
+  $("pTill").addEventListener("change", () => { if (+$("pTill").value < +$("pFran").value) $("pFran").value = $("pTill").value; probVisa(); });
   $("pEnTimme").addEventListener("click", () => { $("pTill").value = $("pFran").value; probVisa(); autoHamta(); });   // en enda timme
   $("pSteg").value = lasa("mt:pSteg") || "per"; $("pDt").value = lasa("mt:pDt") || "1";
   $("pSteg").addEventListener("change", () => lagra("mt:pSteg", $("pSteg").value));
