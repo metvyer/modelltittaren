@@ -216,7 +216,7 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
 </div>
 <div class="tips" id="tips" hidden></div>
 <div class="tips ktips" id="kTips" hidden></div>
-<p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå. Kartunderlag: Natural Earth.</p>
+<p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå. Kartunderlag: Natural Earth. Flygplatser: OurAirports.</p>
 
 <script>
 "use strict";
@@ -874,6 +874,9 @@ function valjOchHamta() {
 //  KARTA (MEPS-gittret i Lambert-projektion, hela modellomradet)
 // ===================================================================
 const KX = LCC.nx, KY = LCC.ny, MIN_BREDD = 70;
+// Ovriga flygplatser [ICAO, namn, lat, lon, storlek 0-2] fran OurAirports (public domain).
+// Sma falt (storlek 0) visas forst nar kartan visar mindre an SMA_FALT_BREDD rutor i bredd.
+let FLYG = []; const SMA_FALT_BREDD = 380;
 let vb = { x: 0, y: 0, w: KX, h: KY };
 const tillKarta = (lat, lon) => { const f = rutaF(lat, lon); return { x: f.fx, y: KY - 1 - f.fy }; };
 function egna() { try { return JSON.parse(lasa("mt:egna") || "[]"); } catch (e) { return []; } }
@@ -907,6 +910,19 @@ function ritaMarkorer() {
   const dtg = M ? M.dtg : lasa("mt:senast"), STAT = ["ej hämtad", "påbörjad", "hämtad"];
   const lista = PUNKTER.map((p, i) => ({ id: "p" + i, namn: p[0] + " " + p[1], kort: p[1], lat: p[2], lon: p[3], fp: true }));
   egna().forEach((e, i) => lista.push({ id: "e" + i, namn: "Egen punkt " + e[0].toFixed(3) + ", " + e[1].toFixed(3), lat: e[0], lon: e[1] }));
+  // Ovriga flygplatser som sma prickar (OurAirports). Sma faltet visas forst nar man zoomat in.
+  const egnaICAO = new Set(PUNKTER.map(p => p[1])), smaOK = vb.w < SMA_FALT_BREDD;
+  FLYG.forEach((f, i) => {
+    if (egnaICAO.has(f[0]) || (f[4] === 0 && !smaOK)) return;
+    const k = tillKarta(f[2], f[3]); if (k.x < vb.x || k.x > vb.x + vb.w || k.y < vb.y || k.y > vb.y + vb.h) return;
+    const r = ruta(f[2], f[3]); if (!r) return;
+    const st = dtg ? hamtStatus(dtg, r.iy, r.ix) : 0;
+    const m = el("g", { class: "mk", "data-id": "f" + i, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
+    m.dataset.tips = f[1] + " " + f[0] + "\n" + STAT[st] + (dtg ? " (" + dtg + ")" : "");
+    m.appendChild(el("circle", { r: 5, style: "fill:transparent" }));
+    m.appendChild(el("circle", { r: f[4] === 2 ? 2.4 : f[4] === 1 ? 2 : 1.6, style: "fill:" + (st ? "var(--mkhamt)" : "var(--mkfg)") + ";opacity:" + (f[4] === 0 && !st ? .55 : .8) }));
+    g.appendChild(m);
+  });
   for (const p of lista) {
     const r = ruta(p.lat, p.lon); if (!r) continue;
     const st = dtg ? hamtStatus(dtg, r.iy, r.ix) : 0; if (!p.fp && !st) continue;
@@ -929,6 +945,7 @@ function ritaMarkorer() {
 }
 function startaKarta() {
   const svg = $("karta");
+  fetch("flygplatser.json").then(r => r.json()).then(f => { FLYG = f; ritaMarkorer(); }).catch(() => {});
   fetch("karta.json").then(r => r.json()).then(k => {
     const geo = $("kGeo"), lager = [["grad", 0.6, "4 4"], ["land", 0.7], ["sjo", 0.5], ["grans", 1, "5 2"]];
     for (const [n, w, d] of lager) {
@@ -1006,6 +1023,7 @@ function kartKlick(e, mal) {
   if (mk) {
     const id = mk.dataset.id;
     if (id[0] === "p") { sel.value = id.slice(1); sattPunkt(); }
+    else if (id[0] === "f") { const f = FLYG[+id.slice(1)]; if (!f) return; $("lat").value = f[2]; $("lon").value = f[3]; sel.value = "egen"; }
     else { const p = egna()[+id.slice(1)]; if (!p) return; $("lat").value = p[0]; $("lon").value = p[1]; sel.value = "egen"; }
   } else {
     const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y);
