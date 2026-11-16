@@ -62,6 +62,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #karta .grans { fill: none; stroke: var(--grans); }
 #karta .grad { fill: none; stroke: var(--gradnat); }
 #karta .mk { cursor: pointer; }
+#karta.fri .mk { cursor: crosshair; }   /* fri punkt: markeringar ar inte klickbara */
 #karta .mk text { fill: var(--mkfg); paint-order: stroke; stroke: var(--land); font-family: var(--font); font-weight: 600; }
 .kartforklaring { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--dim); }
 .kartforklaring .mk { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--mkfg); background: var(--mkbg); vertical-align: -1px; margin-right: 4px; }
@@ -739,7 +740,12 @@ function startaKarta() {
   svg.addEventListener("pointerleave", () => { if (!pek.size) $("kartPos").textContent = ""; });
   $("zIn").addEventListener("click", () => zooma(0.67)); $("zUt").addEventListener("click", () => zooma(1.5));
   $("zHem").addEventListener("click", () => satVb(0, 0, KX));
-  $("fri").addEventListener("click", e => { friPunkt = !friPunkt; e.currentTarget.setAttribute("aria-pressed", String(friPunkt)); });
+  let skift = false;
+  const friKlass = () => svg.classList.toggle("fri", friPunkt || skift);
+  $("fri").addEventListener("click", e => { friPunkt = !friPunkt; e.currentTarget.setAttribute("aria-pressed", String(friPunkt)); friKlass(); });
+  addEventListener("keydown", e => { if (e.key === "Shift") { skift = true; friKlass(); } });
+  addEventListener("keyup", e => { if (e.key === "Shift") { skift = false; friKlass(); } });
+  addEventListener("blur", () => { skift = false; friKlass(); });
   if (window.ResizeObserver) new ResizeObserver(() => ritaMarkorer()).observe(svg);
   satVb(250, 240, 610);   // start: hela Sverige
 }
