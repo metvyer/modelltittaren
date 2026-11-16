@@ -139,6 +139,7 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
     <button class="sek liten" id="zUt" title="Zooma ut">−</button>
     <button class="sek liten" id="zHem" title="Visa hela MEPS-området">Hela</button>
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
+    <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
     <span class="kartpos" id="kartPos"></span>
   </div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
@@ -877,6 +878,7 @@ const KX = LCC.nx, KY = LCC.ny, MIN_BREDD = 70;
 // Ovriga flygplatser [ICAO, namn, lat, lon, storlek 0-2] fran OurAirports (public domain).
 // Sma falt (storlek 0) visas forst nar kartan visar mindre an SMA_FALT_BREDD rutor i bredd.
 let FLYG = []; const SMA_FALT_BREDD = 380;
+let visaFlyg = lasa("mt:visaFlyg") !== "nej";
 let vb = { x: 0, y: 0, w: KX, h: KY };
 const tillKarta = (lat, lon) => { const f = rutaF(lat, lon); return { x: f.fx, y: KY - 1 - f.fy }; };
 function egna() { try { return JSON.parse(lasa("mt:egna") || "[]"); } catch (e) { return []; } }
@@ -912,7 +914,7 @@ function ritaMarkorer() {
   egna().forEach((e, i) => lista.push({ id: "e" + i, namn: "Egen punkt " + e[0].toFixed(3) + ", " + e[1].toFixed(3), lat: e[0], lon: e[1] }));
   // Ovriga flygplatser som sma prickar (OurAirports). Sma faltet visas forst nar man zoomat in.
   const egnaICAO = new Set(PUNKTER.map(p => p[1])), smaOK = vb.w < SMA_FALT_BREDD;
-  FLYG.forEach((f, i) => {
+  if (visaFlyg) FLYG.forEach((f, i) => {
     if (egnaICAO.has(f[0]) || (f[4] === 0 && !smaOK)) return;
     const k = tillKarta(f[2], f[3]); if (k.x < vb.x || k.x > vb.x + vb.w || k.y < vb.y || k.y > vb.y + vb.h) return;
     const r = ruta(f[2], f[3]); if (!r) return;
@@ -988,6 +990,8 @@ function startaKarta() {
   svg.addEventListener("pointerleave", () => { if (!pek.size) $("kartPos").textContent = ""; $("kTips").hidden = true; });
   $("zIn").addEventListener("click", () => zooma(0.67)); $("zUt").addEventListener("click", () => zooma(1.5));
   $("zHem").addEventListener("click", () => satVb(0, 0, KX));
+  $("visaFlyg").setAttribute("aria-pressed", String(visaFlyg));
+  $("visaFlyg").addEventListener("click", e => { visaFlyg = !visaFlyg; lagra("mt:visaFlyg", visaFlyg ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaFlyg)); ritaMarkorer(); });
   let skift = false;
   const friKlass = () => { svg.classList.toggle("fri", friPunkt || skift); if (friPunkt || skift) $("kTips").hidden = true; };
   // forklaring nar man hovrar over knappen Fri punkt
