@@ -87,6 +87,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .tips { position: fixed; z-index: 10; pointer-events: none; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.18); max-width: 300px; font-variant-numeric: tabular-nums; }
 .tips[hidden] { display: none; }
 .tips .rubrik { font-weight: 650; margin-bottom: 2px; }
+.ktips { white-space: pre-line; max-width: 260px; }
 .tips .k { display: inline-block; min-width: 78px; color: var(--dim); }
 .stapel { display: flex; gap: 3px; height: 12px; }
 .stapel > div { flex: 1 1 0; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
@@ -127,7 +128,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
   <div class="kartforklaring">
     <span><i class="mk tom"></i>ej hämtad</span><span><i class="mk halv"></i>påbörjad</span><span><i class="mk full"></i>hämtad</span><span><i class="mk vald"></i>vald</span>
   </div>
-  <p class="karttips">Klicka på kartan för att hämta en punkt, eller på en flygplats. Skift-klick eller <b>Fri punkt</b> = ny punkt precis där du klickar, även på en markering. Hjul eller nyp = zooma, dra = flytta.</p>
+  <p class="karttips">Klicka på kartan för att hämta en punkt, eller på en markering. Håll muspekaren över en markering för namn. Skift-klick eller <b>Fri punkt</b> = ny punkt precis där du klickar. Hjul eller nyp = zooma, dra = flytta.</p>
 </section>
 
 <section class="hoger">
@@ -168,6 +169,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 </section>
 </div>
 <div class="tips" id="tips" hidden></div>
+<div class="tips ktips" id="kTips" hidden></div>
 <p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå. Kartunderlag: Natural Earth.</p>
 
 <script>
@@ -825,7 +827,6 @@ function valjOchHamta() {
 //  KARTA (MEPS-gittret i Lambert-projektion, hela modellomradet)
 // ===================================================================
 const KX = LCC.nx, KY = LCC.ny, MIN_BREDD = 70;
-const ETIKETT_VANSTER = new Set(["ESCM", "ESPE", "ESGG"]);   // etiketter till vanster for att inte krocka
 let vb = { x: 0, y: 0, w: KX, h: KY };
 const tillKarta = (lat, lon) => { const f = rutaF(lat, lon); return { x: f.fx, y: KY - 1 - f.fy }; };
 function egna() { try { return JSON.parse(lasa("mt:egna") || "[]"); } catch (e) { return []; } }
@@ -864,22 +865,18 @@ function ritaMarkorer() {
     const st = dtg ? hamtStatus(dtg, r.iy, r.ix) : 0; if (!p.fp && !st) continue;
     const k = tillKarta(p.lat, p.lon);
     const m = el("g", { class: "mk", "data-id": p.id, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
-    m.appendChild(el("title", {}, p.namn + " – " + STAT[st] + (dtg ? " (" + dtg + ", FL" + $("topp").value + ")" : "")));
-    m.appendChild(el("circle", { r: 10, style: "fill:transparent" }));
-    const rr = p.fp ? 5 : 4;
-    m.appendChild(el("circle", { r: rr, style: "fill:" + (st === 2 ? "var(--mkhamt)" : "var(--mkbg)") + ";stroke:var(--mkfg);stroke-width:1.8" }));
+    m.dataset.tips = p.namn + "\n" + STAT[st] + (dtg ? " (" + dtg + ", FL" + $("topp").value + ")" : "");
+    m.appendChild(el("circle", { r: 8, style: "fill:transparent" }));
+    const rr = p.fp ? 3.6 : 3;
+    m.appendChild(el("circle", { r: rr, style: "fill:" + (st === 2 ? "var(--mkhamt)" : "var(--mkbg)") + ";stroke:var(--mkfg);stroke-width:1.4" }));
     if (st === 1) m.appendChild(el("path", { d: "M0,-" + (rr - 0.9) + "A" + (rr - 0.9) + "," + (rr - 0.9) + " 0 0 0 0," + (rr - 0.9) + "Z", style: "fill:var(--mkhamt)" }));
-    if (p.fp) {
-      const v = ETIKETT_VANSTER.has(p.kort);
-      m.appendChild(el("text", { x: v ? -8 : 8, y: 4, "text-anchor": v ? "end" : "start", style: "font-size:11px;stroke-width:3px" }, p.kort));
-    }
     g.appendChild(m);
   }
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
   if (isFinite(lat) && isFinite(lon) && ruta(lat, lon)) {
     const k = tillKarta(lat, lon), v = el("g", { transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")", style: "pointer-events:none" });
-    v.appendChild(el("circle", { r: 9, style: "fill:none;stroke:var(--red);stroke-width:2.2" }));
-    v.appendChild(el("path", { d: "M-14,0h8M6,0h8M0,-14v8M0,6v8", style: "stroke:var(--red);stroke-width:2" }));
+    v.appendChild(el("circle", { r: 7, style: "fill:none;stroke:var(--red);stroke-width:2" }));
+    v.appendChild(el("path", { d: "M-11,0h6M5,0h6M0,-11v6M0,5v6", style: "stroke:var(--red);stroke-width:1.8" }));
     g.appendChild(v);
   }
 }
@@ -902,6 +899,7 @@ function startaKarta() {
     else if (pek.size === 2 && drag) { const [a, b] = [...pek.values()]; drag.nyp = { d: Math.hypot(a.x - b.x, a.y - b.y), w: vb.w }; drag.flyttat = true; }
   });
   svg.addEventListener("pointermove", e => {
+    kartTips(e);
     const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y);
     $("kartPos").textContent = ll.lat.toFixed(2) + "N " + ll.lon.toFixed(2) + "E";
     if (!pek.has(e.pointerId) || !drag) return;
@@ -923,11 +921,18 @@ function startaKarta() {
     else if (drag) { const [a] = [...pek.values()]; drag.sx = a.x; drag.sy = a.y; drag.vb = { ...vb }; drag.nyp = null; }
   };
   svg.addEventListener("pointerup", slut); svg.addEventListener("pointercancel", slut);
-  svg.addEventListener("pointerleave", () => { if (!pek.size) $("kartPos").textContent = ""; });
+  svg.addEventListener("pointerleave", () => { if (!pek.size) $("kartPos").textContent = ""; $("kTips").hidden = true; });
   $("zIn").addEventListener("click", () => zooma(0.67)); $("zUt").addEventListener("click", () => zooma(1.5));
   $("zHem").addEventListener("click", () => satVb(0, 0, KX));
   let skift = false;
-  const friKlass = () => svg.classList.toggle("fri", friPunkt || skift);
+  const friKlass = () => { svg.classList.toggle("fri", friPunkt || skift); if (friPunkt || skift) $("kTips").hidden = true; };
+  // forklaring nar man hovrar over knappen Fri punkt
+  const fb = $("fri");
+  fb.removeAttribute("title");
+  fb.addEventListener("mouseenter", () => { const r = fb.getBoundingClientRect(); visaKTips(friPunkt
+    ? "Fri punkt är PÅ: varje klick sätter en ny punkt precis där du klickar, även ovanpå en flygplats eller hämtad punkt. Tryck igen för att stänga av."
+    : "Fri punkt: när knappen är intryckt sätter varje klick en ny punkt precis där du klickar, även ovanpå en flygplats eller hämtad punkt. Samma sak som att hålla ner Skift när du klickar.", r.left, r.bottom + 6); });
+  fb.addEventListener("mouseleave", () => { $("kTips").hidden = true; });
   $("fri").addEventListener("click", e => { friPunkt = !friPunkt; e.currentTarget.setAttribute("aria-pressed", String(friPunkt)); friKlass(); });
   addEventListener("keydown", e => { if (e.key === "Shift") { skift = true; friKlass(); } });
   addEventListener("keyup", e => { if (e.key === "Shift") { skift = false; friKlass(); } });
@@ -936,6 +941,18 @@ function startaKarta() {
   satVb(250, 240, 610);   // start: hela Sverige
 }
 let friPunkt = false;
+function visaKTips(text, x, y) {
+  const t = $("kTips"); t.textContent = text; t.hidden = false;
+  const w = t.offsetWidth, h = t.offsetHeight;
+  if (x + w > innerWidth - 8) x = innerWidth - 8 - w; if (y + h > innerHeight - 8) y = y - h - 30;
+  t.style.left = Math.max(8, x) + "px"; t.style.top = Math.max(8, y) + "px";
+}
+// Namn och status for en markering visas bara vid hovring, och inte i fri-punkt-lage (Skift/knapp)
+function kartTips(e) {
+  const mk = e.target && e.target.closest ? e.target.closest(".mk") : null;
+  if (!mk || friPunkt || e.shiftKey || e.pointerType === "touch") { $("kTips").hidden = true; return; }
+  visaKTips(mk.dataset.tips, e.clientX + 14, e.clientY + 14);
+}
 function kartKlick(e, mal) {
   const sel = $("punkt"), fri = friPunkt || e.shiftKey, mk = !fri && mal && mal.closest ? mal.closest(".mk") : null;
   if (mk) {
