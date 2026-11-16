@@ -153,14 +153,15 @@ function periodTimmar() {
   else { lista = []; for (let t = a; t <= b; t++) if (t % dt === 0) lista.push(t); if (!lista.length) lista = [a]; }
   return { a, b, fran, lista, dt };
 }
-async function probHamta() {
+async function probHamta(auto) {
+  auto = auto === true;
   if (P.upptagen) return;
   const o0 = berakna(); if (!o0) { status("Klicka på kartan eller ange lat/lon för områdets mitt.", "fel"); return; }
   P.fragar = false; P.upptagen = true; stoppad = false; $("pHamta").disabled = true; $("pStopp").disabled = false;
   const t0 = performance.now(); let kb = 0; const tider = [];
   try {
     if (!await sokEnsKorning()) throw new Error("Hittade ingen komplett ensemblekörning.");
-    fyllTider(); const o = { ...o0, dtg: P.dtg }; ritaOmrade(); zoomaTillOmrade(o);
+    fyllTider(); const o = { ...o0, dtg: P.dtg }; ritaOmrade(); if (!auto) zoomaTillOmrade(o);
     const { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
     const antV = sakn.length * ENS_MEDL * o.ny * o.nx, mb = antV * ENS_BYTE[ensFormat] / 1048576;
     if (antV > ENS_MAX_VARDEN) { status("För stort: " + Math.round(antV / 1e6) + " miljoner värden får inte plats i webbläsaren. Välj glesare upplösning, mindre område, kortare period eller var 3:e timme.", "fel"); P.fragar = true; return; }
@@ -222,7 +223,8 @@ async function probHamta() {
   } catch (err) {
     status(stoppad || err.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas." : err.message, stoppad ? "" : "fel");
   } finally {
-    P.upptagen = false; $("pHamta").disabled = false; $("pStopp").disabled = true; $("pForlopp").hidden = true; ritaOmrade(); await probVisa();
+    P.upptagen = false; P.autoVantar = false; $("pHamta").disabled = false; $("pStopp").disabled = true; $("pForlopp").hidden = true; ritaOmrade(); await probVisa();
+    if (P.autoIgen) { P.autoIgen = false; autoHamta(); }
   }
 }
 // Laser forsta arrayen i ett DAP2-binarsvar (.dods): DDS-text, "Data:\n", sedan XDR:
@@ -296,13 +298,17 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk, lista) {
 // Visar ALLA sparade omraden for vald parameter och korning som har hela perioden.
 // Grovt rutnat ritas forst, finare ovanpa. Ramen visar vad som hamtas vid nasta Hamta fält.
 async function probVisa() {
-  const g = $("kProb"); g.textContent = ""; P.varden = null; $("pSam").textContent = ""; ritaPForklaring();
-  if (lage !== "p" || !P.dtg) return;
+  const g = $("kProb"); ritaPForklaring();
+  const rensa = () => { g.textContent = ""; P.varden = null; $("pSam").textContent = ""; };
+  if (lage !== "p" || !P.dtg) { rensa(); return; }
   const v = $("pParam").value, pa = PPARAM[v], { a, b, fran, lista, dt } = periodTimmar(), trosk = parseFloat($("pTrosk").value.replace(",", "."));
-  if (!isFinite(trosk)) return;
+  if (!isFinite(trosk)) { rensa(); return; }
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === v).sort((x, y) => y.s - x.s);
   const vis = []; let pmax = 0;
   for (const e of kand) { const r = await beraknaOmrade(e, pa, a, b, fran, trosk, lista); if (r) vis.push(r); }
+  // Under automatisk hamtning vid stegning visas den gamla bilden tills den nya perioden finns.
+  if (!vis.length && (P.upptagen || P.autoVantar)) return;
+  rensa();
   // Varje omrade ritas som EN bild (en pixel per punkt) i stallet for tusentals rutor –
   // annars blir kartan seg att zooma och dra med stora omraden.
   const rgb = PKLASS.map(([gr, c]) => [gr, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
@@ -352,6 +358,20 @@ function probTips(e) {
   $("kTips").hidden = true;
 }
 
+// Automatisk hamtning nar man stegar: vantar 0,5 s efter sista klicket, hamtar bara det som saknas.
+// Pagar redan en hamtning tas nasta steg nar den ar klar.
+let autoTimer = null;
+function autoHamta() {
+  if (!$("pAuto").checked) return;
+  clearTimeout(autoTimer); P.autoVantar = true;
+  autoTimer = setTimeout(() => {
+    if (P.upptagen) { P.autoIgen = true; return; }
+    const o0 = berakna(); if (!o0 || !P.dtg) { P.autoVantar = false; probVisa(); return; }
+    if (!saknadeTimmar({ ...o0, dtg: P.dtg }, periodTimmar().lista).length) { P.autoVantar = false; probVisa(); return; }
+    probHamta(true);
+  }, 500);
+}
+
 // ---------- Kontroller ----------
 function sattParam(behallTrosk) {
   const pa = PPARAM[$("pParam").value];
@@ -381,7 +401,7 @@ function bytLage(nytt) {
   sel.addEventListener("change", () => { P.fragar = false; lagra("mt:pParam", sel.value); const st = lasa("mt:pTrosk:" + sel.value); $("pTrosk").value = st || PPARAM[sel.value].std; sattParam(true); ritaOmrade(); probVisa(); });
   $("pTrosk").addEventListener("input", () => { lagra("mt:pTrosk:" + sel.value, $("pTrosk").value); sattParam(true); probVisa(); });
   ["pFran", "pTill"].forEach(id => $(id).addEventListener("change", () => probVisa()));
-  $("pEnTimme").addEventListener("click", () => { $("pTill").value = $("pFran").value; probVisa(); });   // en enda timme
+  $("pEnTimme").addEventListener("click", () => { $("pTill").value = $("pFran").value; probVisa(); autoHamta(); });   // en enda timme
   $("pSteg").value = lasa("mt:pSteg") || "per"; $("pDt").value = lasa("mt:pDt") || "1";
   $("pSteg").addEventListener("change", () => lagra("mt:pSteg", $("pSteg").value));
   $("pDt").addEventListener("change", () => { lagra("mt:pDt", $("pDt").value); probVisa(); });
@@ -390,7 +410,9 @@ function bytLage(nytt) {
   // Steg: "per" = periodens langd, annars valt antal timmar.
   const flytta = r => { const a = Math.min(+$("pFran").value, +$("pTill").value), L = Math.abs(+$("pTill").value - +$("pFran").value),
     sv = $("pSteg").value, steg = sv === "per" ? Math.max(1, L) : +sv, na = a + r * steg;
-    if (na < 0 || na + L > ENS_TIDER - 1) return; $("pFran").value = na; $("pTill").value = na + L; probVisa(); };
+    if (na < 0 || na + L > ENS_TIDER - 1) return; $("pFran").value = na; $("pTill").value = na + L; probVisa(); autoHamta(); };
+  $("pAuto").checked = lasa("mt:pAuto") !== "nej";
+  $("pAuto").addEventListener("change", () => lagra("mt:pAuto", $("pAuto").checked ? "ja" : "nej"));
   $("pBak").addEventListener("click", () => flytta(-1)); $("pFram").addEventListener("click", () => flytta(1));
   ["pStorlek", "pUppl"].forEach(id => $(id).addEventListener("change", () => { lagra("mt:" + id, $(id).value); probOmradeAndrat(); }));
   ["lat", "lon", "klistra"].forEach(id => $(id).addEventListener("input", () => { if (lage === "p") probOmradeAndrat(); }));

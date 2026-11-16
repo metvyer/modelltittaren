@@ -88,6 +88,7 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
 .pkontroller { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
 .pkontroller .rad { display: flex; gap: 6px; align-items: center; }
 .enhet { color: var(--dim); font-size: 13px; }
+.kryss { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--fg) !important; padding: 5px 0; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chips button { padding: 3px 9px; font-size: 13px; background: transparent; color: var(--acc); }
 .chips button[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
@@ -165,6 +166,7 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
     <div class="falt"><label for="pFran">Från</label><select id="pFran"></select></div>
     <div class="falt"><label for="pTill">Till</label><div class="rad"><select id="pTill"></select><button class="sek liten" id="pEnTimme" title="Sätt Till = Från (en enda timme)">= Från</button></div></div>
     <div class="falt"><label>Flytta perioden</label><div class="rad"><button class="sek liten" id="pBak" title="Bakåt">◀</button><button class="sek liten" id="pFram" title="Framåt">▶</button></div></div>
+    <div class="falt"><label>&nbsp;</label><label class="kryss"><input type="checkbox" id="pAuto" checked> Hämta automatiskt när jag stegar</label></div>
     <div class="falt"><label for="pSteg">Steg</label><select id="pSteg"><option value="per">periodens längd</option><option value="1">1 h</option><option value="3">3 h</option><option value="6">6 h</option><option value="12">12 h</option></select></div>
     <div class="falt"><label for="pDt">Timmar att använda</label><select id="pDt"><option value="1">varje timme</option><option value="3">var 3:e timme</option><option value="6">var 6:e timme</option></select></div>
     <div class="falt"><label for="pStorlek">Område</label><select id="pStorlek"><option value="75">75 km</option><option value="150" selected>150 km</option><option value="300">300 km</option><option value="600">600 km</option><option value="1000">1000 km</option></select></div>
