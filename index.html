@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Modelltittaren</title>
+<style>
+/* Verktygssida: kontroller i en rad overst, diagram med fast hojdskala till vanster och vagrat skrollbart diagram till hoger. */
+:root {
+  --bg: #f4f6f8; --panel: #ffffff; --fg: #1b2530; --dim: #5d6b7a; --line: #d5dce4; --grid: #c3ccd6;
+  --acc: #1f5fa8; --accfg: #ffffff; --ok: #1f7a3f; --bad: #a32020; --warn: #8a5a00; --red: #d40000;
+  --few: #ffff00; --sct: #c0c0c0; --bkn: #0000ff; --ovc: #000000; --hatch: #9aa4ae;
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif; --mono: ui-monospace, "SF Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #12171d; --panel: #1a2129; --fg: #e3e8ee; --dim: #9aa7b5; --line: #2c3743; --grid: #3a4652; --acc: #6aa6ec; --accfg: #0d1620; --hatch: #6b7682; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #12171d; --panel: #1a2129; --fg: #e3e8ee; --dim: #9aa7b5; --line: #2c3743; --grid: #3a4652; --acc: #6aa6ec; --accfg: #0d1620; --hatch: #6b7682; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font); padding-block: 14px 24px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 18px; margin: 0 0 10px; font-weight: 650; }
+h1 small { font-weight: 400; color: var(--dim); font-size: 13px; margin-left: 8px; }
+.kontroller { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.falt { display: grid; gap: 3px; }
+.falt label { font-size: 12px; color: var(--dim); }
+select, input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); min-width: 0; }
+input.koord { width: 92px; font-variant-numeric: tabular-nums; }
+button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--acc); background: var(--acc); color: var(--accfg); cursor: pointer; }
+button.sek { background: transparent; color: var(--acc); }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+.info { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 12px 2px; font-size: 13px; }
+.info dt { color: var(--dim); }
+.info dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
+.ny { color: var(--ok); font-weight: 600; }
+.vald { color: var(--warn); font-weight: 600; }
+.fel { color: var(--bad); font-weight: 600; }
+.diagram { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.axel { flex: 0 0 auto; border-right: 1px solid var(--line); }
+.skroll { flex: 1 1 auto; overflow-x: auto; min-width: 0; }
+svg text { font-family: var(--font); fill: var(--fg); }
+.forklaring { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 2px; font-size: 12px; color: var(--dim); align-items: center; }
+.ruta { display: inline-block; width: 14px; height: 10px; border: 1px solid var(--line); vertical-align: -1px; margin-right: 4px; }
+.kalla { font-size: 12px; color: var(--dim); margin: 8px 2px 0; }
+</style>
+</head>
+<body>
+<h1>Modelltittaren <small>Tid-höjd · AROME 2,5 km (MEPS medlem 0)</small></h1>
+
+<div class="kontroller">
+  <div class="falt"><label for="punkt">Punkt</label><select id="punkt"></select></div>
+  <div class="falt"><label for="lat">Lat</label><input id="lat" class="koord" inputmode="decimal"></div>
+  <div class="falt"><label for="lon">Lon</label><input id="lon" class="koord" inputmode="decimal"></div>
+  <div class="falt"><label for="klistra">Klistra in "lat, lon"</label><input id="klistra" placeholder="59.65, 17.92" style="width:140px"></div>
+  <div class="falt"><label for="topp">Topp</label><select id="topp"><option value="450">FL450</option><option value="250">FL250</option><option value="150">FL150</option><option value="90">FL90</option><option value="30">FL30</option></select></div>
+  <div class="falt"><label for="korning">Körning</label><select id="korning"></select></div>
+  <button id="hamta">Hämta</button>
+  <button id="stopp" class="sek" disabled>Stopp</button>
+</div>
+
+<dl class="info">
+  <dt>Körning</dt><dd id="iKorning">–</dd>
+  <dt>Modellruta</dt><dd id="iRuta">–</dd>
+  <dt>Status</dt><dd id="iStatus">Välj punkt och tryck Hämta.</dd>
+</dl>
+
+<div class="diagram">
+  <svg class="axel" id="axel" width="56" height="10"></svg>
+  <div class="skroll" id="skroll"><svg id="svg" width="10" height="10"></svg></div>
+</div>
+
+<div class="forklaring">
+  <span><span class="ruta" style="background:var(--few)"></span>FEW 1–2/8</span>
+  <span><span class="ruta" style="background:var(--sct)"></span>SCT 3–4/8</span>
+  <span><span class="ruta" style="background:var(--bkn)"></span>BKN 5–7/8</span>
+  <span><span class="ruta" style="background:var(--ovc)"></span>OVC 8/8</span>
+  <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
+  <span>Sikt i synoptisk kod VV (80 = 30 km)</span>
+</div>
+<p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå.</p>
+
+<script>
+"use strict";
+// ===================================================================
+//  INSTALLNINGAR (samma varden som Excel-versionen v0.7)
+// ===================================================================
+const BAS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
+const FIL = dtg => "meps_det_2_5km_" + dtg + ".ncml";
+const INTERVALL = 3, SOK_TIMMAR = 12, KRAV_TIDER = 67, BIT = 24, TIMEOUT_S = 120;
+const NIV = 65, NTRYCK = 13, NIS = 10;
+const SKALA = [0, 10, 30, 90, 210, 450];          // FL, lika stora segment (NfL-Diagram)
+const MOLN = [6.25, 31.25, 56.25, 93.75];        // % for FEW/SCT/BKN/OVC
+const IS = [1, 2, 3, 4];                          // isindex for TRC/LGT/MOD/SEV (obekraftat)
+const ISNAMN = ["", "TRC", "LGT", "MOD", "SEV"];
+const YTA = ["surface_air_pressure", "air_temperature_2m", "relative_humidity_2m", "wind_speed", "wind_direction",
+  "wind_speed_of_gust", "visibility_in_air", "precipitation_amount_acc", "precipitation_type", "cloud_area_fraction"];
+const PUNKTER = [
+  ["Såtenäs", "ESIB", 58.4264, 12.7144], ["Malmen", "ESSL", 58.4023, 15.5257], ["Uppsala", "ESCM", 59.8973, 17.5886],
+  ["Kallinge", "ESDF", 56.2667, 15.265], ["Hagshult", "ESMV", 57.2922, 14.1372], ["Arlanda", "ESSA", 59.6519, 17.9186],
+  ["Landvetter", "ESGG", 57.6628, 12.2798], ["Sturup", "ESMS", 55.5363, 13.3762], ["Visby", "ESSV", 57.6628, 18.3462],
+  ["Kallax", "ESPA", 65.5438, 22.122], ["Vidsel", "ESPE", 65.8753, 20.15]];
+const G0 = 9.80665, RD = 287.05, FOT = 3.28084, KT = 1.943844;
+
+// ===================================================================
+//  HJALP
+// ===================================================================
+const $ = id => document.getElementById(id);
+const enc = s => s.replace(/\[/g, "%5B").replace(/\]/g, "%5D");
+const p2 = n => String(n).padStart(2, "0");
+const dtgText = d => d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCDate()) + "T" + p2(d.getUTCHours()) + "Z";
+const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(9, 11)));
+const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
+let avbryt = null, stoppad = false;
+
+function lagra(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
+function lasa(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function rensaGammalCache() {
+  try {
+    const gr = Date.now() - 3 * 864e5;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      const m = k && k.match(/^mt:(\d{8}T\d{2}Z):/);
+      if (m && dtgDatum(m[1]).getTime() < gr) localStorage.removeItem(k);
+    }
+  } catch (e) {}
+}
+function status(t, klass) { const e = $("iStatus"); e.textContent = t; e.className = klass || ""; }
+
+// Hamtar en URL. Ett anrop i taget, tidsgrans, omforsok vid 429/5xx.
+async function hamta(url, medRetry = true) {
+  for (let f = 1; f <= 4; f++) {
+    if (stoppad) throw new Error("stoppad");
+    avbryt = new AbortController();
+    const tid = setTimeout(() => avbryt.abort(), TIMEOUT_S * 1000);
+    let st = 0, txt = "";
+    try {
+      const r = await fetch(url, { signal: avbryt.signal, cache: "no-store" });
+      st = r.status; txt = await r.text();
+    } catch (e) { if (stoppad) throw new Error("stoppad"); st = 0; }
+    clearTimeout(tid);
+    if (st === 200) return { st, txt };
+    if (st === 404 || st === 400 || st === 403) return { st, txt };
+    if (!medRetry && st !== 429) return { st, txt };
+    if (f < 4) {
+      const v = 10 * 2 ** (f - 1);
+      status("Servern svarade " + st + " – väntar " + v + " s och försöker igen (Stopp avbryter) …");
+      for (let s = 0; s < v * 10 && !stoppad; s++) await new Promise(r => setTimeout(r, 100));
+    } else return { st, txt };
+  }
+}
+
+// OPeNDAP ascii -> { namn: Float64Array } (NaN = saknas). "a.a" -> "a".
+function tolka(txt) {
+  const d = {}; const rader = txt.replace(/\r/g, "").split("\n");
+  let start = false, namn = null, vals = [];
+  const spara = () => {
+    if (!namn || !vals.length) return;
+    let k = namn; const p = namn.indexOf(".");
+    if (p > 0 && namn.slice(0, p) === namn.slice(p + 1)) k = namn.slice(0, p);
+    d[k] = Float64Array.from(vals);
+  };
+  for (const r of rader) {
+    const s = r.trim();
+    if (!start) { if (s.startsWith("----------")) start = true; continue; }
+    if (!s) { spara(); namn = null; vals = []; continue; }
+    if (s[0] !== "[" && !s.includes(",") && s.indexOf("[") > 0 && s.endsWith("]")) {
+      spara(); namn = s.slice(0, s.indexOf("[")); vals = []; continue;
+    }
+    if (!namn) continue;
+    let t = s;
+    if (t[0] === "[") { t = t.slice(t.lastIndexOf("]") + 1); if (t[0] === ",") t = t.slice(1); }
+    for (const x of t.split(",")) {
+      const y = x.trim(); if (!y) continue;
+      let v = parseFloat(y); if (!isFinite(v) || Math.abs(v) > 9e35) v = NaN;
+      vals.push(v);
+    }
+  }
+  spara(); return d;
+}
+
+// lat/lon -> MEPS-ruta (Lambert, tangent 63,3N, lon0 15E, R 6371 km, 2,5 km)
+function ruta(lat, lon) {
+  const rad = Math.PI / 180, p0 = 63.3 * rad, n = Math.sin(p0), R = 6371000;
+  const F = Math.cos(p0) * Math.tan(Math.PI / 4 + p0 / 2) ** n / n;
+  const rho0 = R * F / Math.tan(Math.PI / 4 + p0 / 2) ** n;
+  const rho = R * F / Math.tan(Math.PI / 4 + lat * rad / 2) ** n;
+  const th = n * (lon - 15) * rad;
+  const ix = Math.round((rho * Math.sin(th) + 1060084) / 2500);
+  const iy = Math.round((rho0 - rho * Math.cos(th) + 1332517.9) / 2500);
+  return (ix >= 0 && ix < 949 && iy >= 0 && iy < 1069) ? { iy, ix } : null;
+}
+function avstand(a1, o1, a2, o2) {
+  const r = Math.PI / 180, dA = (a2 - a1) * r, dO = (o2 - o1) * r;
+  const a = Math.sin(dA / 2) ** 2 + Math.cos(a1 * r) * Math.cos(a2 * r) * Math.sin(dO / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+// ===================================================================
+//  KORNING
+// ===================================================================
+function korningsLista() {
+  const d = new Date(); d.setUTCMinutes(0, 0, 0); d.setUTCHours(d.getUTCHours() - d.getUTCHours() % INTERVALL);
+  const sel = $("korning"), val = sel.value; sel.innerHTML = '<option value="senaste">senaste</option>';
+  for (let i = 0; i <= 24 / INTERVALL; i++) {
+    const s = dtgText(new Date(d.getTime() - i * INTERVALL * 3600e3));
+    sel.insertAdjacentHTML("beforeend", '<option value="' + s + '">' + s + "</option>");
+  }
+  if (val) sel.value = val; if (!sel.value) sel.value = "senaste";
+}
+async function antalTider(dtg) {
+  const r = await hamta(BAS + FIL(dtg) + ".ascii?time", false);
+  if (r.st !== 200) return 0; const m = r.txt.match(/\ntime\[(\d+)\]/); return m ? +m[1] : 0;
+}
+async function sokKorning() {
+  const senast = lasa("mt:senast") || "";
+  const d = new Date(); d.setUTCMinutes(0, 0, 0); d.setUTCHours(d.getUTCHours() - d.getUTCHours() % INTERVALL);
+  for (let i = 0; i <= SOK_TIMMAR / INTERVALL + 1; i++) {
+    const dtg = dtgText(new Date(d.getTime() - i * INTERVALL * 3600e3));
+    if (senast && dtgDatum(dtg) <= dtgDatum(senast)) break;
+    status("Letar körning " + dtg + " …");
+    const n = await antalTider(dtg);
+    if (n >= KRAV_TIDER) { lagra("mt:senast", dtg); lagra("mt:senastN", String(n)); return { dtg, nt: n, ny: !!senast }; }
+  }
+  if (senast) return { dtg: senast, nt: +(lasa("mt:senastN") || KRAV_TIDER), ny: false };
+  return null;
+}
+
+// ===================================================================
+//  MODELL (en punkt + korning)
+// ===================================================================
+let M = null;
+function nyModell(dtg, nt, iy, ix) {
+  return { dtg, nt, iy, ix, stat: false, tid: [], ap: [], b: [], pres: [], h5: [], glat: NaN, glon: NaN, terr: 0,
+    yta: YTA.map(() => new Float64Array(nt).fill(NaN)), ytaOK: new Uint8Array(nt),
+    cl: new Float64Array(nt * NIV).fill(NaN), clHar: new Uint8Array(nt * NIV),
+    gp: new Float64Array(nt * NTRYCK).fill(NaN), gpHar: new Uint8Array(nt * NTRYCK),
+    ice: new Float64Array(nt * NIS).fill(NaN), iceHar: new Uint8Array(nt * NIS) };
+}
+function lasStatik(txt) {
+  const d = tolka(txt); if (!d.time || !d.ap || !d.b) return false;
+  M.tid = Array.from(d.time); M.ap = Array.from(d.ap); M.b = Array.from(d.b);
+  M.pres = d.pressure ? Array.from(d.pressure) : []; M.h5 = d.height5 ? Array.from(d.height5) : [];
+  M.glat = d.latitude ? d.latitude[0] : NaN; M.glon = d.longitude ? d.longitude[0] : NaN;
+  M.terr = d.surface_geopotential ? d.surface_geopotential[0] / G0 : 0; M.stat = true; return true;
+}
+// Lagger in en bit. etikett: "s.c6-64.g1-12.i0-3"
+function laggIn(txt, a, b, etikett) {
+  const d = tolka(txt), n = b - a + 1;
+  for (const del of etikett.split(".")) {
+    const typ = del[0];
+    if (typ === "s") {
+      YTA.forEach((nm, i) => { const v = d[nm]; if (v) for (let t = 0; t < n && a + t < M.nt; t++) M.yta[i][a + t] = v[t]; });
+      for (let t = a; t <= b && t < M.nt; t++) M.ytaOK[t] = 1; continue;
+    }
+    const m = del.slice(1).match(/^(\d+)-(\d+)$/); if (!m) continue;
+    const r1 = +m[1], r2 = +m[2], nr = r2 - r1 + 1;
+    const [namn, arr, har, bredd] = typ === "c" ? ["cloud_area_fraction_ml", M.cl, M.clHar, NIV]
+      : typ === "g" ? ["geopotential_pl", M.gp, M.gpHar, NTRYCK] : ["icing_index", M.ice, M.iceHar, NIS];
+    const v = d[namn]; if (!v) continue;
+    // molnmangden kommer som andel 0-1 trots att beskrivningen sager % (kontrollerat 16/11 2026)
+    let skala = 1; if (typ === "c") { let mx = 0; for (const x of v) if (x > mx) mx = x; if (mx <= 1.0001) skala = 100; }
+    for (let t = 0; t < n && a + t < M.nt; t++) for (let k = 0; k < nr; k++) {
+      const x = v[t * nr + k]; if (x === undefined) continue;
+      arr[(a + t) * bredd + r1 + k] = x * skala; har[(a + t) * bredd + r1 + k] = 1;
+    }
+  }
+}
+const nyckel = () => "mt:" + M.dtg + ":" + M.iy + ":" + M.ix + ":";
+function laddaCache() {
+  const st = lasa(nyckel() + "static"); if (!st || !lasStatik(st)) return;
+  const lista = JSON.parse(lasa(nyckel() + "bitar") || "[]");
+  for (const [a, b, e] of lista) { const t = lasa(nyckel() + "t" + a + "-" + b + ":" + e); if (t) laggIn(t, a, b, e); }
+}
+function sparaBit(a, b, e, txt) {
+  if (!lagra(nyckel() + "t" + a + "-" + b + ":" + e, txt)) return;
+  const lista = JSON.parse(lasa(nyckel() + "bitar") || "[]"); lista.push([a, b, e]); lagra(nyckel() + "bitar", JSON.stringify(lista));
+}
+function clKmin(t) { for (let k = NIV - 1; k >= 0; k--) if (!M.clHar[t * NIV + k]) return k + 1; return 0; }
+
+// Vilka nivaer behovs for vald topp (med marginal)
+function behov() {
+  const topp = +$("topp").value, zTopp = Math.max(150, topp * 100 / FOT);
+  const psEst = 101325 * (1 - 2.25577e-5 * M.terr) ** 5.25588, pLim = psEst * Math.exp(-zTopp / 7000) * 0.97;
+  let k1 = NIV - 1; for (let k = 0; k < NIV; k++) if (M.ap[k] + M.b[k] * psEst >= pLim) { k1 = k; break; }
+  if (k1 > 0) k1--;
+  let j1 = -1, j2 = -1, pOver = -1, jOver = -1;
+  M.pres.forEach((p, j) => { if (p * 100 >= pLim * 0.9) { if (j1 < 0 || j < j1) j1 = j; if (j > j2) j2 = j; } else if (p > pOver) { pOver = p; jOver = j; } });
+  if (jOver >= 0) { if (j1 < 0) { j1 = j2 = jOver; } else { j1 = Math.min(j1, jOver); j2 = Math.max(j2, jOver); } }
+  if (j1 < 0) { j1 = 0; j2 = NTRYCK - 1; }
+  let h2 = 0; M.h5.forEach((h, j) => { if (h <= zTopp + 300) h2 = j; });
+  return { k1, j1, j2, h2, zTopp };
+}
+function bitUrl(a, b) {
+  const { k1, j1, j2, h2 } = behov(); let behS = false, kMax = -1, behG = false, behI = false;
+  for (let t = a; t <= b; t++) {
+    if (!M.ytaOK[t]) behS = true;
+    const km = clKmin(t); if (km > k1) kMax = Math.max(kMax, km - 1);
+    for (let j = j1; j <= j2; j++) if (!M.gpHar[t * NTRYCK + j]) behG = true;
+    for (let j = 0; j <= h2; j++) if (!M.iceHar[t * NIS + j]) behI = true;
+  }
+  const tt = "[" + a + ":" + b + "]", yx = "[" + M.iy + "][" + M.ix + "]"; const v = [], e = [];
+  if (behS) { YTA.forEach(n => v.push(n + tt + "[0]" + yx)); e.push("s"); }
+  if (kMax >= k1) { v.push("cloud_area_fraction_ml" + tt + "[" + k1 + ":" + kMax + "]" + yx); e.push("c" + k1 + "-" + kMax); }
+  if (behG) { v.push("geopotential_pl" + tt + "[" + j1 + ":" + j2 + "]" + yx); e.push("g" + j1 + "-" + j2); }
+  if (behI) { v.push("icing_index" + tt + "[0:" + h2 + "]" + yx); e.push("i0-" + h2); }
+  if (!v.length) return null;
+  return { url: BAS + FIL(M.dtg) + ".ascii?" + enc(v.join(",")), etikett: e.join(".") };
+}
+
+// Modellnivaernas hojd (m over mark) for tid t, nivaer kFran..64 (metod B, reserv A)
+function hojder(t, kFran) {
+  const ps = M.yta[0][t]; if (!(ps > 0)) return null;
+  const p = M.ap.map((a, k) => a + M.b[k] * ps), z = new Array(NIV).fill(NaN);
+  const pts = [[Math.log(ps), 0]];
+  for (let j = 0; j < NTRYCK; j++) if (M.gpHar[t * NTRYCK + j] && M.pres[j] * 100 < ps && isFinite(M.gp[t * NTRYCK + j]))
+    pts.push([Math.log(M.pres[j] * 100), M.gp[t * NTRYCK + j] / G0 - M.terr]);
+  pts.sort((x, y) => y[0] - x[0]);
+  if (pts.length >= 3) {
+    for (let k = kFran; k < NIV; k++) {
+      const x = Math.log(p[k]); let i = 1; while (i < pts.length - 1 && x < pts[i][0]) i++;
+      const [a0, z0] = pts[i - 1], [a1, z1] = pts[i];
+      z[k] = Math.max(1, a0 !== a1 ? z0 + (z1 - z0) * (x - a0) / (a1 - a0) : z1);
+    }
+    return z;
+  }
+  let t0 = M.yta[1][t]; if (!(t0 > 200)) t0 = 288.15;
+  for (let k = kFran; k < NIV; k++) z[k] = Math.max(1, t0 / 0.0065 * (1 - (p[k] / ps) ** (RD * 0.0065 / G0)));
+  return z;
+}
+
+// ===================================================================
+//  RITA
+// ===================================================================
+const COL = 22, PLOT_H = 400, TOPP_RAD = 30, RAD_H = 17;
+const RADER = ["Tid UTC", "T °C", "Td °C", "Vind", "Vind kt", "By kt", "Sikt VV", "Väder", "Moln", "Nb mm/h", "Nedisning"];
+const NS = "http://www.w3.org/2000/svg";
+function el(namn, attr, text) { const e = document.createElementNS(NS, namn); for (const k in attr) e.setAttribute(k, attr[k]); if (text !== undefined) e.textContent = text; return e; }
+
+function skala() {
+  const topp = +$("topp").value; let antal = 0;
+  for (let i = 1; i < SKALA.length; i++) { if (topp >= SKALA[i]) antal++; else { antal += (topp - SKALA[i - 1]) / (SKALA[i] - SKALA[i - 1]); break; } }
+  const segH = PLOT_H / antal, botten = TOPP_RAD + PLOT_H;
+  const y = fot => { const fl = fot / 100; if (fl <= 0) return botten; if (fl >= topp) return TOPP_RAD;
+    let s = 1; while (s < SKALA.length - 1 && fl > SKALA[s]) s++;
+    return botten - ((s - 1) + (fl - SKALA[s - 1]) / (SKALA[s] - SKALA[s - 1])) * segH; };
+  return { topp, y, botten };
+}
+function vv(m) {
+  if (!isFinite(m)) return ""; if (m < 100) return "00"; if (m <= 5000) return p2(Math.floor(m / 100)); if (m < 6000) return "50";
+  if (m <= 30000) return String(50 + Math.floor(m / 1000)); if (m <= 70000) return String(80 + Math.floor((m / 1000 - 30) / 5)); return "89";
+}
+function daggpunkt(tk, rh) { if (!isFinite(tk) || !(rh > 0)) return NaN; if (rh > 1.5) rh /= 100; const tc = tk - 273.15, g = Math.log(Math.min(rh, 1)) + 17.62 * tc / (243.12 + tc); return 243.12 * g / (17.62 - g); }
+function vader(nb, typ, sikt) {
+  if (isFinite(nb) && nb >= 0.1) {
+    const n = nb >= 4 ? 3 : nb >= 1 ? 2 : 1;
+    const s = { 0: ",", 1: "•", 2: "*•", 3: "*", 4: "~,", 5: "~•", 6: "△", 7: "▲" }[Math.round(typ)] || "•";
+    return s.repeat(s.length > 1 ? 1 : n);
+  }
+  if (isFinite(sikt) && sikt < 1000) return "≡"; if (isFinite(sikt) && sikt < 5000) return "="; return "";
+}
+function molnCirkel(f) { if (!isFinite(f)) return ""; if (f > 1.5) f /= 100; const o = Math.round(f * 8); return o === 0 ? "○" : o <= 2 ? "◔" : o <= 5 ? "◑" : o <= 7 ? "◕" : "●"; }
+
+function rita() {
+  if (!M || !M.stat) return;
+  const sk = skala(), nt = M.nt, B = nt * COL, H = TOPP_RAD + PLOT_H + 8 + RADER.length * RAD_H + 6;
+  const svg = $("svg"), ax = $("axel"); svg.innerHTML = ""; ax.innerHTML = "";
+  svg.setAttribute("width", B); svg.setAttribute("height", H); ax.setAttribute("height", H);
+  const css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
+  const farg = [null, c("--few"), c("--sct"), c("--bkn"), c("--ovc")];
+  const defs = el("defs", {}); const pat = el("pattern", { id: "snett", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
+  pat.appendChild(el("line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: c("--hatch"), "stroke-width": 1.5 })); defs.appendChild(pat); svg.appendChild(defs);
+  const t0 = M.tid[0] * 1000, { k1 } = behov(), zTopp = sk.topp * 100 / FOT;
+
+  // datumrad + lodrata linjer
+  for (let t = 0; t <= nt; t++) {
+    const x = t * COL, d = new Date(t0 + t * 3600e3), midnatt = t < nt && d.getUTCHours() === 0;
+    svg.appendChild(el("line", { x1: x, y1: midnatt ? 4 : TOPP_RAD, x2: x, y2: sk.botten, stroke: midnatt ? c("--dim") : c("--grid"), "stroke-width": midnatt ? 1.2 : 0.4 }));
+    if (midnatt || t === 0) svg.appendChild(el("text", { x: x + 4, y: 18, "font-size": 12, "font-weight": 600 }, VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1)));
+  }
+  // vagrata linjer + hojdskala
+  for (let s = 1; s < SKALA.length; s++) {
+    if (SKALA[s - 1] >= sk.topp) break;
+    for (let i = 1; i <= 4; i++) {
+      const fl = SKALA[s - 1] + (SKALA[s] - SKALA[s - 1]) * i / 4; if (fl > sk.topp + 0.01) continue;
+      const y = sk.y(fl * 100);
+      svg.appendChild(el("line", { x1: 0, y1: y, x2: B, y2: y, stroke: c("--grid"), "stroke-width": 0.5, "stroke-dasharray": "3 3" }));
+      ax.appendChild(el("text", { x: 50, y: y + 4, "font-size": 10, "text-anchor": "end" }, String(fl * 100)));
+    }
+  }
+  ax.appendChild(el("text", { x: 50, y: sk.botten + 4, "font-size": 10, "text-anchor": "end" }, "0"));
+  ax.appendChild(el("text", { x: 50, y: TOPP_RAD - 6, "font-size": 10, "text-anchor": "end", fill: c("--dim") }, "ft"));
+
+  const gMoln = el("g", {}), gSaknas = el("g", {}), gIs = el("g", {}); svg.insertBefore(gMoln, svg.children[1]); svg.appendChild(gSaknas); svg.appendChild(gIs);
+  let saknasStart = -1;
+  const saknasRekt = (t1, t2, zFran) => {
+    const yLo = zFran > 0 ? sk.y(zFran * FOT) : sk.botten; if (yLo - TOPP_RAD < 2) return;
+    gSaknas.appendChild(el("rect", { x: t1 * COL, y: TOPP_RAD, width: (t2 - t1 + 1) * COL, height: yLo - TOPP_RAD, fill: "url(#snett)" }));
+    if ((t2 - t1 + 1) * COL > 50) gSaknas.appendChild(el("text", { x: t1 * COL + 4, y: TOPP_RAD + 12, "font-size": 10, fill: c("--dim") }, "ej hämtad"));
+  };
+  for (let t = 0; t < nt; t++) {
+    const x = t * COL, kFran = clKmin(t); let zSaknas = -1;
+    const z = (kFran < NIV && M.ytaOK[t]) ? hojder(t, kFran) : null;
+    if (z) {
+      let blk = 0, lo = 0, hi = 0;
+      const ut = () => { if (!blk) return; const y1 = sk.y(hi * FOT), y0 = sk.y(lo * FOT); if (y0 - y1 > 0.3) gMoln.appendChild(el("rect", { x, y: y1, width: COL, height: y0 - y1, fill: farg[blk] })); };
+      for (let k = NIV - 1; k >= kFran; k--) {
+        const zLo = k === NIV - 1 ? 0 : (z[k] + z[k + 1]) / 2, zHi = k === kFran ? z[k] : (z[k] + z[k - 1]) / 2;
+        const v = M.cl[t * NIV + k], kat = v >= MOLN[3] ? 4 : v >= MOLN[2] ? 3 : v >= MOLN[1] ? 2 : v >= MOLN[0] ? 1 : 0;
+        if (kat !== blk) { ut(); blk = kat; lo = zLo; } hi = zHi;
+      }
+      ut();
+      if (kFran > k1) zSaknas = z[kFran];
+    } else zSaknas = 0;
+    if (zSaknas === 0) { if (saknasStart < 0) saknasStart = t; }
+    else { if (saknasStart >= 0) { saknasRekt(saknasStart, t - 1, 0); saknasStart = -1; } if (zSaknas > 0) saknasRekt(t, t, zSaknas); }
+
+    // nedisning
+    let iMax = NaN, ib = NaN, it = NaN;
+    for (let j = 0; j < NIS; j++) if (M.iceHar[t * NIS + j]) { const v = M.ice[t * NIS + j]; if (isFinite(v)) { if (!(v <= iMax)) iMax = v; if (v >= IS[0]) { if (!isFinite(ib)) ib = M.h5[j]; it = M.h5[j]; } } }
+    const kat = !isFinite(iMax) ? 0 : iMax >= IS[3] ? 4 : iMax >= IS[2] ? 3 : iMax >= IS[1] ? 2 : iMax >= IS[0] ? 1 : 0;
+    M.isKat = M.isKat || []; M.isKat[t] = kat;
+    if (kat && isFinite(ib) && ib < zTopp) {
+      const over = it >= zTopp, itS = over ? zTopp : it, cx = x + COL / 2, mid = (ib + itS) / 2;
+      // linjen bryts runt symbolen sa att den inte ser ut som ett streck i bagen
+      const yB = sk.y(ib * FOT), yT = sk.y(itS * FOT), yM = sk.y(mid * FOT), rod = c("--red");
+      if (yB - (yM + 11) > 1) gIs.appendChild(el("line", { x1: cx, y1: yB, x2: cx, y2: yM + 11, stroke: rod, "stroke-width": 1.4 }));
+      if ((yM - 13) - yT > 1) gIs.appendChild(el("line", { x1: cx, y1: yM - 13, x2: cx, y2: yT, stroke: rod, "stroke-width": 1.4 }));
+      if (it > ib) gIs.appendChild(el("line", { x1: cx - 3, y1: yB, x2: cx + 3, y2: yB, stroke: rod, "stroke-width": 1.4 }));
+      if (over) gIs.appendChild(el("path", { d: `M${cx - 4} ${yT + 6} L${cx} ${yT} L${cx + 4} ${yT + 6}`, stroke: rod, fill: "none", "stroke-width": 1.4 }));
+      else if (it > ib) gIs.appendChild(el("line", { x1: cx - 3, y1: yT, x2: cx + 3, y2: yT, stroke: rod, "stroke-width": 1.4 }));
+      // symbol: bage + 0-3 streck
+      gIs.appendChild(el("path", { d: `M${cx - 6} ${yM - 4} Q${cx - 6} ${yM + 6} ${cx} ${yM + 6} Q${cx + 6} ${yM + 6} ${cx + 6} ${yM - 4}`, stroke: rod, fill: "none", "stroke-width": 1.5 }));
+      const offs = [[], [], [0], [-2, 2], [-3.5, 0, 3.5]][kat];
+      for (const o of offs) gIs.appendChild(el("line", { x1: cx + o, y1: yM - 6, x2: cx + o, y2: yM + 8, stroke: rod, "stroke-width": 1.5 }));
+    }
+  }
+  if (saknasStart >= 0) saknasRekt(saknasStart, nt - 1, 0);
+  svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
+
+  // tabellrader
+  const yRad = i => sk.botten + 8 + i * RAD_H + 12;
+  RADER.forEach((r, i) => ax.appendChild(el("text", { x: 4, y: yRad(i), "font-size": 10, fill: c("--dim") }, r)));
+  const txt = (t, i, s, f) => { if (s !== "" && s !== undefined) svg.appendChild(el("text", { x: t * COL + COL / 2, y: yRad(i), "font-size": 10, "text-anchor": "middle", fill: f || c("--fg") }, s)); };
+  for (let t = 0; t < nt; t++) {
+    const d = new Date(t0 + t * 3600e3); txt(t, 0, p2(d.getUTCHours()), c("--dim"));
+    if (!M.ytaOK[t]) continue;
+    const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
+    if (isFinite(tk)) txt(t, 1, String(Math.round(tk - 273.15)), c("--red"));
+    if (isFinite(td)) txt(t, 2, String(Math.round(td)), c("--red"));
+    if (Y(3) > 0.5 && isFinite(Y(4))) {
+      const cx = t * COL + COL / 2, cy = yRad(3) - 4, L = 7, r = (Y(4) + 180) * Math.PI / 180;
+      const x1 = cx - Math.sin(r) * L, y1 = cy + Math.cos(r) * L, x2 = cx + Math.sin(r) * L, y2 = cy - Math.cos(r) * L;
+      svg.appendChild(el("line", { x1, y1, x2, y2, stroke: c("--fg"), "stroke-width": 1.2 }));
+      const a = Math.atan2(y2 - y1, x2 - x1);
+      svg.appendChild(el("path", { d: `M${x2} ${y2} L${x2 - 4 * Math.cos(a - 0.5)} ${y2 - 4 * Math.sin(a - 0.5)} L${x2 - 4 * Math.cos(a + 0.5)} ${y2 - 4 * Math.sin(a + 0.5)} Z`, fill: c("--fg") }));
+    }
+    if (isFinite(Y(3))) txt(t, 4, String(Math.round(Y(3) * KT)));
+    if (isFinite(Y(5))) txt(t, 5, String(Math.round(Y(5) * KT)));
+    txt(t, 6, vv(Y(6)));
+    let nb = NaN; if (t === 0) nb = 0; else if (M.ytaOK[t - 1] && isFinite(Y(7)) && isFinite(M.yta[7][t - 1])) nb = Math.max(0, Y(7) - M.yta[7][t - 1]);
+    txt(t, 7, vader(nb, Y(8), Y(6)));
+    txt(t, 8, molnCirkel(Y(9)));
+    if (isFinite(nb) && nb >= 0.05) txt(t, 9, nb.toFixed(1));
+    if (M.isKat && M.isKat[t]) txt(t, 10, ISNAMN[M.isKat[t]], c("--red"));
+  }
+  // info
+  const d0 = new Date(t0);
+  $("iRuta").textContent = isFinite(M.glat) ? M.glat.toFixed(3) + "N " + M.glon.toFixed(3) + "E, " + avstand(M.lat, M.lon, M.glat, M.glon).toFixed(1) + " km från punkten, modellens markhöjd " + Math.round(M.terr) + " m (ruta y=" + M.iy + " x=" + M.ix + ")" : "–";
+  const kt = $("iKorning"); kt.textContent = M.dtg + " (+0 = " + d0.getUTCDate() + "/" + (d0.getUTCMonth() + 1) + " " + p2(d0.getUTCHours()) + "Z)";
+  if (M.vald) { kt.insertAdjacentHTML("beforeend", ' <span class="vald">– vald körning</span>'); }
+  else if (M.ny) { kt.insertAdjacentHTML("beforeend", ' <span class="ny">– NY KÖRNING</span>'); }
+}
+
+// ===================================================================
+//  HAMTA
+// ===================================================================
+async function hamtaAllt() {
+  const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
+  if (!isFinite(lat) || !isFinite(lon)) { status("Ange lat och lon (decimalgrader).", "fel"); return; }
+  const r = ruta(lat, lon); if (!r) { status("Punkten ligger utanför MEPS-området.", "fel"); return; }
+  stoppad = false; $("hamta").disabled = true; $("stopp").disabled = false; rensaGammalCache();
+  const t0 = performance.now(); const tider = []; let kb = 0;
+  try {
+    let dtg, nt, ny = false; const val = $("korning").value;
+    if (val === "senaste") { const k = await sokKorning(); if (!k) throw new Error("Hittade ingen komplett körning."); ({ dtg, nt, ny } = k); }
+    else { dtg = val; nt = await antalTider(dtg); if (!nt) throw new Error("Körningen " + dtg + " finns inte (längre) på servern."); }
+    if (!M || M.dtg !== dtg || M.iy !== r.iy || M.ix !== r.ix || M.nt !== nt) { M = nyModell(dtg, nt, r.iy, r.ix); laddaCache(); }
+    M.lat = lat; M.lon = lon; M.ny = ny; M.vald = val !== "senaste";
+    if (!M.stat) {
+      status("Hämtar fasta data …"); const yx = "[" + r.iy + "][" + r.ix + "]";
+      const s = await hamta(BAS + FIL(dtg) + ".ascii?" + enc("time,ap,b,pressure,height5,latitude" + yx + ",longitude" + yx + ",surface_geopotential[0][0]" + yx));
+      if (s.st !== 200 || !lasStatik(s.txt)) { if (val === "senaste") { try { localStorage.removeItem("mt:senast"); } catch (e) {} } throw new Error("Kunde inte hämta fasta data (svar " + s.st + ")."); }
+      lagra(nyckel() + "static", s.txt); kb += s.txt.length / 1024;
+    }
+    rita();
+    const antal = Math.ceil(nt / BIT);
+    for (let a = 0; a < nt; a += BIT) {
+      const b = Math.min(a + BIT - 1, nt - 1), bu = bitUrl(a, b); if (!bu) continue;
+      status("Hämtar +" + a + " till +" + b + " h (bit " + (a / BIT + 1) + " av " + antal + ") …");
+      const t1 = performance.now(), res = await hamta(bu.url);
+      if (res.st !== 200) throw new Error("Hämtningen av +" + a + " till +" + b + " h misslyckades (svar " + res.st + "). Tryck Hämta igen för att fortsätta.");
+      tider.push(((performance.now() - t1) / 1000).toFixed(0)); kb += res.txt.length / 1024;
+      sparaBit(a, b, bu.etikett, res.txt); laggIn(res.txt, a, b, bu.etikett); rita();
+    }
+    const tot = ((performance.now() - t0) / 1000).toFixed(0);
+    status(tider.length ? "Klart: totalt " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + kb.toFixed(0) + " kB." : "Klart: allt fanns redan i webbläsaren (" + tot + " s).");
+  } catch (e) {
+    rita(); status(stoppad || e.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas. Tryck Hämta för att fortsätta." : e.message, stoppad ? "" : "fel");
+  } finally { $("hamta").disabled = false; $("stopp").disabled = true; }
+}
+
+// ===================================================================
+//  START
+// ===================================================================
+(function start() {
+  const sel = $("punkt");
+  PUNKTER.forEach(([n, icao], i) => sel.insertAdjacentHTML("beforeend", '<option value="' + i + '">' + n + " " + icao + "</option>"));
+  sel.insertAdjacentHTML("beforeend", '<option value="egen">Egen punkt</option>');
+  const satt = () => { if (sel.value !== "egen") { const p = PUNKTER[+sel.value]; $("lat").value = p[2]; $("lon").value = p[3]; } };
+  sel.addEventListener("change", satt);
+  sel.value = lasa("mt:punkt") || "2"; satt();
+  sel.addEventListener("change", () => lagra("mt:punkt", sel.value));
+  ["lat", "lon"].forEach(id => $(id).addEventListener("input", () => { sel.value = "egen"; }));
+  $("klistra").addEventListener("input", e => {
+    const m = e.target.value.match(/(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)/);
+    if (m) { $("lat").value = m[1].replace(",", "."); $("lon").value = m[2].replace(",", "."); sel.value = "egen"; }
+  });
+  $("topp").value = lasa("mt:topp") || "450";
+  $("topp").addEventListener("change", () => { lagra("mt:topp", $("topp").value); rita(); });
+  korningsLista();
+  $("hamta").addEventListener("click", hamtaAllt);
+  $("stopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rita);
+})();
+</script>
+</body>
+</html>
