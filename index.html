@@ -277,18 +277,19 @@ let lage = "th";   // "th" = tid-hojd, "p" = sannolikhet
 function status(t, klass) { const e = $(lage === "p" ? "pStatus" : "iStatus"); e.textContent = t; e.className = klass || ""; }
 
 // Hamtar en URL. Ett anrop i taget, tidsgrans, omforsok vid 429/5xx.
-async function hamta(url, medRetry = true) {
+// binar = true: svaret lases som byte (ArrayBuffer) i .buf i stallet for text.
+async function hamta(url, medRetry = true, binar = false) {
   for (let f = 1; f <= 4; f++) {
     if (stoppad) throw new Error("stoppad");
     avbryt = new AbortController();
     const tid = setTimeout(() => avbryt.abort(), TIMEOUT_S * 1000);
-    let st = 0, txt = "";
+    let st = 0, txt = "", buf = null;
     try {
       const r = await fetch(url, { signal: avbryt.signal, cache: "no-store" });
-      st = r.status; txt = await r.text();
+      st = r.status; if (binar && r.ok) buf = await r.arrayBuffer(); else txt = await r.text();
     } catch (e) { if (stoppad) throw new Error("stoppad"); st = 0; }
     clearTimeout(tid);
-    if (st === 200) return { st, txt };
+    if (st === 200) return { st, txt, buf };
     if (st === 404 || st === 400 || st === 403) return { st, txt };
     if (!medRetry && st !== 429) return { st, txt };
     if (f < 4) {

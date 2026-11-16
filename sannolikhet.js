@@ -7,15 +7,26 @@
 // ===================================================================
 const ENS_FIL = dtg => "meps_lagged_6_h_subset_2_5km_" + dtg + ".ncml";
 const ENS_MEDL = 30, ENS_TIDER = 62, ENS_BIT = 13;   // hogst 13 timmar per anrop (t.ex. +0 till +12) = 390 kartfalt
-const ENS_GRANS_MB = 150;                            // fraga forst over sa har mycket text att hamta
-const ENS_MAX_MB_ANROP = 40;                         // hogst sa har mycket text per anrop (thredds grans ca 50 MB)
+const ENS_GRANS_MB = 150;                            // fraga forst over sa har mycket att hamta
+const ENS_MAX_MB_ANROP = { txt: 40, bin: 150 };      // hogst per anrop (thredds: text ca 50 MB, binart ca 500 MB)
+const ENS_BYTE = { txt: 9, bin: 4 };                 // ungefar sa manga byte per varde
+const ENS_MAX_VARDEN = 250e6;                        // hard sparr: fler varden an sa far inte plats i webblasaren
+let ensFormat = "bin";                               // binart (.dods) forst, text (.ascii) som reserv
 // Parametrar. villkor ">=" eller "<". agg = hur timmarna i perioden slas ihop per medlem.
 const PPARAM = {
-  by:   { namn: "Byvind", var: "wind_speed_of_gust", enhet: "kt", konv: v => v * KT, villkor: "≥", agg: "max", std: 32, snabb: [25, 32, 35, 45, 50] },
-  nb:   { namn: "Nederbörd, summa i perioden", var: "precipitation_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 5, snabb: [1, 5, 10, 20, 40] },
-  sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [5000, 1500, 800, 300] },
-  bas:  { namn: "Molnbas", var: "cloud_base_altitude", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 1000, snabb: [1500, 1000, 500, 200] }
+  // Lagring: heltal (kod) * steg i visningsenheten. 8 bitar for byvind (1 kt, 0-254), annars 16 bitar.
+  by:   { namn: "Byvind", var: "wind_speed_of_gust", enhet: "kt", konv: v => v * KT, villkor: "≥", agg: "max", std: 32, snabb: [25, 32, 35, 45, 50], bitar: 8, steg: 1 },
+  nb:   { namn: "Nederbörd, summa i perioden", var: "precipitation_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 5, snabb: [1, 5, 10, 20, 40], bitar: 16, steg: 0.1 },
+  sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [5000, 1500, 800, 300], bitar: 16, steg: 10 },
+  bas:  { namn: "Molnbas", var: "cloud_base_altitude", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 1000, snabb: [1500, 1000, 500, 200], bitar: 16, steg: 10 }
 };
+// Kompakt lagring: varde i visningsenhet -> heltal. Hogsta koden betyder "saknas".
+const SAKN = { 8: 255, 16: 65535 };
+const nyKod = (pa, n) => pa.bitar === 8 ? new Uint8Array(n).fill(255) : new Uint16Array(n).fill(65535);
+function koda(pa, ut, i, raa) {
+  if (!isFinite(raa)) return;   // fyllnadsvarde -> saknas (koden ar redan "saknas")
+  const k = Math.round(pa.konv(raa) / pa.steg); ut[i] = Math.max(0, Math.min(SAKN[pa.bitar] - 1, k));
+}
 // Sannolikhetsklasser (%) och farger
 const PKLASS = [[5, "#fde68a"], [10, "#fbbf24"], [30, "#f97316"], [50, "#dc2626"], [70, "#9f1239"], [90, "#581c87"]];
 
@@ -24,7 +35,8 @@ const DB = (() => {
   const minne = new Map(); let dbp = null;
   const oppna = () => dbp || (dbp = new Promise((ok, fel) => {
     try {
-      const r = indexedDB.open("modelltittaren", 1);
+      try { indexedDB.deleteDatabase("modelltittaren"); } catch (e) {}   // gammal databas med flyttal (fore 16/11 kvall)
+      const r = indexedDB.open("modelltittaren-kod", 1);
       r.onupgradeneeded = () => r.result.createObjectStore("ens");
       r.onsuccess = () => ok(r.result); r.onerror = () => fel(r.error);
     } catch (e) { fel(e); }
@@ -138,7 +150,8 @@ async function probHamta() {
     if (!await sokEnsKorning()) throw new Error("Hittade ingen komplett ensemblekörning.");
     fyllTider(); const o = { ...o0, dtg: P.dtg }; ritaOmrade(); zoomaTillOmrade(o);
     const { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
-    const mb = sakn.length * ENS_MEDL * o.ny * o.nx * 9 / 1048576;
+    const antV = sakn.length * ENS_MEDL * o.ny * o.nx, mb = antV * ENS_BYTE[ensFormat] / 1048576;
+    if (antV > ENS_MAX_VARDEN) { status("För stort: " + Math.round(antV / 1e6) + " miljoner värden får inte plats i webbläsaren. Välj glesare upplösning, mindre område, kortare period eller var 3:e timme.", "fel"); P.fragar = true; return; }
     if (mb > ENS_GRANS_MB && !confirmStor(mb)) return;   // knappen "Hämta ändå" visas i Status
     // grupper om hogst ENS_BIT sammanhangande timmar
     // grupper med jamnt steg (1, 3 eller 6 h), hogst ENS_BIT timmar per anrop
@@ -158,18 +171,31 @@ async function probHamta() {
       const st = grupper[gi][2] || 1, nt = (g1 - g0) / st + 1;
       // thredds svarar inte med mer an ca 50 MB text per anrop -> dela omradet i rad-band vid behov.
       // Varje band kostar servern lika mycket som hela omradet, sa banden halls sa fa som mojligt.
-      const radPerBand = Math.max(1, Math.floor(ENS_MAX_MB_ANROP * 1048576 / (nt * ENS_MEDL * o.nx * 9)));
-      const ut = []; for (let k = 0; k < nt; k++) ut.push(new Float32Array(ENS_MEDL * n).fill(NaN));
+      const radPerBand = Math.max(1, Math.floor(ENS_MAX_MB_ANROP[ensFormat] * 1048576 / (nt * ENS_MEDL * o.nx * ENS_BYTE[ensFormat])));
+      const ut = []; for (let k = 0; k < nt; k++) ut.push(nyKod(pa, ENS_MEDL * n));
       for (let r0 = 0; r0 < o.ny; r0 += radPerBand) {
         const r1 = Math.min(o.ny - 1, r0 + radPerBand - 1), nb = r1 - r0 + 1;
         if (o.ny > radPerBand) $("pForloppText").textContent = "Anrop " + (gi + 1) + " av " + grupper.length + ", band " + (r0 / radPerBand + 1) + " av " + Math.ceil(o.ny / radPerBand) + ": +" + g0 + " till +" + g1 + " h";
-        const url = BAS + ENS_FIL(o.dtg) + ".ascii?" + enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][0:" + (ENS_MEDL - 1) + "][" + (o.y0 + r0 * o.s) + ":" + o.s + ":" + (o.y0 + r1 * o.s) + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
-        const t1 = performance.now(), res = await hamta(url);
-        if (res.st !== 200) throw new Error("Hämtningen av +" + g0 + " till +" + g1 + " h misslyckades (svar " + res.st + "). Tryck Hämta fält igen för att fortsätta.");
-        tider.push(((performance.now() - t1) / 1000).toFixed(0)); kb += res.txt.length / 1024;
-        const v = tolka(res.txt)[pa.var]; if (!v || v.length < nt * ENS_MEDL * nb * o.nx) throw new Error("Oväntat svar från servern (för få värden).");
-        for (let k = 0; k < nt; k++) for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < nb; y++)
-          ut[k].set(v.subarray(((k * ENS_MEDL + m) * nb + y) * o.nx, ((k * ENS_MEDL + m) * nb + y + 1) * o.nx), (m * o.ny + r0 + y) * o.nx);
+        const fraga = enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][0:" + (ENS_MEDL - 1) + "][" + (o.y0 + r0 * o.s) + ":" + o.s + ":" + (o.y0 + r1 * o.s) + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
+        const behov = nt * ENS_MEDL * nb * o.nx, t1 = performance.now();
+        let v = null;
+        if (ensFormat === "bin") {
+          // Binart forst. Fungerar det inte gar sidan over till text for resten av besoket.
+          const res = await hamta(BAS + ENS_FIL(o.dtg) + ".dods?" + fraga, false, true);
+          if (res.st === 200 && res.buf) { v = lasDods(res.buf, behov); kb += res.buf.byteLength / 1024; }
+          if (!v) { ensFormat = "txt"; status("Binärt format fungerade inte (svar " + res.st + ") – hämtar som text i stället …"); }
+        }
+        if (!v) {
+          const res = await hamta(BAS + ENS_FIL(o.dtg) + ".ascii?" + fraga);
+          if (res.st !== 200) throw new Error("Hämtningen av +" + g0 + " till +" + g1 + " h misslyckades (svar " + res.st + "). Tryck Hämta fält igen för att fortsätta.");
+          kb += res.txt.length / 1024; v = tolka(res.txt)[pa.var];
+          if (!v || v.length < behov) throw new Error("Oväntat svar från servern (för få värden).");
+        }
+        tider.push(((performance.now() - t1) / 1000).toFixed(0));
+        for (let k = 0; k < nt; k++) for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < nb; y++) {
+          const fr = ((k * ENS_MEDL + m) * nb + y) * o.nx, till = (m * o.ny + r0 + y) * o.nx;
+          for (let x = 0; x < o.nx; x++) koda(pa, ut[k], till + x, v[fr + x]);
+        }
       }
       for (let k = 0; k < nt; k++) {
         const t = g0 + k * st, arr = ut[k];
@@ -180,12 +206,28 @@ async function probHamta() {
       await probVisa();
     }
     const tot = ((performance.now() - t0) / 1000).toFixed(0);
-    status(tider.length ? "Klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + (kb / 1024).toFixed(1) + " MB." : "Klart: allt fanns redan sparat (" + tot + " s).");
+    status(tider.length ? "Klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + (kb / 1024).toFixed(1) + " MB " + (ensFormat === "bin" ? "binärt" : "text") + "." : "Klart: allt fanns redan sparat (" + tot + " s).");
   } catch (err) {
     status(stoppad || err.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas." : err.message, stoppad ? "" : "fel");
   } finally {
     P.upptagen = false; $("pHamta").disabled = false; $("pStopp").disabled = true; $("pForlopp").hidden = true; ritaOmrade(); await probVisa();
   }
+}
+// Laser forsta arrayen i ett DAP2-binarsvar (.dods): DDS-text, "Data:\n", sedan XDR:
+// tva 32-bitars langder och darefter flyttalen (32 bitar, storsta byte forst). Kartvektorerna efter hoppas over.
+// Returnerar Float32Array (NaN = fyllnadsvarde) eller null om svaret inte ser ut som vantat.
+function lasDods(buf, behov) {
+  const b = new Uint8Array(buf), mark = [10, 68, 97, 116, 97, 58, 10];   // "\nData:\n"
+  let p = -1;
+  for (let i = 0; i + 7 <= Math.min(b.length, 200000); i++) { let ok = true; for (let k = 0; k < 7; k++) if (b[i + k] !== mark[k]) { ok = false; break; } if (ok) { p = i + 7; break; } }
+  if (p < 0 || p + 8 > b.length) return null;
+  const dds = new TextDecoder().decode(b.subarray(0, p));
+  if (!/Float32\s+\w+\[/.test(dds)) return null;   // vi forvantar oss 32-bitars flyttal
+  const dv = new DataView(buf), n = dv.getUint32(p, false);
+  if (n !== dv.getUint32(p + 4, false) || n < behov || p + 8 + n * 4 > b.length) return null;
+  const ut = new Float32Array(n);
+  for (let i = 0, q = p + 8; i < n; i++, q += 4) { const v = dv.getFloat32(q, false); ut[i] = Math.abs(v) > 9e35 ? NaN : v; }
+  return ut;
 }
 // Vanlig fraga i en webbsida utan dialogrutor: tva klick pa Hamta inom 8 s bekraftar.
 let storOK = false;
@@ -210,7 +252,7 @@ async function timData(o, t) {
   if (!arr) { arr = await DB.get(k); if (!arr) return null; P.data.set(k, arr); }
   if (e.y0 === o.y0 && e.x0 === o.x0 && e.y1 === o.y1 && e.x1 === o.x1) return arr;
   const eny = (e.y1 - e.y0) / e.s + 1, enx = (e.x1 - e.x0) / e.s + 1, dy = (o.y0 - e.y0) / e.s, dx = (o.x0 - e.x0) / e.s;
-  const ut = new Float32Array(ENS_MEDL * o.ny * o.nx);
+  const ut = new arr.constructor(ENS_MEDL * o.ny * o.nx);
   for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++)
     ut[(m * o.ny + y) * o.nx + x] = arr[(m * eny + y + dy) * enx + x + dx];
   return ut;
@@ -222,12 +264,15 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk, lista) {
   if (pa.agg === "summa") {
     if (!e.tider.includes(b) || (fran < b && !e.tider.includes(fran))) return null;
     const ab = await timData(o, b), aa = fran < b ? await timData(o, fran) : null; if (!ab) return null;
-    for (let i = 0; i < agg.length; i++) agg[i] = pa.konv(Math.max(0, ab[i] - (aa ? aa[i] : 0)));   // ackumulerat: slut minus start
+    const ms = SAKN[pa.bitar];
+    for (let i = 0; i < agg.length; i++) { if (ab[i] === ms || (aa && aa[i] === ms)) continue;
+      agg[i] = Math.max(0, ab[i] - (aa ? aa[i] : 0)) * pa.steg; }   // ackumulerat: slut minus start
   } else {
     for (const t of lista) if (!e.tider.includes(t)) return null;
     for (const t of lista) {
       const d = await timData(o, t); if (!d) return null;
-      for (let i = 0; i < agg.length; i++) { const v = d[i]; if (!isFinite(v)) continue; const w = pa.konv(v);
+      const ms = SAKN[pa.bitar];
+      for (let i = 0; i < agg.length; i++) { const k = d[i]; if (k === ms) continue; const w = k * pa.steg;
         if (pa.agg === "max" ? w > agg[i] : w < agg[i]) agg[i] = w; }
     }
   }
