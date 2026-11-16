@@ -17,7 +17,7 @@ const PPARAM = {
   // Lagring: heltal (kod) * steg i visningsenheten. 8 bitar for byvind (1 kt, 0-254), annars 16 bitar.
   by:   { namn: "Byvind", var: "wind_speed_of_gust", enhet: "kt", konv: v => v * KT, villkor: "≥", agg: "max", std: 32, snabb: [25, 32, 35, 45, 50], bitar: 8, steg: 1 },
   nb:   { namn: "Nederbörd, summa i perioden", var: "precipitation_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 5, snabb: [1, 5, 10, 20, 40], bitar: 16, steg: 0.1 },
-  sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [5000, 1500, 800, 300], bitar: 8,
+  sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [5000, 3000, 2000, 1500, 1000, 800, 500, 300], bitar: 8,
           tabell: skala([[0, 200, 10], [225, 500, 25], [550, 1000, 50], [1100, 5000, 100], [5200, 10000, 200], [11000, 75000, 1000]]) },
   bas:  { namn: "Molnbas", var: "cloud_base_altitude", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 1000, snabb: [1500, 1000, 500, 400, 300, 200, 100], bitar: 8,
           tabell: skala([[0, 200, 10], [250, 1000, 50], [1100, 5000, 100], [5500, 20000, 500], [25000, 25000, 1]]) }   // 25000 = "over 20 000 ft"
