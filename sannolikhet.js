@@ -245,10 +245,21 @@ async function probVisa() {
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === v).sort((x, y) => y.s - x.s);
   const vis = []; let pmax = 0;
   for (const e of kand) { const r = await beraknaOmrade(e, pa, a, b, fran, trosk, lista); if (r) vis.push(r); }
-  for (const { o, prob } of vis) for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
-    const p = prob[y * o.nx + x]; if (p > pmax) pmax = p; const pr = p * 100; if (pr < PKLASS[0][0]) continue;
-    let f = PKLASS[0][1]; for (const [gr, c] of PKLASS) if (pr >= gr) f = c;
-    g.appendChild(el("rect", { x: o.x0 + x * o.s - o.s / 2, y: KY - 1 - (o.y0 + y * o.s) - o.s / 2, width: o.s, height: o.s, fill: f }));
+  // Varje omrade ritas som EN bild (en pixel per punkt) i stallet for tusentals rutor –
+  // annars blir kartan seg att zooma och dra med stora omraden.
+  const rgb = PKLASS.map(([gr, c]) => [gr, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
+  for (const { o, prob } of vis) {
+    const cv = document.createElement("canvas"); cv.width = o.nx; cv.height = o.ny;
+    const cx = cv.getContext("2d"), img = cx.createImageData(o.nx, o.ny), px = img.data;
+    for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
+      const p = prob[y * o.nx + x]; if (p > pmax) pmax = p; const pr = p * 100; if (pr < rgb[0][0]) continue;
+      let f = rgb[0]; for (const k of rgb) if (pr >= k[0]) f = k;
+      const i = ((o.ny - 1 - y) * o.nx + x) * 4;   // bildens rad 0 = norra kanten
+      px[i] = f[1]; px[i + 1] = f[2]; px[i + 2] = f[3]; px[i + 3] = 255;
+    }
+    cx.putImageData(img, 0, 0);
+    g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
+      preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   }
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
