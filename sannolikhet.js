@@ -18,13 +18,13 @@ const PPARAM = {
   by:   { namn: "Byvind", var: "wind_speed_of_gust", enhet: "kt", konv: v => v * KT, villkor: "≥", agg: "max", std: 32, snabb: [25, 32, 35, 45, 50], bitar: 8, steg: 1 },
   nb:   { namn: "Nederbörd, summa i perioden", var: "precipitation_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 5, snabb: [1, 5, 10, 20, 40], bitar: 16, steg: 0.1 },
   sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [10000, 5000, 3000, 2000, 1500, 1000, 800, 500, 300, 100], bitar: 8,
-          tabell: skala([[0, 200, 10], [225, 500, 25], [550, 1000, 50], [1100, 5000, 100], [5200, 10000, 200], [11000, 75000, 1000]]) },
+          tabell: trappSkala([[0, 200, 10], [225, 500, 25], [550, 1000, 50], [1100, 5000, 100], [5200, 10000, 200], [11000, 75000, 1000]]) },
   bas:  { namn: "Molnbas", var: "cloud_base_altitude", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 1000, snabb: [1500, 1000, 500, 400, 300, 200, 100], bitar: 8,
-          tabell: skala([[0, 200, 10], [250, 1000, 50], [1100, 5000, 100], [5500, 20000, 500], [25000, 25000, 1]]) }   // 25000 = "over 20 000 ft"
+          tabell: trappSkala([[0, 200, 10], [250, 1000, 50], [1100, 5000, 100], [5500, 20000, 500], [25000, 25000, 1]]) }   // 25000 = "over 20 000 ft"
 };
 // Olinjar skala for 1 byte (Jakobs forslag 16/11): fint steg dar trosklarna finns, grovt dar det inte spelar roll.
 // [fran, till, steg] -> lista med alla tillatna varden. Koden ar platsen i listan.
-function skala(delar) { const ut = []; for (const [a, b, s] of delar) for (let v = a; v <= b + 1e-9; v += s) ut.push(Math.round(v)); return ut; }
+function trappSkala(delar) { const ut = []; for (const [a, b, s] of delar) for (let v = a; v <= b + 1e-9; v += s) ut.push(Math.round(v)); return ut; }
 // Kompakt lagring: varde i visningsenhet -> heltal. Hogsta koden betyder "saknas".
 const SAKN = { 8: 255, 16: 65535 };
 const nyKod = (pa, n) => pa.bitar === 8 ? new Uint8Array(n).fill(255) : new Uint16Array(n).fill(65535);

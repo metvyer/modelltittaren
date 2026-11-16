@@ -798,7 +798,7 @@ let F = null, tick = null, upptagen = false, koad = false;
 const bitTidNyckel = () => "mt:bitTid:" + $("topp").value + (vindLage ? "v" : "");
 function forvantadBitTid() { const v = +lasa(bitTidNyckel()); return v > 0 ? v : (+$("topp").value <= 30 ? 28 : 42); }
 function noteraBitTid(s) { const k = bitTidNyckel(), v = +lasa(k); lagra(k, String(v > 0 ? v * 0.6 + s * 0.4 : s)); }
-function tidText(s) { s = Math.round(s); return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + p2(s % 60) + " s"; }
+function sekText(s) { s = Math.round(s); return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + p2(s % 60) + " s"; }
 function visaForlopp() {
   const box = $("forlopp"); if (!F) { box.hidden = true; return; }
   box.hidden = false; const st = $("stapel"); st.textContent = "";
@@ -816,7 +816,7 @@ function visaForlopp() {
   txt.innerHTML = "";
   txt.append("Bit " + (F.a / BIT + 1) + " av " + Math.ceil(M.nt / BIT) + ": +" + F.a + " till +" + F.b + " h · " + Math.floor(s) + " s ");
   const dim = document.createElement("span"); dim.className = "dim"; dim.textContent = "(brukar ta ca " + Math.round(F.forv) + " s)"; txt.append(dim);
-  txt.append(" · ca " + tidText(rest) + " kvar" + (F.varv > 0 ? " · fyller på nivåer för ny topp" : ""));
+  txt.append(" · ca " + sekText(rest) + " kvar" + (F.varv > 0 ? " · fyller på nivåer för ny topp" : ""));
 }
 function forloppStart(fas) { F = { fas, t1: 0, a: 0, b: 0, varv: 0, forv: forvantadBitTid() }; visaForlopp(); clearInterval(tick); tick = setInterval(visaForlopp, 500); }
 function forloppSlut() { clearInterval(tick); tick = null; F = null; visaForlopp(); }
@@ -865,7 +865,8 @@ async function hamtaAllt() {
     const tot = ((performance.now() - t0) / 1000).toFixed(0);
     status(tider.length ? "Klart: totalt " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + kb.toFixed(0) + " kB." : "Klart: allt fanns redan i webbläsaren (" + tot + " s).");
   } catch (e) {
-    rita(); status(koad ? "Byter punkt …" : stoppad || e.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas. Tryck Hämta för att fortsätta." : e.message, stoppad ? "" : "fel");
+    try { rita(); } catch (e2) {}
+    status(koad ? "Byter punkt …" : stoppad || e.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas. Tryck Hämta för att fortsätta." : e.message, stoppad ? "" : "fel");
   } finally {
     upptagen = false; forloppSlut(); ritaMarkorer();
     $("hamta").disabled = false; $("stopp").disabled = true;
@@ -1087,6 +1088,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261116-2037"></script>
+<script src="sannolikhet.js?v=20261116-2140"></script>
 </body>
 </html>
