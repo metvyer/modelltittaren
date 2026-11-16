@@ -75,6 +75,11 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 /* Forlopp under hamtning */
 .forlopp { margin: 0 0 10px; display: grid; gap: 5px; }
 .forlopp[hidden] { display: none; }
+/* Hovringsruta */
+.tips { position: fixed; z-index: 10; pointer-events: none; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.18); max-width: 300px; font-variant-numeric: tabular-nums; }
+.tips[hidden] { display: none; }
+.tips .rubrik { font-weight: 650; margin-bottom: 2px; }
+.tips .k { display: inline-block; min-width: 78px; color: var(--dim); }
 .stapel { display: flex; gap: 3px; height: 12px; }
 .stapel > div { flex: 1 1 0; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
 .stapel > div.klar { background: var(--acc); }
@@ -144,6 +149,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 </div>
 </section>
 </div>
+<div class="tips" id="tips" hidden></div>
 <p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå. Kartunderlag: Natural Earth.</p>
 
 <script>
@@ -420,7 +426,9 @@ function skala() {
   const y = fot => { const fl = fot / 100; if (fl <= 0) return botten; if (fl >= topp) return TOPP_RAD;
     let s = 1; while (s < SKALA.length - 1 && fl > SKALA[s]) s++;
     return botten - ((s - 1) + (fl - SKALA[s - 1]) / (SKALA[s] - SKALA[s - 1])) * segH; };
-  return { topp, y, botten };
+  const fot = y => { if (y >= botten) return 0; const seg = Math.min(antal, (botten - y) / segH), s = Math.min(SKALA.length - 1, Math.floor(seg) + 1);
+    return (SKALA[s - 1] + (seg - (s - 1)) * (SKALA[s] - SKALA[s - 1])) * 100; };
+  return { topp, y, fot, botten, segH };
 }
 function vv(m) {
   if (!isFinite(m)) return ""; if (m < 100) return "00"; if (m <= 5000) return p2(Math.floor(m / 100)); if (m < 6000) return "50";
@@ -447,6 +455,7 @@ function rita() {
   const defs = el("defs", {}); const pat = el("pattern", { id: "snett", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
   pat.appendChild(el("line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: c("--hatch"), "stroke-width": 1.5 })); defs.appendChild(pat); svg.appendChild(defs);
   const t0 = M.tid[0] * 1000, { k1 } = behov(), zTopp = sk.topp * 100 / FOT;
+  M.sk = sk; M.t0 = t0;
 
   // datumrad + lodrata linjer
   for (let t = 0; t <= nt; t++) {
@@ -547,6 +556,65 @@ function rita() {
   if (M.vald) { kt.insertAdjacentHTML("beforeend", ' <span class="vald">– vald körning</span>'); }
   else if (M.ny) { kt.insertAdjacentHTML("beforeend", ' <span class="ny">– NY KÖRNING</span>'); }
 }
+
+// ===================================================================
+//  HOVRINGSRUTA I DIAGRAMMET (timme + hojd under pekaren)
+// ===================================================================
+const KAT = ["inga", "FEW", "SCT", "BKN", "OVC"];
+function tipsText(t, yPix) {
+  const rad = [], d = new Date(M.t0 + t * 3600e3);
+  rad.push(["", VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + " h)", "rubrik"]);
+  if (yPix !== null && yPix >= TOPP_RAD - 2 && yPix <= M.sk.botten) {
+    const fot = Math.max(0, M.sk.fot(yPix)), z = fot / FOT;
+    rad.push(["Höjd", "ca " + Math.round(fot / 50) * 50 + " ft (" + Math.round(z / 10) * 10 + " m) över mark"]);
+    const kFran = clKmin(t), zz = (kFran < NIV && M.ytaOK[t]) ? hojder(t, kFran) : null;
+    let moln = "ej hämtad";
+    if (zz) for (let k = NIV - 1; k >= kFran; k--) {
+      const zLo = k === NIV - 1 ? 0 : (zz[k] + zz[k + 1]) / 2, zHi = k === kFran ? zz[k] : (zz[k] + zz[k - 1]) / 2;
+      if (z >= zLo && z < zHi) { const v = M.cl[t * NIV + k], kat = v >= MOLN[3] ? 4 : v >= MOLN[2] ? 3 : v >= MOLN[1] ? 2 : v >= MOLN[0] ? 1 : 0; moln = Math.round(v) + " % (" + KAT[kat] + "), modellnivå " + k; break; }
+    }
+    rad.push(["Moln där", moln]);
+    // isindex pa narmaste indexhojd
+    let jB = -1; M.h5.forEach((h, j) => { if (jB < 0 || Math.abs(h - z) < Math.abs(M.h5[jB] - z)) jB = j; });
+    if (jB >= 0 && M.iceHar[t * NIS + jB]) {
+      const v = M.ice[t * NIS + jB], kat = !isFinite(v) ? 0 : v >= IS[3] ? 4 : v >= IS[2] ? 3 : v >= IS[1] ? 2 : v >= IS[0] ? 1 : 0;
+      rad.push(["Isindex", (isFinite(v) ? v : "–") + (kat ? " (" + ISNAMN[kat] + ")" : "") + " vid " + M.h5[jB] + " m"]);
+    }
+  }
+  if (M.ytaOK[t]) {
+    const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
+    rad.push(["T / Td", (isFinite(tk) ? (tk - 273.15).toFixed(1) : "–") + " / " + (isFinite(td) ? td.toFixed(1) : "–") + " °C"]);
+    if (isFinite(Y(3))) rad.push(["Vind", (isFinite(Y(4)) ? p2(Math.round(Y(4) / 10) % 36 || 36) + "0° " : "") + Math.round(Y(3) * KT) + " kt, byar " + (isFinite(Y(5)) ? Math.round(Y(5) * KT) : "–") + " kt"]);
+    if (isFinite(Y(6))) rad.push(["Sikt", Y(6) >= 10000 ? Math.round(Y(6) / 1000) + " km" : Math.round(Y(6) / 100) * 100 + " m"]);
+    let nb = NaN; if (t > 0 && M.ytaOK[t - 1]) nb = Math.max(0, Y(7) - M.yta[7][t - 1]);
+    if (isFinite(nb)) rad.push(["Nederbörd", nb.toFixed(1) + " mm/h"]);
+    if (isFinite(Y(9))) rad.push(["Totalt moln", Math.round((Y(9) > 1.5 ? Y(9) / 100 : Y(9)) * 8) + "/8"]);
+  } else rad.push(["", "markdata ej hämtade"]);
+  return rad;
+}
+function visaTips(e) {
+  const tip = $("tips"); if (!M || !M.sk) { tip.hidden = true; return; }
+  const r = $("svg").getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, t = Math.floor(x / COL);
+  if (t < 0 || t >= M.nt || y < 0 || y > r.height) { tip.hidden = true; return; }
+  tip.innerHTML = "";
+  for (const [k, v, cl] of tipsText(t, y <= M.sk.botten ? y : null)) {
+    const div = document.createElement("div"); if (cl) div.className = cl;
+    if (k) { const b = document.createElement("span"); b.className = "k"; b.textContent = k; div.append(b); }
+    div.append(v); tip.append(div);
+  }
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let lx = e.clientX + 14, ly = e.clientY + 14;
+  if (lx + w > innerWidth - 8) lx = e.clientX - w - 14;
+  if (ly + h > innerHeight - 8) ly = e.clientY - h - 14;
+  tip.style.left = Math.max(8, lx) + "px"; tip.style.top = Math.max(8, ly) + "px";
+  // markera timmen
+  let ram = $("tipsRam"); if (!ram) { ram = el("rect", { id: "tipsRam", fill: "none", "stroke-width": 1.5, "pointer-events": "none" }); }
+  $("svg").appendChild(ram);
+  ram.setAttribute("x", t * COL + 0.75); ram.setAttribute("y", 1); ram.setAttribute("width", COL - 1.5); ram.setAttribute("height", r.height - 2);
+  ram.setAttribute("stroke", getComputedStyle(document.documentElement).getPropertyValue("--acc").trim());
+}
+function gomTips() { $("tips").hidden = true; const r = $("tipsRam"); if (r) r.remove(); }
 
 // ===================================================================
 //  FORLOPP (stapel per 24 h-bit, tickande tid, uppskattad tid kvar)
@@ -788,6 +856,9 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("stopp").addEventListener("click", () => { koad = false; stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rita);
   startaKarta();
+  const d = $("svg");
+  d.addEventListener("pointermove", visaTips); d.addEventListener("pointerdown", visaTips); d.addEventListener("pointerleave", gomTips);
+  $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
 </body>
