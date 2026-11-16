@@ -43,6 +43,43 @@ svg text { font-family: var(--font); fill: var(--fg); }
 .forklaring { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 2px; font-size: 12px; color: var(--dim); align-items: center; }
 .ruta { display: inline-block; width: 14px; height: 10px; border: 1px solid var(--line); vertical-align: -1px; margin-right: 4px; }
 .kalla { font-size: 12px; color: var(--dim); margin: 8px 2px 0; }
+/* Karta till vanster, diagram till hoger (staplas pa smal skarm) */
+:root { --hav: #d3e2ee; --land: #f1f2ec; --kust: #8fa3a0; --grans: #b07a7a; --gradnat: #a9b4be; --mkfg: #1b2530; --mkbg: #ffffff; --mkhamt: #1f7a3f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --hav: #16222d; --land: #262d33; --kust: #5c6f78; --grans: #9a6464; --gradnat: #3b4752; --mkfg: #e3e8ee; --mkbg: #12171d; --mkhamt: #6fd08f; } }
+:root[data-theme="dark"] { --hav: #16222d; --land: #262d33; --kust: #5c6f78; --grans: #9a6464; --gradnat: #3b4752; --mkfg: #e3e8ee; --mkbg: #12171d; --mkhamt: #6fd08f; }
+.arbete { display: grid; grid-template-columns: minmax(260px, 430px) minmax(0, 1fr); gap: 14px; margin-top: 12px; align-items: start; }
+@media (max-width: 860px) { .arbete { grid-template-columns: minmax(0, 1fr); } .kartpanel { max-width: 480px; } }
+.kartpanel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 6px; min-width: 0; }
+.kartverktyg { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+button.liten { padding: 2px 10px; min-width: 32px; }
+.kartpos { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; margin-left: auto; }
+#karta { width: 100%; height: auto; aspect-ratio: 949 / 1069; display: block; border-radius: 4px; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
+#karta.drar { cursor: grabbing; }
+#kHav { fill: var(--hav); }
+#karta .land { fill: var(--land); stroke: var(--kust); fill-rule: evenodd; }
+#karta .sjo { fill: var(--hav); stroke: var(--kust); }
+#karta .grans { fill: none; stroke: var(--grans); }
+#karta .grad { fill: none; stroke: var(--gradnat); }
+#karta .mk { cursor: pointer; }
+#karta .mk text { fill: var(--mkfg); paint-order: stroke; stroke: var(--land); font-family: var(--font); font-weight: 600; }
+.kartforklaring { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--dim); }
+.kartforklaring .mk { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--mkfg); background: var(--mkbg); vertical-align: -1px; margin-right: 4px; }
+.kartforklaring .mk.halv { background: linear-gradient(90deg, var(--mkhamt) 50%, var(--mkbg) 50%); }
+.kartforklaring .mk.full { background: var(--mkhamt); }
+.kartforklaring .mk.vald { border-color: var(--red); background: transparent; box-shadow: 0 0 0 2px var(--red) inset; }
+.karttips { font-size: 12px; color: var(--dim); margin: 0; }
+.hoger { min-width: 0; }
+.hoger .info { margin-top: 0; }
+/* Forlopp under hamtning */
+.forlopp { margin: 0 0 10px; display: grid; gap: 5px; }
+.forlopp[hidden] { display: none; }
+.stapel { display: flex; gap: 3px; height: 12px; }
+.stapel > div { flex: 1 1 0; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
+.stapel > div.klar { background: var(--acc); }
+.stapel > div > span { position: absolute; inset: 0 auto 0 0; background: var(--acc); opacity: .65; transition: width .5s linear; }
+.stapel > div.aktiv { outline: 1px solid var(--acc); outline-offset: -1px; }
+.forlopptext { font-size: 13px; font-variant-numeric: tabular-nums; }
+.forlopptext .dim { color: var(--dim); }
 </style>
 </head>
 <body>
@@ -59,11 +96,35 @@ svg text { font-family: var(--font); fill: var(--fg); }
   <button id="stopp" class="sek" disabled>Stopp</button>
 </div>
 
+<div class="arbete">
+<section class="kartpanel" aria-label="Karta">
+  <div class="kartverktyg">
+    <button class="sek liten" id="zIn" title="Zooma in">+</button>
+    <button class="sek liten" id="zUt" title="Zooma ut">−</button>
+    <button class="sek liten" id="zHem" title="Visa hela MEPS-området">Hela</button>
+    <span class="kartpos" id="kartPos"></span>
+  </div>
+  <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
+    <rect id="kHav" x="0" y="0" width="949" height="1069"/>
+    <g id="kGeo"></g><g id="kMark"></g>
+  </svg>
+  <div class="kartforklaring">
+    <span><i class="mk tom"></i>ej hämtad</span><span><i class="mk halv"></i>påbörjad</span><span><i class="mk full"></i>hämtad</span><span><i class="mk vald"></i>vald</span>
+  </div>
+  <p class="karttips">Klicka på kartan för att hämta en punkt, eller på en flygplats. Hjul eller nyp = zooma, dra = flytta.</p>
+</section>
+
+<section class="hoger">
 <dl class="info">
   <dt>Körning</dt><dd id="iKorning">–</dd>
   <dt>Modellruta</dt><dd id="iRuta">–</dd>
-  <dt>Status</dt><dd id="iStatus">Välj punkt och tryck Hämta.</dd>
+  <dt>Status</dt><dd id="iStatus">Välj punkt och tryck Hämta, eller klicka på kartan.</dd>
 </dl>
+
+<div class="forlopp" id="forlopp" hidden>
+  <div class="stapel" id="stapel"></div>
+  <div class="forlopptext" id="forloppText" aria-live="polite"></div>
+</div>
 
 <div class="diagram">
   <svg class="axel" id="axel" width="56" height="10"></svg>
@@ -78,7 +139,9 @@ svg text { font-family: var(--font); fill: var(--fg); }
   <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt i synoptisk kod VV (80 = 30 km)</span>
 </div>
-<p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå.</p>
+</section>
+</div>
+<p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå. Kartunderlag: Natural Earth.</p>
 
 <script>
 "use strict";
@@ -180,15 +243,25 @@ function tolka(txt) {
 }
 
 // lat/lon -> MEPS-ruta (Lambert, tangent 63,3N, lon0 15E, R 6371 km, 2,5 km)
-function ruta(lat, lon) {
+const LCC = (() => {
   const rad = Math.PI / 180, p0 = 63.3 * rad, n = Math.sin(p0), R = 6371000;
   const F = Math.cos(p0) * Math.tan(Math.PI / 4 + p0 / 2) ** n / n;
-  const rho0 = R * F / Math.tan(Math.PI / 4 + p0 / 2) ** n;
-  const rho = R * F / Math.tan(Math.PI / 4 + lat * rad / 2) ** n;
-  const th = n * (lon - 15) * rad;
-  const ix = Math.round((rho * Math.sin(th) + 1060084) / 2500);
-  const iy = Math.round((rho0 - rho * Math.cos(th) + 1332517.9) / 2500);
-  return (ix >= 0 && ix < 949 && iy >= 0 && iy < 1069) ? { iy, ix } : null;
+  return { rad, n, RF: R * F, rho0: R * F / Math.tan(Math.PI / 4 + p0 / 2) ** n, x0: -1060084, y0: -1332517.9, dx: 2500, nx: 949, ny: 1069 };
+})();
+// lat/lon -> rutindex med decimaler (fx, fy)
+function rutaF(lat, lon) {
+  const L = LCC, rho = L.RF / Math.tan(Math.PI / 4 + lat * L.rad / 2) ** L.n, th = L.n * (lon - 15) * L.rad;
+  return { fx: (rho * Math.sin(th) - L.x0) / L.dx, fy: (L.rho0 - rho * Math.cos(th) - L.y0) / L.dx };
+}
+// rutindex (fx, fy) -> lat/lon (omvand Lambert)
+function franRuta(fx, fy) {
+  const L = LCC, x = fx * L.dx + L.x0, dy = L.rho0 - (fy * L.dx + L.y0);
+  const rho = Math.hypot(x, dy), th = Math.atan2(x, dy);
+  return { lat: (2 * Math.atan((L.RF / rho) ** (1 / L.n)) - Math.PI / 2) / L.rad, lon: 15 + th / L.n / L.rad };
+}
+function ruta(lat, lon) {
+  const f = rutaF(lat, lon), ix = Math.round(f.fx), iy = Math.round(f.fy);
+  return (ix >= 0 && ix < LCC.nx && iy >= 0 && iy < LCC.ny) ? { iy, ix } : null;
 }
 function avstand(a1, o1, a2, o2) {
   const r = Math.PI / 180, dA = (a2 - a1) * r, dO = (o2 - o1) * r;
@@ -473,14 +546,45 @@ function rita() {
 }
 
 // ===================================================================
+//  FORLOPP (stapel per 24 h-bit, tickande tid, uppskattad tid kvar)
+// ===================================================================
+let F = null, tick = null, upptagen = false, koad = false;
+function forvantadBitTid() { const v = +lasa("mt:bitTid:" + $("topp").value); return v > 0 ? v : (+$("topp").value <= 30 ? 28 : 42); }
+function noteraBitTid(s) { const k = "mt:bitTid:" + $("topp").value, v = +lasa(k); lagra(k, String(v > 0 ? v * 0.6 + s * 0.4 : s)); }
+function tidText(s) { s = Math.round(s); return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + p2(s % 60) + " s"; }
+function visaForlopp() {
+  const box = $("forlopp"); if (!F) { box.hidden = true; return; }
+  box.hidden = false; const st = $("stapel"); st.textContent = "";
+  const nu = performance.now(); let kvar = 0;
+  if (M && M.stat) for (let a = 0; a < M.nt; a += BIT) {
+    const b = Math.min(a + BIT - 1, M.nt - 1), d = document.createElement("div"), aktiv = F.t1 && F.a === a;
+    d.title = "+" + a + " till +" + b + " h";
+    if (aktiv) { d.className = "aktiv"; const sp = document.createElement("span"); sp.style.width = Math.min(95, (nu - F.t1) / 10 / F.forv) + "%"; d.appendChild(sp); }
+    else if (!bitUrl(a, b)) d.className = "klar"; else kvar++;
+    st.appendChild(d);
+  }
+  const txt = $("forloppText");
+  if (!F.t1) { txt.textContent = F.fas; return; }
+  const s = (nu - F.t1) / 1000, rest = Math.max(3, F.forv - s) + kvar * F.forv;
+  txt.innerHTML = "";
+  txt.append("Bit " + (F.a / BIT + 1) + " av " + Math.ceil(M.nt / BIT) + ": +" + F.a + " till +" + F.b + " h · " + Math.floor(s) + " s ");
+  const dim = document.createElement("span"); dim.className = "dim"; dim.textContent = "(brukar ta ca " + Math.round(F.forv) + " s)"; txt.append(dim);
+  txt.append(" · ca " + tidText(rest) + " kvar" + (F.varv > 0 ? " · fyller på nivåer för ny topp" : ""));
+}
+function forloppStart(fas) { F = { fas, t1: 0, a: 0, b: 0, varv: 0, forv: forvantadBitTid() }; visaForlopp(); clearInterval(tick); tick = setInterval(visaForlopp, 500); }
+function forloppSlut() { clearInterval(tick); tick = null; F = null; visaForlopp(); }
+
+// ===================================================================
 //  HAMTA
 // ===================================================================
 async function hamtaAllt() {
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
   if (!isFinite(lat) || !isFinite(lon)) { status("Ange lat och lon (decimalgrader).", "fel"); return; }
   const r = ruta(lat, lon); if (!r) { status("Punkten ligger utanför MEPS-området.", "fel"); return; }
-  stoppad = false; $("hamta").disabled = true; $("stopp").disabled = false; rensaGammalCache();
+  upptagen = true; stoppad = false; $("hamta").disabled = true; $("stopp").disabled = false; rensaGammalCache();
+  if ($("punkt").value === "egen") laggTillEgen(lat, lon, r);
   const t0 = performance.now(); const tider = []; let kb = 0;
+  forloppStart("Letar senaste körningen …");
   try {
     let dtg, nt, ny = false; const val = $("korning").value;
     if (val === "senaste") { const k = await sokKorning(); if (!k) throw new Error("Hittade ingen komplett körning."); ({ dtg, nt, ny } = k); }
@@ -488,50 +592,192 @@ async function hamtaAllt() {
     if (!M || M.dtg !== dtg || M.iy !== r.iy || M.ix !== r.ix || M.nt !== nt) { M = nyModell(dtg, nt, r.iy, r.ix); laddaCache(); }
     M.lat = lat; M.lon = lon; M.ny = ny; M.vald = val !== "senaste";
     if (!M.stat) {
-      status("Hämtar fasta data …"); const yx = "[" + r.iy + "][" + r.ix + "]";
+      F.fas = "Hämtar fasta data (tider, nivåer, markhöjd) …"; status("Hämtar fasta data …"); visaForlopp();
+      const yx = "[" + r.iy + "][" + r.ix + "]";
       const s = await hamta(BAS + FIL(dtg) + ".ascii?" + enc("time,ap,b,pressure,height5,latitude" + yx + ",longitude" + yx + ",surface_geopotential[0][0]" + yx));
       if (s.st !== 200 || !lasStatik(s.txt)) { if (val === "senaste") { try { localStorage.removeItem("mt:senast"); } catch (e) {} } throw new Error("Kunde inte hämta fasta data (svar " + s.st + ")."); }
       lagra(nyckel() + "static", s.txt); kb += s.txt.length / 1024;
     }
-    rita();
-    const antal = Math.ceil(nt / BIT);
-    for (let a = 0; a < nt; a += BIT) {
-      const b = Math.min(a + BIT - 1, nt - 1), bu = bitUrl(a, b); if (!bu) continue;
-      status("Hämtar +" + a + " till +" + b + " h (bit " + (a / BIT + 1) + " av " + antal + ") …");
-      const t1 = performance.now(), res = await hamta(bu.url);
-      if (res.st !== 200) throw new Error("Hämtningen av +" + a + " till +" + b + " h misslyckades (svar " + res.st + "). Tryck Hämta igen för att fortsätta.");
-      tider.push(((performance.now() - t1) / 1000).toFixed(0)); kb += res.txt.length / 1024;
-      sparaBit(a, b, bu.etikett, res.txt); laggIn(res.txt, a, b, bu.etikett); rita();
+    rita(); ritaMarkorer(); F.fas = "Kontrollerar vad som saknas …";
+    // Varv 0 hamtar allt som saknas. Byts toppen under hamtningen fyller varv 1-2 pa det som da saknas.
+    for (let varv = 0; varv < 3; varv++) {
+      let nagot = false; F.varv = varv;
+      for (let a = 0; a < nt; a += BIT) {
+        const b = Math.min(a + BIT - 1, nt - 1), bu = bitUrl(a, b); if (!bu) continue;
+        nagot = true; status("Hämtar +" + a + " till +" + b + " h …");
+        F.a = a; F.b = b; F.forv = forvantadBitTid(); F.t1 = performance.now(); visaForlopp();
+        const res = await hamta(bu.url);
+        if (res.st !== 200) throw new Error("Hämtningen av +" + a + " till +" + b + " h misslyckades (svar " + res.st + "). Tryck Hämta igen för att fortsätta.");
+        const sek = (performance.now() - F.t1) / 1000; F.t1 = 0; F.fas = "Ritar och förbereder nästa bit …";
+        tider.push(sek.toFixed(0)); noteraBitTid(sek); kb += res.txt.length / 1024;
+        sparaBit(a, b, bu.etikett, res.txt); laggIn(res.txt, a, b, bu.etikett); rita(); visaForlopp();
+      }
+      if (!nagot) break;
     }
+    lagra(nyckel() + "klar", String(Math.max(+$("topp").value, +(lasa(nyckel() + "klar") || 0))));
     const tot = ((performance.now() - t0) / 1000).toFixed(0);
     status(tider.length ? "Klart: totalt " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + kb.toFixed(0) + " kB." : "Klart: allt fanns redan i webbläsaren (" + tot + " s).");
   } catch (e) {
-    rita(); status(stoppad || e.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas. Tryck Hämta för att fortsätta." : e.message, stoppad ? "" : "fel");
-  } finally { $("hamta").disabled = false; $("stopp").disabled = true; }
+    rita(); status(koad ? "Byter punkt …" : stoppad || e.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas. Tryck Hämta för att fortsätta." : e.message, stoppad ? "" : "fel");
+  } finally {
+    upptagen = false; forloppSlut(); ritaMarkorer();
+    $("hamta").disabled = false; $("stopp").disabled = true;
+    if (koad) { koad = false; setTimeout(hamtaAllt, 0); }
+  }
+}
+// Klick pa kartan: hamta direkt, eller avbryt pagaende hamtning och byt punkt.
+function valjOchHamta() {
+  ritaMarkorer();
+  if (upptagen) { koad = true; stoppad = true; if (avbryt) avbryt.abort(); status("Byter punkt …"); }
+  else hamtaAllt();
+}
+
+// ===================================================================
+//  KARTA (MEPS-gittret i Lambert-projektion, hela modellomradet)
+// ===================================================================
+const KX = LCC.nx, KY = LCC.ny, MIN_BREDD = 70;
+const ETIKETT_VANSTER = new Set(["ESCM", "ESPE", "ESGG"]);   // etiketter till vanster for att inte krocka
+let vb = { x: 0, y: 0, w: KX, h: KY };
+const tillKarta = (lat, lon) => { const f = rutaF(lat, lon); return { x: f.fx, y: KY - 1 - f.fy }; };
+function egna() { try { return JSON.parse(lasa("mt:egna") || "[]"); } catch (e) { return []; } }
+function laggTillEgen(lat, lon, r) {
+  const l = egna().filter(e => { const q = ruta(e[0], e[1]); return q && (q.iy !== r.iy || q.ix !== r.ix); });
+  l.unshift([+lat.toFixed(4), +lon.toFixed(4)]); lagra("mt:egna", JSON.stringify(l.slice(0, 40)));
+}
+// 0 = ej hamtad, 1 = paborjad, 2 = hamtad for vald topp
+function hamtStatus(dtg, iy, ix) {
+  const k = "mt:" + dtg + ":" + iy + ":" + ix + ":";
+  if (!lasa(k + "static")) return 0;
+  return +(lasa(k + "klar") || 0) >= +$("topp").value ? 2 : 1;
+}
+function satVb(x, y, w) {
+  w = Math.min(KX, Math.max(MIN_BREDD, w)); const h = w * KY / KX;
+  vb = { x: Math.min(KX - w, Math.max(0, x)), y: Math.min(KY - h, Math.max(0, y)), w, h };
+  $("karta").setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h); ritaMarkorer();
+}
+function zooma(f, cx, cy) {
+  if (cx === undefined) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
+  const w = Math.min(KX, Math.max(MIN_BREDD, vb.w * f)), q = w / vb.w;
+  satVb(cx - (cx - vb.x) * q, cy - (cy - vb.y) * q, w);
+}
+function kartPunkt(ev) {
+  const r = $("karta").getBoundingClientRect();
+  return { x: vb.x + (ev.clientX - r.left) / r.width * vb.w, y: vb.y + (ev.clientY - r.top) / r.height * vb.h };
+}
+function ritaMarkorer() {
+  const svg = $("karta"), g = $("kMark"); if (!svg) return; g.textContent = "";
+  const s = vb.w / Math.max(1, svg.clientWidth);     // rutor per skarmpixel -> markorer far fast storlek
+  const dtg = M ? M.dtg : lasa("mt:senast"), STAT = ["ej hämtad", "påbörjad", "hämtad"];
+  const lista = PUNKTER.map((p, i) => ({ id: "p" + i, namn: p[0] + " " + p[1], kort: p[1], lat: p[2], lon: p[3], fp: true }));
+  egna().forEach((e, i) => lista.push({ id: "e" + i, namn: "Egen punkt " + e[0].toFixed(3) + ", " + e[1].toFixed(3), lat: e[0], lon: e[1] }));
+  for (const p of lista) {
+    const r = ruta(p.lat, p.lon); if (!r) continue;
+    const st = dtg ? hamtStatus(dtg, r.iy, r.ix) : 0; if (!p.fp && !st) continue;
+    const k = tillKarta(p.lat, p.lon);
+    const m = el("g", { class: "mk", "data-id": p.id, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
+    m.appendChild(el("title", {}, p.namn + " – " + STAT[st] + (dtg ? " (" + dtg + ", FL" + $("topp").value + ")" : "")));
+    m.appendChild(el("circle", { r: 10, style: "fill:transparent" }));
+    const rr = p.fp ? 5 : 4;
+    m.appendChild(el("circle", { r: rr, style: "fill:" + (st === 2 ? "var(--mkhamt)" : "var(--mkbg)") + ";stroke:var(--mkfg);stroke-width:1.8" }));
+    if (st === 1) m.appendChild(el("path", { d: "M0,-" + (rr - 0.9) + "A" + (rr - 0.9) + "," + (rr - 0.9) + " 0 0 0 0," + (rr - 0.9) + "Z", style: "fill:var(--mkhamt)" }));
+    if (p.fp) {
+      const v = ETIKETT_VANSTER.has(p.kort);
+      m.appendChild(el("text", { x: v ? -8 : 8, y: 4, "text-anchor": v ? "end" : "start", style: "font-size:11px;stroke-width:3px" }, p.kort));
+    }
+    g.appendChild(m);
+  }
+  const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
+  if (isFinite(lat) && isFinite(lon) && ruta(lat, lon)) {
+    const k = tillKarta(lat, lon), v = el("g", { transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")", style: "pointer-events:none" });
+    v.appendChild(el("circle", { r: 9, style: "fill:none;stroke:var(--red);stroke-width:2.2" }));
+    v.appendChild(el("path", { d: "M-14,0h8M6,0h8M0,-14v8M0,6v8", style: "stroke:var(--red);stroke-width:2" }));
+    g.appendChild(v);
+  }
+}
+function startaKarta() {
+  const svg = $("karta");
+  fetch("karta.json").then(r => r.json()).then(k => {
+    const geo = $("kGeo"), lager = [["grad", 0.6, "4 4"], ["land", 0.7], ["sjo", 0.5], ["grans", 1, "5 2"]];
+    for (const [n, w, d] of lager) {
+      const a = { d: k[n], class: n, "vector-effect": "non-scaling-stroke", "stroke-width": w }; if (d) a["stroke-dasharray"] = d;
+      geo.appendChild(el("path", a));
+    }
+    geo.appendChild(geo.firstChild);   // gradnatet overst sa det syns over land
+  }).catch(() => { $("kartPos").textContent = "Kartunderlaget kunde inte laddas."; });
+  const pek = new Map(); let drag = null;
+  svg.addEventListener("wheel", e => { e.preventDefault(); const p = kartPunkt(e); zooma(e.deltaY > 0 ? 1.25 : 0.8, p.x, p.y); }, { passive: false });
+  svg.addEventListener("pointerdown", e => {
+    if (e.button > 0) return;
+    svg.setPointerCapture(e.pointerId); pek.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pek.size === 1) drag = { sx: e.clientX, sy: e.clientY, vb: { ...vb }, flyttat: false, mal: e.target };
+    else if (pek.size === 2 && drag) { const [a, b] = [...pek.values()]; drag.nyp = { d: Math.hypot(a.x - b.x, a.y - b.y), w: vb.w }; drag.flyttat = true; }
+  });
+  svg.addEventListener("pointermove", e => {
+    const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y);
+    $("kartPos").textContent = ll.lat.toFixed(2) + "N " + ll.lon.toFixed(2) + "E";
+    if (!pek.has(e.pointerId) || !drag) return;
+    pek.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pek.size >= 2 && drag.nyp) {
+      const [a, b] = [...pek.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (d < 10) return;
+      const c = kartPunkt({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 });
+      zooma(drag.nyp.w * drag.nyp.d / d / vb.w, c.x, c.y); return;
+    }
+    const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+    if (!drag.flyttat && Math.hypot(dx, dy) < 5) return;
+    drag.flyttat = true; svg.classList.add("drar");
+    const q = vb.w / svg.getBoundingClientRect().width;
+    satVb(drag.vb.x - dx * q, drag.vb.y - dy * q, vb.w);
+  });
+  const slut = e => {
+    if (!pek.delete(e.pointerId)) return;
+    if (pek.size === 0) { if (drag && !drag.flyttat && e.type === "pointerup") kartKlick(e, drag.mal); drag = null; svg.classList.remove("drar"); }
+    else if (drag) { const [a] = [...pek.values()]; drag.sx = a.x; drag.sy = a.y; drag.vb = { ...vb }; drag.nyp = null; }
+  };
+  svg.addEventListener("pointerup", slut); svg.addEventListener("pointercancel", slut);
+  svg.addEventListener("pointerleave", () => { if (!pek.size) $("kartPos").textContent = ""; });
+  $("zIn").addEventListener("click", () => zooma(0.67)); $("zUt").addEventListener("click", () => zooma(1.5));
+  $("zHem").addEventListener("click", () => satVb(0, 0, KX));
+  if (window.ResizeObserver) new ResizeObserver(() => ritaMarkorer()).observe(svg);
+  satVb(250, 240, 610);   // start: hela Sverige
+}
+function kartKlick(e, mal) {
+  const sel = $("punkt"), mk = mal && mal.closest ? mal.closest(".mk") : null;
+  if (mk) {
+    const id = mk.dataset.id;
+    if (id[0] === "p") { sel.value = id.slice(1); sattPunkt(); }
+    else { const p = egna()[+id.slice(1)]; if (!p) return; $("lat").value = p[0]; $("lon").value = p[1]; sel.value = "egen"; }
+  } else {
+    const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y);
+    $("lat").value = ll.lat.toFixed(4); $("lon").value = ll.lon.toFixed(4); sel.value = "egen";
+  }
+  lagra("mt:punkt", sel.value); valjOchHamta();
 }
 
 // ===================================================================
 //  START
 // ===================================================================
+function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const p = PUNKTER[+sel.value]; $("lat").value = p[2]; $("lon").value = p[3]; } ritaMarkorer(); }
 (function start() {
   const sel = $("punkt");
   PUNKTER.forEach(([n, icao], i) => sel.insertAdjacentHTML("beforeend", '<option value="' + i + '">' + n + " " + icao + "</option>"));
   sel.insertAdjacentHTML("beforeend", '<option value="egen">Egen punkt</option>');
-  const satt = () => { if (sel.value !== "egen") { const p = PUNKTER[+sel.value]; $("lat").value = p[2]; $("lon").value = p[3]; } };
-  sel.addEventListener("change", satt);
-  sel.value = lasa("mt:punkt") || "2"; satt();
+  sel.addEventListener("change", sattPunkt);
+  sel.value = lasa("mt:punkt") || "2"; if (!sel.value) sel.value = "2";
+  if (sel.value === "egen") { const e = egna()[0]; if (e) { $("lat").value = e[0]; $("lon").value = e[1]; } else sel.value = "2"; }
+  sattPunkt();
   sel.addEventListener("change", () => lagra("mt:punkt", sel.value));
-  ["lat", "lon"].forEach(id => $(id).addEventListener("input", () => { sel.value = "egen"; }));
+  ["lat", "lon"].forEach(id => $(id).addEventListener("input", () => { sel.value = "egen"; ritaMarkorer(); }));
   $("klistra").addEventListener("input", e => {
     const m = e.target.value.match(/(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)/);
-    if (m) { $("lat").value = m[1].replace(",", "."); $("lon").value = m[2].replace(",", "."); sel.value = "egen"; }
+    if (m) { $("lat").value = m[1].replace(",", "."); $("lon").value = m[2].replace(",", "."); sel.value = "egen"; ritaMarkorer(); }
   });
   $("topp").value = lasa("mt:topp") || "450";
-  $("topp").addEventListener("change", () => { lagra("mt:topp", $("topp").value); rita(); });
+  $("topp").addEventListener("change", () => { lagra("mt:topp", $("topp").value); rita(); ritaMarkorer(); visaForlopp(); });
   korningsLista();
   $("hamta").addEventListener("click", hamtaAllt);
-  $("stopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
+  $("stopp").addEventListener("click", () => { koad = false; stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rita);
+  startaKarta();
 })();
 </script>
 </body>
