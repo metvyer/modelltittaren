@@ -114,15 +114,19 @@ function fyllTider() {
 }
 
 // ---------- Hamta ----------
-function saknadeTimmar(o, a, b) {
-  const ut = [];
-  for (let t = a; t <= b; t++) if (!P.index.some(e => innehaller(e, { ...o, dtg: P.dtg }) && e.tider.includes(t))) ut.push(t);
-  return ut;
+function saknadeTimmar(o, lista) {
+  return lista.filter(t => !P.index.some(e => innehaller(e, { ...o, dtg: P.dtg }) && e.tider.includes(t)));
 }
+// Timmarna som anvands for perioden. Tidsupplosning 3 eller 6 h: bara timmar delbara med steget
+// (00, 03, 06 ... UTC relativt korningen). Nederbord (summa) behover bara start och slut.
 function periodTimmar() {
   let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
-  const pa = PPARAM[$("pParam").value];
-  return { a, b, fran: pa.agg === "summa" && a > 0 ? a - 1 : a };   // nederbord: summan = ack(b) - ack(a-1)
+  const pa = PPARAM[$("pParam").value], dt = +$("pDt").value;
+  const fran = pa.agg === "summa" && a > 0 ? a - 1 : a;   // nederbord: summan = ack(b) - ack(a-1)
+  let lista;
+  if (pa.agg === "summa") lista = fran < b ? [fran, b] : [b];
+  else { lista = []; for (let t = a; t <= b; t++) if (t % dt === 0) lista.push(t); if (!lista.length) lista = [a]; }
+  return { a, b, fran, lista, dt };
 }
 async function probHamta() {
   if (P.upptagen) return;
@@ -132,24 +136,32 @@ async function probHamta() {
   try {
     if (!await sokEnsKorning()) throw new Error("Hittade ingen komplett ensemblekörning.");
     fyllTider(); const o = { ...o0, dtg: P.dtg }; ritaOmrade(); zoomaTillOmrade(o);
-    const { a, b, fran } = periodTimmar(), sakn = saknadeTimmar(o, fran, b);
+    const { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
     const mb = sakn.length * ENS_MEDL * o.ny * o.nx * 9 / 1048576;
     if (mb > ENS_GRANS_MB && !confirmStor(mb)) { status("Avbröt – välj mindre område, glesare upplösning eller kortare period.", ""); return; }
     // grupper om hogst ENS_BIT sammanhangande timmar
-    const grupper = []; for (const t of sakn) { const g = grupper[grupper.length - 1]; if (g && t === g[1] + 1 && t - g[0] < ENS_BIT) g[1] = t; else grupper.push([t, t]); }
+    // grupper med jamnt steg (1, 3 eller 6 h), hogst ENS_BIT timmar per anrop
+    const grupper = [];
+    for (const t of sakn) {
+      const g = grupper[grupper.length - 1];
+      if (g) { const d = t - g[1], st = g[2] || d;
+        if (d === st && (d <= 6 || sakn.length === 2) && (g[1] - g[0]) / st + 2 <= ENS_BIT) { g[2] = st; g[1] = t; continue; } }
+      grupper.push([t, t, 0]);   // [forsta, sista, steg]
+    }
     let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === o.y0 && x.y1 === o.y1 && x.x0 === o.x0 && x.x1 === o.x1);
     if (!e && grupper.length) { e = { dtg: o.dtg, v: o.v, s: o.s, y0: o.y0, y1: o.y1, x0: o.x0, x1: o.x1, tider: [] }; P.index.push(e); }
     const pa = PPARAM[o.v], n = o.ny * o.nx;
     for (let gi = 0; gi < grupper.length; gi++) {
       const [g0, g1] = grupper[gi];
-      visaPForlopp(gi, grupper.length, g0, g1, performance.now());
-      const url = BAS + ENS_FIL(o.dtg) + ".ascii?" + enc(pa.var + "[" + g0 + ":" + g1 + "][0][0:" + (ENS_MEDL - 1) + "][" + o.y0 + ":" + o.s + ":" + o.y1 + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
+      visaPForlopp(gi, grupper.length, g0, g1, (g1 - g0) / (grupper[gi][2] || 1) + 1);
+      const st = grupper[gi][2] || 1, nt = (g1 - g0) / st + 1;
+      const url = BAS + ENS_FIL(o.dtg) + ".ascii?" + enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][0:" + (ENS_MEDL - 1) + "][" + o.y0 + ":" + o.s + ":" + o.y1 + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
       const t1 = performance.now(), res = await hamta(url);
       if (res.st !== 200) throw new Error("Hämtningen av +" + g0 + " till +" + g1 + " h misslyckades (svar " + res.st + "). Tryck Hämta fält igen för att fortsätta.");
       tider.push(((performance.now() - t1) / 1000).toFixed(0)); kb += res.txt.length / 1024;
-      const v = tolka(res.txt)[pa.var]; if (!v || v.length < (g1 - g0 + 1) * ENS_MEDL * n) throw new Error("Oväntat svar från servern (för få värden).");
-      for (let t = g0; t <= g1; t++) {
-        const arr = Float32Array.from(v.subarray((t - g0) * ENS_MEDL * n, (t - g0 + 1) * ENS_MEDL * n));
+      const v = tolka(res.txt)[pa.var]; if (!v || v.length < nt * ENS_MEDL * n) throw new Error("Oväntat svar från servern (för få värden).");
+      for (let k = 0; k < nt; k++) {
+        const t = g0 + k * st, arr = Float32Array.from(v.subarray(k * ENS_MEDL * n, (k + 1) * ENS_MEDL * n));
         await DB.put(nyckelE(e, t), arr); P.data.set(nyckelE(e, t), arr);
         if (!e.tider.includes(t)) e.tider.push(t);
       }
@@ -170,10 +182,10 @@ function confirmStor(mb) {
   if (Date.now() - storOK < 8000) { storOK = 0; return true; }
   storOK = Date.now(); status("Stort uttag: ca " + Math.round(mb) + " MB text. Tryck Hämta fält igen inom 8 s för att hämta ändå.", "fel"); return false;
 }
-function visaPForlopp(i, n, g0, g1) {
+function visaPForlopp(i, n, g0, g1, antal) {
   $("pForlopp").hidden = false; const st = $("pStapel"); st.textContent = "";
   for (let k = 0; k < n; k++) { const d = document.createElement("div"); if (k < i) d.className = "klar"; else if (k === i) d.className = "aktiv"; st.append(d); }
-  $("pForloppText").textContent = "Anrop " + (i + 1) + " av " + n + ": +" + g0 + " till +" + g1 + " h (" + (g1 - g0 + 1) * ENS_MEDL + " kartfält)";
+  $("pForloppText").textContent = "Anrop " + (i + 1) + " av " + n + ": +" + g0 + " till +" + g1 + " h (" + antal * ENS_MEDL + " kartfält)";
 }
 
 // ---------- Berakna och visa ----------
@@ -190,7 +202,7 @@ async function timData(o, t) {
   return ut;
 }
 // Beraknar sannolikheten for ett sparat omrade e (pa dess eget rutnat). null om nagon timme saknas.
-async function beraknaOmrade(e, pa, a, b, fran, trosk) {
+async function beraknaOmrade(e, pa, a, b, fran, trosk, lista) {
   const o = { ...e, ny: (e.y1 - e.y0) / e.s + 1, nx: (e.x1 - e.x0) / e.s + 1 }, n = o.ny * o.nx;
   const agg = new Float32Array(ENS_MEDL * n).fill(pa.agg === "max" ? -Infinity : pa.agg === "min" ? Infinity : NaN);
   if (pa.agg === "summa") {
@@ -198,8 +210,8 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk) {
     const ab = await timData(o, b), aa = fran < b ? await timData(o, fran) : null; if (!ab) return null;
     for (let i = 0; i < agg.length; i++) agg[i] = pa.konv(Math.max(0, ab[i] - (aa ? aa[i] : 0)));   // ackumulerat: slut minus start
   } else {
-    for (let t = a; t <= b; t++) if (!e.tider.includes(t)) return null;
-    for (let t = a; t <= b; t++) {
+    for (const t of lista) if (!e.tider.includes(t)) return null;
+    for (const t of lista) {
       const d = await timData(o, t); if (!d) return null;
       for (let i = 0; i < agg.length; i++) { const v = d[i]; if (!isFinite(v)) continue; const w = pa.konv(v);
         if (pa.agg === "max" ? w > agg[i] : w < agg[i]) agg[i] = w; }
@@ -214,11 +226,11 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk) {
 async function probVisa() {
   const g = $("kProb"); g.textContent = ""; P.varden = null; $("pSam").textContent = ""; ritaPForklaring();
   if (lage !== "p" || !P.dtg) return;
-  const v = $("pParam").value, pa = PPARAM[v], { a, b, fran } = periodTimmar(), trosk = parseFloat($("pTrosk").value.replace(",", "."));
+  const v = $("pParam").value, pa = PPARAM[v], { a, b, fran, lista, dt } = periodTimmar(), trosk = parseFloat($("pTrosk").value.replace(",", "."));
   if (!isFinite(trosk)) return;
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === v).sort((x, y) => y.s - x.s);
   const vis = []; let pmax = 0;
-  for (const e of kand) { const r = await beraknaOmrade(e, pa, a, b, fran, trosk); if (r) vis.push(r); }
+  for (const e of kand) { const r = await beraknaOmrade(e, pa, a, b, fran, trosk, lista); if (r) vis.push(r); }
   for (const { o, prob } of vis) for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
     const p = prob[y * o.nx + x]; if (p > pmax) pmax = p; const pr = p * 100; if (pr < PKLASS[0][0]) continue;
     let f = PKLASS[0][1]; for (const [gr, c] of PKLASS) if (pr >= gr) f = c;
@@ -227,7 +239,7 @@ async function probVisa() {
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
   if (!vis.length) { if (!P.upptagen) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
-  $("pSam").textContent = pa.namn + " " + pa.villkor + " " + trosk.toLocaleString("sv-SE") + " " + pa.enhet + (pa.agg === "summa" ? "" : " någon gång") + " " + tidText(a) + " – " + tidText(b) +
+  $("pSam").textContent = pa.namn + " " + pa.villkor + " " + trosk.toLocaleString("sv-SE") + " " + pa.enhet + (pa.agg === "summa" ? "" : " någon gång") + " " + tidText(a) + " – " + tidText(b) + (pa.agg !== "summa" && dt > 1 && b > a ? " (var " + dt + ":e timme)" : "") +
     ". Högsta sannolikhet: " + Math.round(pmax * 100) + " %." + (aktuell ? "" : " Ramen (ditt valda område) är inte hämtad med vald upplösning – tryck Hämta fält.");
 }
 
@@ -286,9 +298,14 @@ function bytLage(nytt) {
   sel.addEventListener("change", () => { lagra("mt:pParam", sel.value); const st = lasa("mt:pTrosk:" + sel.value); $("pTrosk").value = st || PPARAM[sel.value].std; sattParam(true); ritaOmrade(); probVisa(); });
   $("pTrosk").addEventListener("input", () => { lagra("mt:pTrosk:" + sel.value, $("pTrosk").value); sattParam(true); probVisa(); });
   ["pFran", "pTill"].forEach(id => $(id).addEventListener("change", () => probVisa()));
+  $("pSteg").value = lasa("mt:pSteg") || "per"; $("pDt").value = lasa("mt:pDt") || "1";
+  $("pSteg").addEventListener("change", () => lagra("mt:pSteg", $("pSteg").value));
+  $("pDt").addEventListener("change", () => { lagra("mt:pDt", $("pDt").value); probVisa(); });
   // Perioden flyttas med sin langd: +0 till +12 -> +12 till +24 (slutet blir nasta start).
   // En enda timme (Fran = Till) flyttas en timme i taget och forblir en enda timme.
-  const flytta = r => { const a = Math.min(+$("pFran").value, +$("pTill").value), L = Math.abs(+$("pTill").value - +$("pFran").value), na = a + r * Math.max(1, L);
+  // Steg: "per" = periodens langd, annars valt antal timmar.
+  const flytta = r => { const a = Math.min(+$("pFran").value, +$("pTill").value), L = Math.abs(+$("pTill").value - +$("pFran").value),
+    sv = $("pSteg").value, steg = sv === "per" ? Math.max(1, L) : +sv, na = a + r * steg;
     if (na < 0 || na + L > ENS_TIDER - 1) return; $("pFran").value = na; $("pTill").value = na + L; probVisa(); };
   $("pBak").addEventListener("click", () => flytta(-1)); $("pFram").addEventListener("click", () => flytta(1));
   ["pStorlek", "pUppl"].forEach(id => $(id).addEventListener("change", () => { lagra("mt:" + id, $(id).value); probOmradeAndrat(); }));
