@@ -75,6 +75,14 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 /* Forlopp under hamtning */
 .forlopp { margin: 0 0 10px; display: grid; gap: 5px; }
 .forlopp[hidden] { display: none; }
+.forklaring[hidden] { display: none; }
+.lagerad { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; flex-wrap: wrap; }
+.vaxel { display: inline-flex; border: 1px solid var(--acc); border-radius: 6px; overflow: hidden; }
+.vaxel button { border: 0; border-radius: 0; background: transparent; color: var(--acc); padding: 4px 16px; }
+.vaxel button[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
+.lagetips { font-size: 12px; color: var(--dim); }
+#vindSkala span { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
+#vindSkala i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
 /* Hovringsruta */
 .tips { position: fixed; z-index: 10; pointer-events: none; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.18); max-width: 300px; font-variant-numeric: tabular-nums; }
 .tips[hidden] { display: none; }
@@ -134,12 +142,22 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
   <div class="forlopptext" id="forloppText" aria-live="polite"></div>
 </div>
 
+<div class="lagerad">
+  <div class="vaxel" role="group" aria-label="Visa i diagrammet">
+    <button id="lMoln" aria-pressed="true">Moln</button><button id="lVind" aria-pressed="false">Vind</button>
+  </div>
+  <span class="lagetips" id="lageTips"></span>
+</div>
 <div class="diagram">
   <svg class="axel" id="axel" width="56" height="10"></svg>
   <div class="skroll" id="skroll"><svg id="svg" width="10" height="10"></svg></div>
 </div>
 
-<div class="forklaring">
+<div class="forklaring" id="fVind" hidden>
+  <span>Vindflaggor var 3:e timme: halv hulling 5 kt, hel 10 kt, vimpel 50 kt.</span>
+  <span id="vindSkala"></span>
+</div>
+<div class="forklaring" id="fMoln">
   <span><span class="ruta" style="background:var(--few)"></span>FEW 1–2/8</span>
   <span><span class="ruta" style="background:var(--sct)"></span>SCT 3–4/8</span>
   <span><span class="ruta" style="background:var(--bkn)"></span>BKN 5–7/8</span>
@@ -173,6 +191,11 @@ const PUNKTER = [
   ["Landvetter", "ESGG", 57.6628, 12.2798], ["Sturup", "ESMS", 55.5363, 13.3762], ["Visby", "ESSV", 57.6628, 18.3462],
   ["Kallax", "ESPA", 65.5438, 22.122], ["Vidsel", "ESPE", 65.8753, 20.15]];
 const G0 = 9.80665, RD = 287.05, FOT = 3.28084, KT = 1.943844;
+// Vind (hamtas forst nar man valjer Vind): var 3:e timme. Modellnivaer (varannan) upp till ca 1600 m,
+// darover tryckytorna (800, 700, 500 ... hPa) som racker for vindflaggor hogre upp.
+const VIND_DT = 3, VIND_DK = 2, VIND_ZML = 1600, VIND_AVST = 20;
+// Fargskala for vindflaggor (kt) – fran lugnt (gratt) till hard vind (lila)
+const VINDFARG = [[0, "#7f8b97"], [10, "#2f7fc1"], [20, "#1f9e6e"], [30, "#c9a000"], [45, "#e0601b"], [60, "#c4122f"], [80, "#8a2bb5"]];
 
 // ===================================================================
 //  HJALP
@@ -183,7 +206,7 @@ const p2 = n => String(n).padStart(2, "0");
 const dtgText = d => d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCDate()) + "T" + p2(d.getUTCHours()) + "Z";
 const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(9, 11)));
 const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
-let avbryt = null, stoppad = false;
+let avbryt = null, stoppad = false, vindLage = false;
 
 function lagra(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
 function lasa(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -317,7 +340,9 @@ function nyModell(dtg, nt, iy, ix) {
     yta: YTA.map(() => new Float64Array(nt).fill(NaN)), ytaOK: new Uint8Array(nt),
     cl: new Float64Array(nt * NIV).fill(NaN), clHar: new Uint8Array(nt * NIV),
     gp: new Float64Array(nt * NTRYCK).fill(NaN), gpHar: new Uint8Array(nt * NTRYCK),
-    ice: new Float64Array(nt * NIS).fill(NaN), iceHar: new Uint8Array(nt * NIS) };
+    ice: new Float64Array(nt * NIS).fill(NaN), iceHar: new Uint8Array(nt * NIS),
+    wx: new Float64Array(nt * NIV).fill(NaN), wy: new Float64Array(nt * NIV).fill(NaN), wHar: new Uint8Array(nt * NIV),
+    px: new Float64Array(nt * NTRYCK).fill(NaN), py: new Float64Array(nt * NTRYCK).fill(NaN), pwHar: new Uint8Array(nt * NTRYCK) };
 }
 function lasStatik(txt) {
   const d = tolka(txt); if (!d.time || !d.ap || !d.b) return false;
@@ -337,6 +362,16 @@ function laggIn(txt, a, b, etikett) {
     }
     const m = del.slice(1).match(/^(\d+)-(\d+)$/); if (!m) continue;
     const r1 = +m[1], r2 = +m[2], nr = r2 - r1 + 1;
+    if (typ === "u" || typ === "v") {   // vind: var VIND_DT:e timme, modellnivaer var VIND_DK:e
+      const steg = typ === "u" ? VIND_DK : 1, nn = Math.floor((r2 - r1) / steg) + 1, n3 = Math.floor((b - a) / VIND_DT) + 1;
+      const [xn, yn, br, X, Y, H] = typ === "u" ? ["x_wind_ml", "y_wind_ml", NIV, M.wx, M.wy, M.wHar] : ["x_wind_pl", "y_wind_pl", NTRYCK, M.px, M.py, M.pwHar];
+      const vx = d[xn], vy = d[yn]; if (!vx || !vy) continue;
+      for (let t = 0; t < n3 && a + t * VIND_DT < M.nt; t++) for (let k = 0; k < nn; k++) {
+        const i = (a + t * VIND_DT) * br + r1 + k * steg; if (vx[t * nn + k] === undefined) continue;
+        X[i] = vx[t * nn + k]; Y[i] = vy[t * nn + k]; H[i] = 1;
+      }
+      continue;
+    }
     const [namn, arr, har, bredd] = typ === "c" ? ["cloud_area_fraction_ml", M.cl, M.clHar, NIV]
       : typ === "g" ? ["geopotential_pl", M.gp, M.gpHar, NTRYCK] : ["icing_index", M.ice, M.iceHar, NIS];
     const v = d[namn]; if (!v) continue;
@@ -373,6 +408,17 @@ function behov() {
   let h2 = 0; M.h5.forEach((h, j) => { if (h <= zTopp + 300) h2 = j; });
   return { k1, j1, j2, h2, zTopp };
 }
+// Vilka vindnivaer som hamtas: modellnivaer (jamna, ner till marken) upp till ca 1600 m (eller toppen),
+// tryckytor darover upp till toppen.
+function vindNivaer() {
+  const { j1, zTopp } = behov(), psEst = 101325 * (1 - 2.25577e-5 * M.terr) ** 5.25588;
+  const pLag = psEst * Math.exp(-Math.min(VIND_ZML, zTopp * 1.15) / 8000), pLim = psEst * Math.exp(-zTopp / 7000) * 0.97;
+  let ks = NIV - 1; for (let k = NIV - 1; k >= 0 && M.ap[k] + M.b[k] * psEst >= pLag; k--) ks = k;
+  const rest = (NIV - 1 - ks) % VIND_DK; if (rest) ks -= VIND_DK - rest;   // sa att stegningen slutar pa lagsta nivan
+  let ja = -1, jb = -1;
+  M.pres.forEach((p, j) => { const pa = p * 100; if (j >= j1 && pa < pLag && pa >= pLim * 0.85) { if (ja < 0) ja = j; jb = j; } });
+  return { ks: Math.max(0, ks), ja, jb };
+}
 function bitUrl(a, b) {
   const { k1, j1, j2, h2 } = behov(); let behS = false, kMax = -1, behG = false, behI = false;
   for (let t = a; t <= b; t++) {
@@ -386,6 +432,16 @@ function bitUrl(a, b) {
   if (kMax >= k1) { v.push("cloud_area_fraction_ml" + tt + "[" + k1 + ":" + kMax + "]" + yx); e.push("c" + k1 + "-" + kMax); }
   if (behG) { v.push("geopotential_pl" + tt + "[" + j1 + ":" + j2 + "]" + yx); e.push("g" + j1 + "-" + j2); }
   if (behI) { v.push("icing_index" + tt + "[0:" + h2 + "]" + yx); e.push("i0-" + h2); }
+  if (vindLage) {
+    const w = vindNivaer(); let behU = false, behP = false;
+    for (let t = a; t <= b; t += VIND_DT) {
+      for (let k = w.ks; k < NIV; k += VIND_DK) if (!M.wHar[t * NIV + k]) behU = true;
+      if (w.ja >= 0) for (let j = w.ja; j <= w.jb; j++) if (!M.pwHar[t * NTRYCK + j]) behP = true;
+    }
+    const t3 = "[" + a + ":" + VIND_DT + ":" + b + "]";
+    if (behU) { const s = "[" + w.ks + ":" + VIND_DK + ":" + (NIV - 1) + "]"; ["x_wind_ml", "y_wind_ml"].forEach(n => v.push(n + t3 + s + yx)); e.push("u" + w.ks + "-" + (NIV - 1)); }
+    if (behP) { const s = "[" + w.ja + ":" + w.jb + "]"; ["x_wind_pl", "y_wind_pl"].forEach(n => v.push(n + t3 + s + yx)); e.push("v" + w.ja + "-" + w.jb); }
+  }
   if (!v.length) return null;
   return { url: BAS + FIL(M.dtg) + ".ascii?" + enc(v.join(",")), etikett: e.join(".") };
 }
@@ -476,7 +532,8 @@ function rita() {
   ax.appendChild(el("text", { x: 50, y: sk.botten + 4, "font-size": 10, "text-anchor": "end" }, "0"));
   ax.appendChild(el("text", { x: 50, y: TOPP_RAD - 6, "font-size": 10, "text-anchor": "end", fill: c("--dim") }, "ft"));
 
-  const gMoln = el("g", {}), gSaknas = el("g", {}), gIs = el("g", {}); svg.insertBefore(gMoln, svg.children[1]); svg.appendChild(gSaknas); svg.appendChild(gIs);
+  const dolj = vindLage ? { style: "display:none" } : {};
+  const gMoln = el("g", dolj), gSaknas = el("g", dolj), gIs = el("g", dolj); svg.insertBefore(gMoln, svg.children[1]); svg.appendChild(gSaknas); svg.appendChild(gIs);
   let saknasStart = -1;
   const saknasRekt = (t1, t2, zFran) => {
     const yLo = zFran > 0 ? sk.y(zFran * FOT) : sk.botten; if (yLo - TOPP_RAD < 2) return;
@@ -521,6 +578,7 @@ function rita() {
     }
   }
   if (saknasStart >= 0) saknasRekt(saknasStart, nt - 1, 0);
+  if (vindLage) ritaVind(svg, sk, zTopp, c);
   svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
 
   // tabellrader
@@ -558,6 +616,60 @@ function rita() {
 }
 
 // ===================================================================
+//  VINDFLAGGOR (vindlage)
+// ===================================================================
+function vindFarg(kt) { let f = VINDFARG[0][1]; for (const [g, c] of VINDFARG) if (kt >= g) f = c; return f; }
+// Alla vindvarden for timme t: { z (m over mark), kt, dir (fran, grader) }, sorterade nerifran.
+// Modellens vind ar riktad efter gittret och vrids till geografisk nord.
+function vindPunkter(t) {
+  const ut = [], lon = isFinite(M.glon) ? M.glon : M.lon, th = LCC.n * (lon - 15) * LCC.rad, c = Math.cos(th), s = Math.sin(th);
+  const lagg = (z, u, v) => {
+    if (!isFinite(z) || !isFinite(u) || !isFinite(v)) return;
+    const ue = u * c + v * s, ve = -u * s + v * c;
+    ut.push({ z, kt: Math.hypot(ue, ve) * KT, dir: (Math.atan2(-ue, -ve) * 180 / Math.PI + 360) % 360 });
+  };
+  let kMin = NIV; for (let k = 0; k < NIV; k++) if (M.wHar[t * NIV + k]) { kMin = k; break; }
+  if (kMin < NIV && M.ytaOK[t]) { const z = hojder(t, kMin); if (z) for (let k = kMin; k < NIV; k++) if (M.wHar[t * NIV + k]) lagg(z[k], M.wx[t * NIV + k], M.wy[t * NIV + k]); }
+  for (let j = 0; j < NTRYCK; j++) if (M.pwHar[t * NTRYCK + j] && M.gpHar[t * NTRYCK + j]) lagg(M.gp[t * NTRYCK + j] / G0 - M.terr, M.px[t * NTRYCK + j], M.py[t * NTRYCK + j]);
+  return ut.sort((p, q) => p.z - q.z);
+}
+// Vindflagga: pinne mot det hall vinden kommer fran, hullingar pa vanster sida (norra halvklotet).
+// Halv hulling = 5 kt, hel = 10 kt, vimpel = 50 kt.
+function vindflagga(g, cx, cy, dir, kt, farg) {
+  if (kt < 2.5) { g.appendChild(el("circle", { cx, cy, r: 3, fill: "none", stroke: farg, "stroke-width": 1.4 })); return; }
+  const r = dir * Math.PI / 180, dx = Math.sin(r), dy = -Math.cos(r), px = -dy, py = dx, L = 17;
+  const P = s => [cx + dx * (L - s), cy + dy * (L - s)];
+  let d = "M" + cx.toFixed(1) + " " + cy.toFixed(1) + "L" + P(0).map(v => v.toFixed(1)).join(" "), pen = "";
+  let rest = Math.round(kt / 5) * 5, s = 0;
+  while (rest >= 50) { const [ax, ay] = P(s), [bx, by] = P(s + 4.5); pen += `M${ax} ${ay}L${ax + px * 8 + dx * 1} ${ay + py * 8 + dy * 1}L${bx} ${by}Z`; s += 5.5; rest -= 50; }
+  while (rest >= 10) { const [ax, ay] = P(s); d += `M${ax} ${ay}l${px * 8 + dx * 3} ${py * 8 + dy * 3}`; s += 3.2; rest -= 10; }
+  if (rest >= 5) { if (s === 0) s = 3.2; const [ax, ay] = P(s); d += `M${ax} ${ay}l${px * 4 + dx * 1.5} ${py * 4 + dy * 1.5}`; }
+  g.appendChild(el("path", { d, stroke: farg, "stroke-width": 1.5, fill: "none", "stroke-linecap": "round" }));
+  if (pen) g.appendChild(el("path", { d: pen, fill: farg, stroke: farg, "stroke-width": 0.8, "stroke-linejoin": "round" }));
+}
+function ritaVind(svg, sk, zTopp, c) {
+  // flaggorna klipps vid diagrammets underkant sa att de nedersta inte gar in i tabellen
+  const cp = el("clipPath", { id: "vindKlipp" }); cp.appendChild(el("rect", { x: 0, y: 0, width: M.nt * COL, height: sk.botten })); svg.querySelector("defs").appendChild(cp);
+  const g = el("g", { "clip-path": "url(#vindKlipp)" }), gs = el("g", {}); svg.appendChild(gs); svg.appendChild(g);
+  let tom = -1;
+  const sakn = (t1, t2) => {
+    const w = (t2 - t1) * COL; gs.appendChild(el("rect", { x: t1 * COL, y: TOPP_RAD, width: w, height: sk.botten - TOPP_RAD, fill: "url(#snett)" }));
+    if (w > 70) gs.appendChild(el("text", { x: t1 * COL + 4, y: TOPP_RAD + 12, "font-size": 10, fill: c("--dim") }, "vind ej hämtad"));
+  };
+  for (let t = 0; t < M.nt; t += VIND_DT) {
+    const pts = vindPunkter(t).filter(p => p.z <= zTopp * 1.02 && p.z > 0);
+    if (!pts.length) { if (tom < 0) tom = t; continue; }
+    if (tom >= 0) { sakn(tom, t); tom = -1; }
+    let yForra = Infinity; const cx = t * COL + COL / 2;
+    for (const p of pts) {
+      const y = sk.y(p.z * FOT); if (yForra - y < VIND_AVST) continue;
+      vindflagga(g, cx, y, p.dir, p.kt, vindFarg(p.kt)); yForra = y;
+    }
+  }
+  if (tom >= 0) sakn(tom, M.nt);
+}
+
+// ===================================================================
 //  HOVRINGSRUTA I DIAGRAMMET (timme + hojd under pekaren)
 // ===================================================================
 const KAT = ["inga", "FEW", "SCT", "BKN", "OVC"];
@@ -574,6 +686,11 @@ function tipsText(t, yPix) {
       if (z >= zLo && z < zHi) { const v = M.cl[t * NIV + k], kat = v >= MOLN[3] ? 4 : v >= MOLN[2] ? 3 : v >= MOLN[1] ? 2 : v >= MOLN[0] ? 1 : 0; moln = Math.round(v) + " % (" + KAT[kat] + "), modellnivå " + k; break; }
     }
     rad.push(["Moln där", moln]);
+    if (vindLage) {
+      const t3 = Math.min(Math.round(t / VIND_DT) * VIND_DT, Math.floor((M.nt - 1) / VIND_DT) * VIND_DT), pts = vindPunkter(t3);
+      let nb = null; for (const p of pts) if (!nb || Math.abs(p.z - z) < Math.abs(nb.z - z)) nb = p;
+      rad.push(["Vind där", nb ? p2(Math.round(nb.dir / 10) % 36 || 36) + "0° " + Math.round(nb.kt) + " kt (vid " + Math.round(nb.z * FOT / 50) * 50 + " ft" + (t3 !== t ? ", " + p2(new Date(M.t0 + t3 * 3600e3).getUTCHours()) + " UTC" : "") + ")" : "ej hämtad"]);
+    }
     // isindex pa narmaste indexhojd
     let jB = -1; M.h5.forEach((h, j) => { if (jB < 0 || Math.abs(h - z) < Math.abs(M.h5[jB] - z)) jB = j; });
     if (jB >= 0 && M.iceHar[t * NIS + jB]) {
@@ -620,8 +737,9 @@ function gomTips() { $("tips").hidden = true; const r = $("tipsRam"); if (r) r.r
 //  FORLOPP (stapel per 24 h-bit, tickande tid, uppskattad tid kvar)
 // ===================================================================
 let F = null, tick = null, upptagen = false, koad = false;
-function forvantadBitTid() { const v = +lasa("mt:bitTid:" + $("topp").value); return v > 0 ? v : (+$("topp").value <= 30 ? 28 : 42); }
-function noteraBitTid(s) { const k = "mt:bitTid:" + $("topp").value, v = +lasa(k); lagra(k, String(v > 0 ? v * 0.6 + s * 0.4 : s)); }
+const bitTidNyckel = () => "mt:bitTid:" + $("topp").value + (vindLage ? "v" : "");
+function forvantadBitTid() { const v = +lasa(bitTidNyckel()); return v > 0 ? v : (+$("topp").value <= 30 ? 28 : 42); }
+function noteraBitTid(s) { const k = bitTidNyckel(), v = +lasa(k); lagra(k, String(v > 0 ? v * 0.6 + s * 0.4 : s)); }
 function tidText(s) { s = Math.round(s); return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + p2(s % 60) + " s"; }
 function visaForlopp() {
   const box = $("forlopp"); if (!F) { box.hidden = true; return; }
@@ -856,6 +974,18 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("stopp").addEventListener("click", () => { koad = false; stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rita);
   startaKarta();
+  const vs = $("vindSkala");
+  VINDFARG.forEach(([g, f], i) => { const n = VINDFARG[i + 1]; const sp = document.createElement("span"); const ii = document.createElement("i"); ii.style.background = f; sp.append(ii, n ? g + "–" + (n[0] - 1) + " kt" : "≥" + g + " kt"); vs.append(sp); });
+  const satLage = v => {
+    vindLage = v; lagra("mt:lage", v ? "vind" : "moln");
+    $("lMoln").setAttribute("aria-pressed", String(!v)); $("lVind").setAttribute("aria-pressed", String(v));
+    $("fVind").hidden = !v; $("fMoln").hidden = v;
+    $("lageTips").textContent = v ? "Vinden hämtas när den behövs (var 3:e timme) och sparas." : "";
+    rita(); visaForlopp();
+    if (v && M && M.stat && !upptagen) { let saknas = false; for (let a = 0; a < M.nt; a += BIT) if (bitUrl(a, Math.min(a + BIT - 1, M.nt - 1))) saknas = true; if (saknas) hamtaAllt(); }
+  };
+  $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
+  if (lasa("mt:lage") === "vind") satLage(true);
   const d = $("svg");
   d.addEventListener("pointermove", visaTips); d.addEventListener("pointerdown", visaTips); d.addEventListener("pointerleave", gomTips);
   $("skroll").addEventListener("scroll", gomTips);
