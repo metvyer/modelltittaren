@@ -218,7 +218,7 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
   <span><span class="ruta" style="background:var(--ovc)"></span>OVC 8/8</span>
   <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt i synoptisk kod VV (80 = 30 km)</span>
-  <span><span class="ruta" style="background:var(--bas);border-color:var(--baskant)"></span>Modellens molnbas (streck i diagrammet, hft = hundratal fot i tabellen)</span>
+  <span>Bas hft = modellens molnbas i hundratal fot över mark</span>
 </div>
 </div>
 </section>
@@ -644,14 +644,6 @@ function rita() {
     }
   }
   if (saknasStart >= 0) saknasRekt(saknasStart, nt - 1, 0);
-  // Modellens molnbas: ett vagratt streck per timme (som i NfL-Diagram), cyan med mork kant
-  const gBas = el("g", dolj); svg.appendChild(gBas);
-  for (let t = 0; t < nt; t++) {
-    const z = M.cb[t]; if (!isFinite(z) || z * FOT > sk.topp * 100) continue;
-    const y = sk.y(z * FOT), x1 = t * COL + 1, x2 = (t + 1) * COL - 1;
-    gBas.appendChild(el("line", { x1, y1: y, x2, y2: y, stroke: c("--baskant"), "stroke-width": 4.5, "stroke-linecap": "round" }));
-    gBas.appendChild(el("line", { x1, y1: y, x2, y2: y, stroke: c("--bas"), "stroke-width": 2.5, "stroke-linecap": "round" }));
-  }
   if (vindLage) ritaVind(svg, sk, zTopp, c);
   svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
 
