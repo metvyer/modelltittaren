@@ -40,6 +40,7 @@ const DB = (() => {
 })();
 
 // ---------- Tillstand ----------
+let visaOmr = lasa("mt:visaOmr") !== "nej";   // ramar runt hamtade omraden
 const P = { dtg: null, tid: [], omr: null, data: new Map(), index: [], upptagen: false, varden: null };
 // index: [{ dtg, v, s, y0, y1, x0, x1, tider: [t...] }] – vilka omraden och timmar som finns sparade
 
@@ -74,7 +75,7 @@ function ritaOmrade() {
   const r = (e, stil) => g.appendChild(el("rect", { x: e.x0 - e.s / 2, y: KY - 1 - e.y1 - e.s / 2, width: e.x1 - e.x0 + e.s, height: e.y1 - e.y0 + e.s,
     fill: "none", "vector-effect": "non-scaling-stroke", style: stil }));
   // sparade omraden for samma parameter och korning (tunt, prickat)
-  for (const e of P.index) if (P.dtg && e.dtg === P.dtg && e.v === o.v) r(e, "stroke:var(--dim);stroke-width:1;stroke-dasharray:2 3");
+  if (visaOmr) for (const e of P.index) if (P.dtg && e.dtg === P.dtg && e.v === o.v) r(e, "stroke:var(--dim);stroke-width:1;stroke-dasharray:2 3");
   r(o, "stroke:var(--acc);stroke-width:2;stroke-dasharray:6 4");
   $("pOmrade").textContent = Math.round((o.y1 - o.y0) * 2.5 + o.s * 2.5) + " × " + Math.round((o.x1 - o.x0) * 2.5 + o.s * 2.5) + " km, " + o.ny * o.nx + " punkter (var " + (o.s * 2.5).toLocaleString("sv-SE") + " km), mitt " + o.lat.toFixed(2) + "N " + o.lon.toFixed(2) + "E";
 }
@@ -294,6 +295,8 @@ function bytLage(nytt) {
   ["lat", "lon", "klistra"].forEach(id => $(id).addEventListener("input", () => { if (lage === "p") probOmradeAndrat(); }));
   $("punkt").addEventListener("change", () => { if (lage === "p") probOmradeAndrat(); });
   $("pHamta").addEventListener("click", probHamta);
+  $("visaOmr").setAttribute("aria-pressed", String(visaOmr));
+  $("visaOmr").addEventListener("click", e => { visaOmr = !visaOmr; lagra("mt:visaOmr", visaOmr ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaOmr)); ritaOmrade(); });
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
   $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p"));
   try { await laddaIndex(); } catch (e) {}

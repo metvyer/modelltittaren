@@ -81,6 +81,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .flikar button { background: transparent; color: var(--dim); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 14px; font-weight: 600; }
 .flikar button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
 body.p .baraTH { display: none; }
+body:not(.p) .baraP { display: none; }
 body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
 @media (max-width: 860px) { body.p .arbete { grid-template-columns: minmax(0, 1fr); } }
 #vyP[hidden], #vyTH[hidden] { display: none; }
@@ -140,6 +141,7 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
     <button class="sek liten" id="zHem" title="Visa hela MEPS-området">Hela</button>
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
+    <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
     <span class="kartpos" id="kartPos"></span>
   </div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
