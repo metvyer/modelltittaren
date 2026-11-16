@@ -52,6 +52,7 @@ svg text { font-family: var(--font); fill: var(--fg); }
 .kartpanel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 6px; min-width: 0; }
 .kartverktyg { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 button.liten { padding: 2px 10px; min-width: 32px; }
+button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .kartpos { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; margin-left: auto; }
 #karta { width: 100%; height: auto; aspect-ratio: 949 / 1069; display: block; border-radius: 4px; touch-action: none; cursor: crosshair; user-select: none; -webkit-user-select: none; }
 #karta.drar { cursor: grabbing; }
@@ -102,6 +103,7 @@ button.liten { padding: 2px 10px; min-width: 32px; }
     <button class="sek liten" id="zIn" title="Zooma in">+</button>
     <button class="sek liten" id="zUt" title="Zooma ut">−</button>
     <button class="sek liten" id="zHem" title="Visa hela MEPS-området">Hela</button>
+    <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <span class="kartpos" id="kartPos"></span>
   </div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
@@ -111,7 +113,7 @@ button.liten { padding: 2px 10px; min-width: 32px; }
   <div class="kartforklaring">
     <span><i class="mk tom"></i>ej hämtad</span><span><i class="mk halv"></i>påbörjad</span><span><i class="mk full"></i>hämtad</span><span><i class="mk vald"></i>vald</span>
   </div>
-  <p class="karttips">Klicka på kartan för att hämta en punkt, eller på en flygplats. Hjul eller nyp = zooma, dra = flytta.</p>
+  <p class="karttips">Klicka på kartan för att hämta en punkt, eller på en flygplats. Skift-klick eller <b>Fri punkt</b> = ny punkt precis där du klickar, även på en markering. Hjul eller nyp = zooma, dra = flytta.</p>
 </section>
 
 <section class="hoger">
@@ -737,11 +739,13 @@ function startaKarta() {
   svg.addEventListener("pointerleave", () => { if (!pek.size) $("kartPos").textContent = ""; });
   $("zIn").addEventListener("click", () => zooma(0.67)); $("zUt").addEventListener("click", () => zooma(1.5));
   $("zHem").addEventListener("click", () => satVb(0, 0, KX));
+  $("fri").addEventListener("click", e => { friPunkt = !friPunkt; e.currentTarget.setAttribute("aria-pressed", String(friPunkt)); });
   if (window.ResizeObserver) new ResizeObserver(() => ritaMarkorer()).observe(svg);
   satVb(250, 240, 610);   // start: hela Sverige
 }
+let friPunkt = false;
 function kartKlick(e, mal) {
-  const sel = $("punkt"), mk = mal && mal.closest ? mal.closest(".mk") : null;
+  const sel = $("punkt"), fri = friPunkt || e.shiftKey, mk = !fri && mal && mal.closest ? mal.closest(".mk") : null;
   if (mk) {
     const id = mk.dataset.id;
     if (id[0] === "p") { sel.value = id.slice(1); sattPunkt(); }
