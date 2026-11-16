@@ -10,13 +10,13 @@
 :root {
   --bg: #f4f6f8; --panel: #ffffff; --fg: #1b2530; --dim: #5d6b7a; --line: #d5dce4; --grid: #c3ccd6;
   --acc: #1f5fa8; --accfg: #ffffff; --ok: #1f7a3f; --bad: #a32020; --warn: #8a5a00; --red: #d40000;
-  --few: #ffff00; --sct: #c0c0c0; --bkn: #0000ff; --ovc: #000000; --hatch: #9aa4ae;
+  --few: #ffff00; --sct: #c0c0c0; --bkn: #0000ff; --ovc: #000000; --hatch: #9aa4ae; --bas: #00b7d8; --baskant: #003a46; --bastext: #00788f;
   --font: "Segoe UI", system-ui, -apple-system, sans-serif; --mono: ui-monospace, "SF Mono", Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #12171d; --panel: #1a2129; --fg: #e3e8ee; --dim: #9aa7b5; --line: #2c3743; --grid: #3a4652; --acc: #6aa6ec; --accfg: #0d1620; --hatch: #6b7682; color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: #12171d; --panel: #1a2129; --fg: #e3e8ee; --dim: #9aa7b5; --line: #2c3743; --grid: #3a4652; --acc: #6aa6ec; --accfg: #0d1620; --hatch: #6b7682; --bas: #22d3ee; --baskant: #04262e; --bastext: #67e3f5; color-scheme: dark; }
 }
-:root[data-theme="dark"] { --bg: #12171d; --panel: #1a2129; --fg: #e3e8ee; --dim: #9aa7b5; --line: #2c3743; --grid: #3a4652; --acc: #6aa6ec; --accfg: #0d1620; --hatch: #6b7682; color-scheme: dark; }
+:root[data-theme="dark"] { --bg: #12171d; --panel: #1a2129; --fg: #e3e8ee; --dim: #9aa7b5; --line: #2c3743; --grid: #3a4652; --acc: #6aa6ec; --accfg: #0d1620; --hatch: #6b7682; --bas: #22d3ee; --baskant: #04262e; --bastext: #67e3f5; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font); padding-block: 14px 24px; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
 h1 { font-size: 18px; margin: 0 0 10px; font-weight: 650; }
@@ -218,6 +218,7 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
   <span><span class="ruta" style="background:var(--ovc)"></span>OVC 8/8</span>
   <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt i synoptisk kod VV (80 = 30 km)</span>
+  <span><span class="ruta" style="background:var(--bas);border-color:var(--baskant)"></span>Modellens molnbas (streck i diagrammet, hft = hundratal fot i tabellen)</span>
 </div>
 </div>
 </section>
@@ -399,6 +400,7 @@ function nyModell(dtg, nt, iy, ix) {
     cl: new Float64Array(nt * NIV).fill(NaN), clHar: new Uint8Array(nt * NIV),
     gp: new Float64Array(nt * NTRYCK).fill(NaN), gpHar: new Uint8Array(nt * NTRYCK),
     ice: new Float64Array(nt * NIS).fill(NaN), iceHar: new Uint8Array(nt * NIS),
+    cb: new Float64Array(nt).fill(NaN), cbHar: new Uint8Array(nt),   // modellens molnbas (m over modellens mark)
     wx: new Float64Array(nt * NIV).fill(NaN), wy: new Float64Array(nt * NIV).fill(NaN), wHar: new Uint8Array(nt * NIV),
     px: new Float64Array(nt * NTRYCK).fill(NaN), py: new Float64Array(nt * NTRYCK).fill(NaN), pwHar: new Uint8Array(nt * NTRYCK) };
 }
@@ -414,6 +416,10 @@ function laggIn(txt, a, b, etikett) {
   const d = tolka(txt), n = b - a + 1;
   for (const del of etikett.split(".")) {
     const typ = del[0];
+    if (typ === "b") {   // modellens molnbas (fyllnadsvarde = inget moln)
+      const v = d.cloud_base_altitude; if (v) for (let t = 0; t < n && a + t < M.nt; t++) { M.cb[a + t] = v[t]; M.cbHar[a + t] = 1; }
+      continue;
+    }
     if (typ === "s") {
       YTA.forEach((nm, i) => { const v = d[nm]; if (v) for (let t = 0; t < n && a + t < M.nt; t++) M.yta[i][a + t] = v[t]; });
       for (let t = a; t <= b && t < M.nt; t++) M.ytaOK[t] = 1; continue;
@@ -487,6 +493,8 @@ function bitUrl(a, b) {
   }
   const tt = "[" + a + ":" + b + "]", yx = "[" + M.iy + "][" + M.ix + "]"; const v = [], e = [];
   if (behS) { YTA.forEach(n => v.push(n + tt + "[0]" + yx)); e.push("s"); }
+  let behB = false; for (let t = a; t <= b; t++) if (!M.cbHar[t]) behB = true;
+  if (behB) { v.push("cloud_base_altitude" + tt + "[0]" + yx); e.push("b"); }
   if (kMax >= k1) { v.push("cloud_area_fraction_ml" + tt + "[" + k1 + ":" + kMax + "]" + yx); e.push("c" + k1 + "-" + kMax); }
   if (behG) { v.push("geopotential_pl" + tt + "[" + j1 + ":" + j2 + "]" + yx); e.push("g" + j1 + "-" + j2); }
   if (behI) { v.push("icing_index" + tt + "[0:" + h2 + "]" + yx); e.push("i0-" + h2); }
@@ -529,7 +537,7 @@ function hojder(t, kFran) {
 //  RITA
 // ===================================================================
 const COL = 22, PLOT_H = 400, TOPP_RAD = 30, RAD_H = 17;
-const RADER = ["Tid UTC", "T °C", "Td °C", "Vind", "Vind kt", "By kt", "Sikt VV", "Väder", "Moln", "Nb mm/h", "Nedisning"];
+const RADER = ["Tid UTC", "T °C", "Td °C", "Vind", "Vind kt", "By kt", "Sikt VV", "Väder", "Moln", "Bas hft", "Nb mm/h", "Nedisning"];
 const NS = "http://www.w3.org/2000/svg";
 function el(namn, attr, text) { const e = document.createElementNS(NS, namn); for (const k in attr) e.setAttribute(k, attr[k]); if (text !== undefined) e.textContent = text; return e; }
 
@@ -636,6 +644,14 @@ function rita() {
     }
   }
   if (saknasStart >= 0) saknasRekt(saknasStart, nt - 1, 0);
+  // Modellens molnbas: ett vagratt streck per timme (som i NfL-Diagram), cyan med mork kant
+  const gBas = el("g", dolj); svg.appendChild(gBas);
+  for (let t = 0; t < nt; t++) {
+    const z = M.cb[t]; if (!isFinite(z) || z * FOT > sk.topp * 100) continue;
+    const y = sk.y(z * FOT), x1 = t * COL + 1, x2 = (t + 1) * COL - 1;
+    gBas.appendChild(el("line", { x1, y1: y, x2, y2: y, stroke: c("--baskant"), "stroke-width": 4.5, "stroke-linecap": "round" }));
+    gBas.appendChild(el("line", { x1, y1: y, x2, y2: y, stroke: c("--bas"), "stroke-width": 2.5, "stroke-linecap": "round" }));
+  }
   if (vindLage) ritaVind(svg, sk, zTopp, c);
   svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
 
@@ -645,6 +661,7 @@ function rita() {
   const txt = (t, i, s, f) => { if (s !== "" && s !== undefined) svg.appendChild(el("text", { x: t * COL + COL / 2, y: yRad(i), "font-size": 10, "text-anchor": "middle", fill: f || c("--fg") }, s)); };
   for (let t = 0; t < nt; t++) {
     const d = new Date(t0 + t * 3600e3); txt(t, 0, p2(d.getUTCHours()), c("--dim"));
+    if (isFinite(M.cb[t])) txt(t, 9, String(Math.round(M.cb[t] * FOT / 100)), c("--bastext"));   // molnbas i hundratal fot
     if (!M.ytaOK[t]) continue;
     const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
     if (isFinite(tk)) txt(t, 1, String(Math.round(tk - 273.15)), c("--red"));
@@ -662,8 +679,8 @@ function rita() {
     let nb = NaN; if (t === 0) nb = 0; else if (M.ytaOK[t - 1] && isFinite(Y(7)) && isFinite(M.yta[7][t - 1])) nb = Math.max(0, Y(7) - M.yta[7][t - 1]);
     txt(t, 7, vader(nb, Y(8), Y(6)));
     txt(t, 8, molnCirkel(Y(9)));
-    if (isFinite(nb) && nb >= 0.05) txt(t, 9, nb.toFixed(1));
-    if (M.isKat && M.isKat[t]) txt(t, 10, ISNAMN[M.isKat[t]], c("--red"));
+    if (isFinite(nb) && nb >= 0.05) txt(t, 10, nb.toFixed(1));
+    if (M.isKat && M.isKat[t]) txt(t, 11, ISNAMN[M.isKat[t]], c("--red"));
   }
   // info
   const d0 = new Date(t0);
@@ -763,6 +780,7 @@ function tipsText(t, yPix) {
     if (isFinite(Y(6))) rad.push(["Sikt", Y(6) >= 10000 ? Math.round(Y(6) / 1000) + " km" : Math.round(Y(6) / 100) * 100 + " m"]);
     let nb = NaN; if (t > 0 && M.ytaOK[t - 1]) nb = Math.max(0, Y(7) - M.yta[7][t - 1]);
     if (isFinite(nb)) rad.push(["Nederbörd", nb.toFixed(1) + " mm/h"]);
+    if (M.cbHar[t]) rad.push(["Molnbas", isFinite(M.cb[t]) ? Math.round(M.cb[t] * FOT / 10) * 10 + " ft (" + Math.round(M.cb[t]) + " m) över mark" : "inget moln"]);
     if (isFinite(Y(9))) rad.push(["Totalt moln", Math.round((Y(9) > 1.5 ? Y(9) / 100 : Y(9)) * 8) + "/8"]);
   } else rad.push(["", "markdata ej hämtade"]);
   return rad;
