@@ -285,8 +285,9 @@ function bytLage(nytt) {
   sel.addEventListener("change", () => { lagra("mt:pParam", sel.value); const st = lasa("mt:pTrosk:" + sel.value); $("pTrosk").value = st || PPARAM[sel.value].std; sattParam(true); ritaOmrade(); probVisa(); });
   $("pTrosk").addEventListener("input", () => { lagra("mt:pTrosk:" + sel.value, $("pTrosk").value); sattParam(true); probVisa(); });
   ["pFran", "pTill"].forEach(id => $(id).addEventListener("change", () => probVisa()));
-  // Perioden flyttas med sin langd: +0 till +12 -> +12 till +24 (slutet blir nasta start)
-  const flytta = r => { const a = Math.min(+$("pFran").value, +$("pTill").value), L = Math.max(1, Math.abs(+$("pTill").value - +$("pFran").value)), na = a + r * L;
+  // Perioden flyttas med sin langd: +0 till +12 -> +12 till +24 (slutet blir nasta start).
+  // En enda timme (Fran = Till) flyttas en timme i taget och forblir en enda timme.
+  const flytta = r => { const a = Math.min(+$("pFran").value, +$("pTill").value), L = Math.abs(+$("pTill").value - +$("pFran").value), na = a + r * Math.max(1, L);
     if (na < 0 || na + L > ENS_TIDER - 1) return; $("pFran").value = na; $("pTill").value = na + L; probVisa(); };
   $("pBak").addEventListener("click", () => flytta(-1)); $("pFram").addEventListener("click", () => flytta(1));
   ["pStorlek", "pUppl"].forEach(id => $(id).addEventListener("change", () => { lagra("mt:" + id, $(id).value); probOmradeAndrat(); }));
