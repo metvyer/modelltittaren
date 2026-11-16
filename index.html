@@ -186,14 +186,14 @@ const ISNAMN = ["", "TRC", "LGT", "MOD", "SEV"];
 const YTA = ["surface_air_pressure", "air_temperature_2m", "relative_humidity_2m", "wind_speed", "wind_direction",
   "wind_speed_of_gust", "visibility_in_air", "precipitation_amount_acc", "precipitation_type", "cloud_area_fraction"];
 const PUNKTER = [
-  ["Såtenäs", "ESIB", 58.4264, 12.7144], ["Malmen", "ESSL", 58.4023, 15.5257], ["Uppsala", "ESCM", 59.8973, 17.5886],
+  ["Såtenäs", "ESIB", 58.4264, 12.7144], ["Malmen", "ESCF", 58.3978, 15.5228], ["Uppsala", "ESCM", 59.8973, 17.5886],
   ["Kallinge", "ESDF", 56.2667, 15.265], ["Hagshult", "ESMV", 57.2922, 14.1372], ["Arlanda", "ESSA", 59.6519, 17.9186],
   ["Landvetter", "ESGG", 57.6628, 12.2798], ["Sturup", "ESMS", 55.5363, 13.3762], ["Visby", "ESSV", 57.6628, 18.3462],
   ["Kallax", "ESPA", 65.5438, 22.122], ["Vidsel", "ESPE", 65.8753, 20.15]];
 const G0 = 9.80665, RD = 287.05, FOT = 3.28084, KT = 1.943844;
 // Vind (hamtas forst nar man valjer Vind): var 3:e timme. Modellnivaer (varannan) upp till ca 1600 m,
 // darover tryckytorna (800, 700, 500 ... hPa) som racker for vindflaggor hogre upp.
-const VIND_DT = 3, VIND_DK = 2, VIND_ZML = 1600, VIND_AVST = 20;
+const VIND_DT = 3, VIND_DK = 2, VIND_ZML = 1600, VIND_AVST = 20, VIND_UNDER = 18;   // VIND_UNDER: extra plats under diagrammet sa att nedersta flaggan syns hel
 // Fargskala for vindflaggor (kt) – fran lugnt (gratt) till hard vind (lila)
 const VINDFARG = [[0, "#7f8b97"], [10, "#2f7fc1"], [20, "#1f9e6e"], [30, "#c9a000"], [45, "#e0601b"], [60, "#c4122f"], [80, "#8a2bb5"]];
 
@@ -503,7 +503,7 @@ function molnCirkel(f) { if (!isFinite(f)) return ""; if (f > 1.5) f /= 100; con
 
 function rita() {
   if (!M || !M.stat) return;
-  const sk = skala(), nt = M.nt, B = nt * COL, H = TOPP_RAD + PLOT_H + 8 + RADER.length * RAD_H + 6;
+  const sk = skala(), nt = M.nt, B = nt * COL, EXTRA = vindLage ? VIND_UNDER : 0, H = TOPP_RAD + PLOT_H + 8 + EXTRA + RADER.length * RAD_H + 6;
   const svg = $("svg"), ax = $("axel"); svg.innerHTML = ""; ax.innerHTML = "";
   svg.setAttribute("width", B); svg.setAttribute("height", H); ax.setAttribute("height", H);
   const css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
@@ -582,7 +582,7 @@ function rita() {
   svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
 
   // tabellrader
-  const yRad = i => sk.botten + 8 + i * RAD_H + 12;
+  const yRad = i => sk.botten + 8 + EXTRA + i * RAD_H + 12;
   RADER.forEach((r, i) => ax.appendChild(el("text", { x: 4, y: yRad(i), "font-size": 10, fill: c("--dim") }, r)));
   const txt = (t, i, s, f) => { if (s !== "" && s !== undefined) svg.appendChild(el("text", { x: t * COL + COL / 2, y: yRad(i), "font-size": 10, "text-anchor": "middle", fill: f || c("--fg") }, s)); };
   for (let t = 0; t < nt; t++) {
@@ -649,7 +649,7 @@ function vindflagga(g, cx, cy, dir, kt, farg) {
 }
 function ritaVind(svg, sk, zTopp, c) {
   // flaggorna klipps vid diagrammets underkant sa att de nedersta inte gar in i tabellen
-  const cp = el("clipPath", { id: "vindKlipp" }); cp.appendChild(el("rect", { x: 0, y: 0, width: M.nt * COL, height: sk.botten })); svg.querySelector("defs").appendChild(cp);
+  const cp = el("clipPath", { id: "vindKlipp" }); cp.appendChild(el("rect", { x: 0, y: 0, width: M.nt * COL, height: sk.botten + VIND_UNDER + 4 })); svg.querySelector("defs").appendChild(cp);
   const g = el("g", { "clip-path": "url(#vindKlipp)" }), gs = el("g", {}); svg.appendChild(gs); svg.appendChild(g);
   let tom = -1;
   const sakn = (t1, t2) => {
