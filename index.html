@@ -242,7 +242,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <span><span class="ruta" style="background:var(--bkn)"></span>BKN 5–7/8</span>
   <span><span class="ruta" style="background:var(--ovc)"></span>OVC 8/8</span>
   <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
-  <span>Sikt i synoptisk kod VV (80 = 30 km)</span>
+  <span>Sikt (horisontell, 2 m) i synoptisk kod (80 = 30 km)</span>
   <span>Bas hft = modellens molnbas i hundratal fot över mark</span>
 </div>
 </div>
@@ -673,7 +673,7 @@ function hojder(t, kFran) {
 //  RITA
 // ===================================================================
 const COL = 22, PLOT_H = 400, TOPP_RAD = 30, RAD_H = 17;
-const RADER = ["Tid UTC", "T °C", "Td °C", "Vind", "Vind kt", "By kt", "Sikt VV", "Väder", "Moln", "Bas hft", "Nb mm/h", "Nedisning"];
+const RADER = ["Tid UTC", "T °C", "Td °C", "Vind", "Vind kt", "By kt", "Sikt", "Väder", "Moln", "Bas hft", "Nb mm/h", "Nedisning"];
 const NS = "http://www.w3.org/2000/svg";
 function el(namn, attr, text) { const e = document.createElementNS(NS, namn); for (const k in attr) e.setAttribute(k, attr[k]); if (text !== undefined) e.textContent = text; return e; }
 
