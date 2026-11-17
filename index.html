@@ -533,6 +533,32 @@ function laggIn(txt, a, b, etikett) {
   }
 }
 const nyckel = () => "mt:" + M.dtg + ":" + M.iy + ":" + M.ix + ":";
+// ---- Forhamtat fran GitHub (verktyg/forhamta.py via GitHub Actions) ----
+// For de forvalda flygplatserna lagger GitHub ut hela tid-hojd-datat for senaste
+// korningen pa sjalva sidan (forhamtat/th/). Det hamtas fran github.io - ingen
+// thredds eller mellanserver behovs - och sparas sedan som om sidan hamtat sjalv.
+let FORH = null;
+async function forhamtatIndex() {
+  if (FORH && Date.now() - FORH.t < 10 * 60e3) return FORH.idx;
+  let idx = null;
+  try { const r = await fetch("forhamtat/th/index.json", { cache: "no-store" }); if (r.ok) idx = await r.json(); } catch (e) {}
+  FORH = { t: Date.now(), idx }; return idx;
+}
+async function hamtaForhamtat() {
+  const idx = await forhamtatIndex(); if (!idx || idx.dtg !== M.dtg || !idx.punkter) return false;
+  const fil = idx.punkter[M.iy + ":" + M.ix]; if (!fil) return false;
+  try {
+    status("Hämtar förberäknad data (GitHub) …");
+    const r = await fetch("forhamtat/th/" + idx.dtg + "/" + fil); if (!r.ok) return false;
+    const d = await r.json(), m = M, k = nyckel(); if (!d.static || !d.bitar) return false;
+    await THDB.put(k + "static", d.static);
+    const lista = [];
+    for (const [a, b, e, txt] of d.bitar) { await THDB.put(k + "t" + a + "-" + b + ":" + e, txt); lista.push([a, b, e]); }
+    if (M !== m) return false;
+    lagra(k + "har", "1"); lagra(k + "bitar", JSON.stringify(lista)); lagra(k + "klar", "450");
+    await laddaCache(); return !!M.stat;
+  } catch (e) { return false; }
+}
 async function laddaCache() {
   const m = M, k = nyckel();
   const st = await THDB.get(k + "static"); if (M !== m || !st || !lasStatik(st)) return;
@@ -931,9 +957,16 @@ async function hamtaAllt() {
   forloppStart("Letar senaste körningen …");
   try {
     let dtg, nt, ny = false; const val = $("korning").value;
-    if (val === "senaste") { const k = await sokKorning(); if (!k) throw new Error("Hittade ingen komplett körning."); ({ dtg, nt, ny } = k); }
+    if (val === "senaste") {
+      let k = await sokKorning();
+      if (!k) { const idx = await forhamtatIndex(); if (idx && idx.dtg) k = { dtg: idx.dtg, nt: idx.nt, ny: false }; }   // thredds nas inte: ta GitHubs senaste
+      if (!k) throw new Error("Hittade ingen komplett körning.");
+      ({ dtg, nt, ny } = k);
+    }
     else { dtg = val; nt = await antalTider(dtg); if (!nt) throw new Error("Körningen " + dtg + " finns inte (längre) på servern."); }
     if (!M || M.dtg !== dtg || M.iy !== r.iy || M.ix !== r.ix || M.nt !== nt) { M = nyModell(dtg, nt, r.iy, r.ix); await laddaCache(); }
+    let franGH = false;
+    if (!M.stat) franGH = await hamtaForhamtat();
     M.lat = lat; M.lon = lon; M.ny = ny; M.vald = val !== "senaste";
     if (!M.stat) {
       F.fas = "Hämtar fasta data (tider, nivåer, markhöjd) …"; status("Hämtar fasta data …"); visaForlopp();
@@ -960,7 +993,7 @@ async function hamtaAllt() {
     }
     lagra(nyckel() + "klar", String(Math.max(+$("topp").value, +(lasa(nyckel() + "klar") || 0))));
     const tot = ((performance.now() - t0) / 1000).toFixed(0);
-    status(tider.length ? "Klart: totalt " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + kb.toFixed(0) + " kB." : "Klart: allt fanns redan i webbläsaren (" + tot + " s).");
+    status(tider.length ? "Klart: totalt " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + kb.toFixed(0) + " kB." : (franGH ? "Klart: förberäknat från GitHub (" + tot + " s)." : "Klart: allt fanns redan i webbläsaren (" + tot + " s)."));
   } catch (e) {
     try { rita(); } catch (e2) {}
     status(koad ? "Byter punkt …" : stoppad || e.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas. Tryck Hämta för att fortsätta." : e.message, stoppad ? "" : "fel");

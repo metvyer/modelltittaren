@@ -1,0 +1,88 @@
+# Modelltittaren - forhamtning och publicering
+#
+# Var 20:e minut: finns en ny komplett MEPS-korning hamtas tid-hojd for de
+# forvalda flygplatserna (verktyg/forhamta.py). Datat sparas pa grenen "data"
+# (skrivs over varje gang - ingen historik som vaxer) och sidan publiceras med
+# datat i mappen forhamtat/. Kors aven vid andringar i main och for hand.
+#
+# Publiceringen kraver att Settings -> Pages -> Source = "GitHub Actions".
+# Ar den inte installd an hamtas och sparas datat anda, men sidan publiceras
+# som forut direkt fran main (steget hoppas over).
+name: Förhämtning
+
+on:
+  schedule:
+    - cron: "7,27,47 * * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: forhamtning
+  cancel-in-progress: false
+
+jobs:
+  forhamta:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    timeout-minutes: 90
+    steps:
+      - name: Hämta koden
+        uses: actions/checkout@v4
+
+      - name: Hämta tidigare förhämtat data (grenen data)
+        run: |
+          mkdir -p forhamtat
+          if git ls-remote --exit-code origin data >/dev/null 2>&1; then
+            git fetch --depth 1 origin data
+            git --work-tree=forhamtat checkout origin/data -- .
+            git reset -q
+          fi
+          ls -R forhamtat | head -20
+
+      - name: Förhämta ny körning
+        id: hamta
+        run: python3 verktyg/forhamta.py forhamtat
+
+      - name: Spara datat på grenen data
+        if: steps.hamta.outputs.andrat == 'ja'
+        run: |
+          cd forhamtat
+          git init -q
+          git checkout -q -b data
+          git add -A
+          git -c user.name="modelltittaren-bot" -c user.email="actions@users.noreply.github.com" commit -q -m "Förhämtat data $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
+          rm -rf .git
+
+      - name: Publiceras sidan via Actions?
+        id: pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          typ=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null || echo okand)
+          echo "Pages build_type: $typ"
+          echo "typ=$typ" >> "$GITHUB_OUTPUT"
+
+      - name: Bygg sidan med datat
+        if: steps.pages.outputs.typ == 'workflow' && (steps.hamta.outputs.andrat == 'ja' || github.event_name != 'schedule')
+        run: |
+          mkdir -p _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' ./ _site/
+          ls _site _site/forhamtat || true
+
+      - name: Ladda upp sidan
+        if: steps.pages.outputs.typ == 'workflow' && (steps.hamta.outputs.andrat == 'ja' || github.event_name != 'schedule')
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Publicera
+        if: steps.pages.outputs.typ == 'workflow' && (steps.hamta.outputs.andrat == 'ja' || github.event_name != 'schedule')
+        uses: actions/deploy-pages@v4
