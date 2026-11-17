@@ -1,6 +1,6 @@
 # Modelltittaren - forhamtning och publicering
 #
-# Var 20:e minut: finns en ny komplett MEPS-korning hamtas tid-hojd for de
+# Var 10:e minut: finns en ny komplett MEPS-korning hamtas tid-hojd for de
 # forvalda flygplatserna (verktyg/forhamta.py). Datat sparas pa grenen "data"
 # (skrivs over varje gang - ingen historik som vaxer) och sidan publiceras med
 # datat i mappen forhamtat/. Kors aven vid andringar i main och for hand.
@@ -12,7 +12,7 @@ name: Förhämtning
 
 on:
   schedule:
-    - cron: "7,27,47 * * * *"
+    - cron: "2,12,22,32,42,52 * * * *"
   push:
     branches: [main]
   workflow_dispatch:

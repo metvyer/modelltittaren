@@ -129,7 +129,7 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
   <div class="falt"><label for="lat">Lat</label><input id="lat" class="koord" inputmode="decimal"></div>
   <div class="falt"><label for="lon">Lon</label><input id="lon" class="koord" inputmode="decimal"></div>
   <div class="falt"><label for="klistra">Klistra in "lat, lon"</label><input id="klistra" placeholder="59.65, 17.92" style="width:140px"></div>
-  <div class="falt baraTH"><label for="topp">Topp</label><select id="topp"><option value="450">FL450</option><option value="250">FL250</option><option value="150">FL150</option><option value="90">FL90</option><option value="30">FL30</option></select></div>
+  <div class="falt baraTH"><label for="topp">Topp</label><select id="topp"><option value="450">FL450</option><option value="250">FL250</option><option value="200">FL200</option><option value="150">FL150</option><option value="90">FL90</option><option value="30">FL30</option></select></div>
   <div class="falt baraTH"><label for="korning">Körning</label><select id="korning"></select></div>
   <button id="hamta" class="baraTH">Hämta</button>
   <button id="stopp" class="sek baraTH" disabled>Stopp</button>
@@ -555,7 +555,7 @@ async function hamtaForhamtat() {
     const lista = [];
     for (const [a, b, e, txt] of d.bitar) { await THDB.put(k + "t" + a + "-" + b + ":" + e, txt); lista.push([a, b, e]); }
     if (M !== m) return false;
-    lagra(k + "har", "1"); lagra(k + "bitar", JSON.stringify(lista)); lagra(k + "klar", "450");
+    lagra(k + "har", "1"); lagra(k + "bitar", JSON.stringify(lista)); lagra(k + "klar", String(idx.topp || 450));
     await laddaCache(); return !!M.stat;
   } catch (e) { return false; }
 }
