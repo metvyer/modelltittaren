@@ -226,14 +226,20 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
 </div>
 <div class="tips" id="tips" hidden></div>
 <div class="tips ktips" id="kTips" hidden></div>
-<p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå. Kartunderlag: Natural Earth. Flygplatser: OurAirports.</p>
+<p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå. Kartunderlag: Natural Earth. Flygplatser: OurAirports.<span id="vagInfo"></span></p>
 
 <script>
 "use strict";
 // ===================================================================
 //  INSTALLNINGAR (samma varden som Excel-versionen v0.7)
 // ===================================================================
+// Alla adresser byggs med BAS (thredds direkt). Nas thredds inte fran natet
+// (t.ex. jobbet) byter hamta() till mellanservern - en Cloudflare Worker som
+// bara vidarebefordrar lasning av MEPS-filer (koden: verktyg/mellanserver.js).
 const BAS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
+const MELLAN = "https://modelltittaren.metvyer.workers.dev/mepslatest/";
+const PROV_FIL = "meps_lagged_6_h_latest_2_5km_latest.nc.ascii?time";   // litet anrop for kontakttest
+const PROV_DIREKT_S = 6, PROV_MELLAN_S = 12;                          // tidsgranser for kontakttestet
 const FIL = dtg => "meps_det_2_5km_" + dtg + ".ncml";
 const INTERVALL = 3, SOK_TIMMAR = 12, KRAV_TIDER = 67, BIT = 24, TIMEOUT_S = 120;
 const NIV = 65, NTRYCK = 13, NIS = 10;
@@ -288,9 +294,34 @@ function status(t, klass) {
   }
 }
 
+// ---- Direkt eller via mellanservern? ----
+// Provas en gang per besok: forst thredds direkt (kort tidsgrans), annars
+// mellanservern. Alla svar fran servern (aven 404) raknas som kontakt.
+let VAG = null, vagLofte = null;
+async function svarar(bas, sek) {
+  const c = new AbortController(); const t = setTimeout(() => c.abort(), sek * 1000);
+  try { const r = await fetch(bas + PROV_FIL, { signal: c.signal, cache: "no-store" }); clearTimeout(t); return r.status > 0; }
+  catch (e) { clearTimeout(t); return false; }
+}
+function valjVag() {
+  if (VAG) return Promise.resolve(VAG);
+  if (!vagLofte) vagLofte = (async () => {
+    if (await svarar(BAS, PROV_DIREKT_S)) return (VAG = "direkt");
+    status("thredds.met.no svarar inte direkt härifrån – provar mellanservern …");
+    if (await svarar(MELLAN, PROV_MELLAN_S)) {
+      VAG = "mellan";
+      const e = $("vagInfo"); if (e) e.textContent = " Hämtar via mellanserver (Cloudflare), eftersom thredds.met.no inte nås direkt från det här nätet.";
+      return VAG;
+    }
+    vagLofte = null; return "direkt";   // ingen kontakt alls - prova igen nasta gang
+  })();
+  return vagLofte;
+}
+
 // Hamtar en URL. Ett anrop i taget, tidsgrans, omforsok vid 429/5xx.
 // binar = true: svaret lases som byte (ArrayBuffer) i .buf i stallet for text.
 async function hamta(url, medRetry = true, binar = false) {
+  if ((await valjVag()) === "mellan" && url.startsWith(BAS)) url = MELLAN + url.slice(BAS.length);
   for (let f = 1; f <= 4; f++) {
     if (stoppad) throw new Error("stoppad");
     avbryt = new AbortController();
@@ -301,6 +332,7 @@ async function hamta(url, medRetry = true, binar = false) {
       st = r.status; if (binar && r.ok) buf = await r.arrayBuffer(); else txt = await r.text();
     } catch (e) { if (stoppad) throw new Error("stoppad"); st = 0; }
     clearTimeout(tid);
+    if (st === 0 && VAG === "direkt") { VAG = null; vagLofte = null; }   // natet bytt? prova vagen igen nasta anrop
     if (st === 200) return { st, txt, buf };
     if (st === 404 || st === 400 || st === 403) return { st, txt };
     if (!medRetry && st !== 429) return { st, txt };
