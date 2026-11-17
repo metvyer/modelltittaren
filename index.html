@@ -274,15 +274,51 @@ let avbryt = null, stoppad = false, vindLage = false;
 
 function lagra(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
 function lasa(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+// Tid-hojd: de stora texterna (fasta data + bitar) ligger i IndexedDB
+// (databasen "modelltittaren-th"), bara sma markeringar ("har", "bitar",
+// "klar") i localStorage. Forut lag allt i localStorage, som bara rymmer ca 5 MB.
+// Gar IndexedDB inte att anvanda sparas texterna i minnet medan fliken ar oppen.
+const THDB = (() => {
+  const minne = new Map(); let dbp = null;
+  const oppna = () => dbp || (dbp = new Promise((ok, fel) => {
+    try {
+      const r = indexedDB.open("modelltittaren-th", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("th");
+      r.onsuccess = () => ok(r.result); r.onerror = () => fel(r.error);
+    } catch (e) { fel(e); }
+  }));
+  const tx = (mode, f) => oppna().then(db => new Promise((ok, fel) => {
+    const t = db.transaction("th", mode), req = f(t.objectStore("th"));
+    t.oncomplete = () => ok(req ? req.result : undefined); t.onerror = () => fel(t.error); t.onabort = () => fel(t.error);
+  }));
+  return {
+    get: k => tx("readonly", s => s.get(k)).then(v => v !== undefined ? v : minne.get(k)).catch(() => minne.get(k)),
+    put: (k, v) => tx("readwrite", s => s.put(v, k)).then(() => true).catch(() => { minne.set(k, v); return false; }),
+    // tar bort allt fran korningar aldre an gr (ms)
+    rensa: gr => tx("readwrite", s => {
+      const c = s.openKeyCursor();
+      c.onsuccess = () => {
+        const cur = c.result; if (!cur) return;
+        const m = String(cur.key).match(/^mt:(\d{8}T\d{2}Z):/);
+        if (m && dtgDatum(m[1]).getTime() < gr) s.delete(cur.key);
+        cur.continue();
+      };
+      return null;
+    }).catch(() => {})
+  };
+})();
 function rensaGammalCache() {
+  const gr = Date.now() - 864e5;   // ett dygn racker
   try {
-    const gr = Date.now() - 864e5;   // ett dygn racker
+    const flytt = lasa("mt:thFormat") !== "idb";   // forsta gangen: ta bort gamla tid-hojd-texter i localStorage
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
       const m = k && k.match(/^mt:(\d{8}T\d{2}Z):/);
-      if (m && dtgDatum(m[1]).getTime() < gr) localStorage.removeItem(k);
+      if (m && (flytt || dtgDatum(m[1]).getTime() < gr)) localStorage.removeItem(k);
     }
+    if (flytt) lagra("mt:thFormat", "idb");
   } catch (e) {}
+  THDB.rensa(gr);
 }
 let lage = "th";   // "th" = tid-hojd, "p" = sannolikhet
 // Vid fel visas en lank till met.no:s driftstatus (status.met.no), dar storningar pa thredds meddelas.
@@ -488,14 +524,16 @@ function laggIn(txt, a, b, etikett) {
   }
 }
 const nyckel = () => "mt:" + M.dtg + ":" + M.iy + ":" + M.ix + ":";
-function laddaCache() {
-  const st = lasa(nyckel() + "static"); if (!st || !lasStatik(st)) return;
-  const lista = JSON.parse(lasa(nyckel() + "bitar") || "[]");
-  for (const [a, b, e] of lista) { const t = lasa(nyckel() + "t" + a + "-" + b + ":" + e); if (t) laggIn(t, a, b, e); }
+async function laddaCache() {
+  const m = M, k = nyckel();
+  const st = await THDB.get(k + "static"); if (M !== m || !st || !lasStatik(st)) return;
+  const lista = JSON.parse(lasa(k + "bitar") || "[]");
+  for (const [a, b, e] of lista) { const t = await THDB.get(k + "t" + a + "-" + b + ":" + e); if (M !== m) return; if (t) laggIn(t, a, b, e); }
 }
-function sparaBit(a, b, e, txt) {
-  if (!lagra(nyckel() + "t" + a + "-" + b + ":" + e, txt)) return;
-  const lista = JSON.parse(lasa(nyckel() + "bitar") || "[]"); lista.push([a, b, e]); lagra(nyckel() + "bitar", JSON.stringify(lista));
+async function sparaBit(a, b, e, txt) {
+  const k = nyckel();
+  await THDB.put(k + "t" + a + "-" + b + ":" + e, txt);
+  const lista = JSON.parse(lasa(k + "bitar") || "[]"); lista.push([a, b, e]); lagra(k + "bitar", JSON.stringify(lista));
 }
 function clKmin(t) { for (let k = NIV - 1; k >= 0; k--) if (!M.clHar[t * NIV + k]) return k + 1; return 0; }
 
@@ -886,14 +924,14 @@ async function hamtaAllt() {
     let dtg, nt, ny = false; const val = $("korning").value;
     if (val === "senaste") { const k = await sokKorning(); if (!k) throw new Error("Hittade ingen komplett körning."); ({ dtg, nt, ny } = k); }
     else { dtg = val; nt = await antalTider(dtg); if (!nt) throw new Error("Körningen " + dtg + " finns inte (längre) på servern."); }
-    if (!M || M.dtg !== dtg || M.iy !== r.iy || M.ix !== r.ix || M.nt !== nt) { M = nyModell(dtg, nt, r.iy, r.ix); laddaCache(); }
+    if (!M || M.dtg !== dtg || M.iy !== r.iy || M.ix !== r.ix || M.nt !== nt) { M = nyModell(dtg, nt, r.iy, r.ix); await laddaCache(); }
     M.lat = lat; M.lon = lon; M.ny = ny; M.vald = val !== "senaste";
     if (!M.stat) {
       F.fas = "Hämtar fasta data (tider, nivåer, markhöjd) …"; status("Hämtar fasta data …"); visaForlopp();
       const yx = "[" + r.iy + "][" + r.ix + "]";
       const s = await hamta(BAS + FIL(dtg) + ".ascii?" + enc("time,ap,b,pressure,height5,latitude" + yx + ",longitude" + yx + ",surface_geopotential[0][0]" + yx));
       if (s.st !== 200 || !lasStatik(s.txt)) { if (val === "senaste") { try { localStorage.removeItem("mt:senast"); } catch (e) {} } throw new Error("Kunde inte hämta fasta data (svar " + s.st + ")."); }
-      lagra(nyckel() + "static", s.txt); kb += s.txt.length / 1024;
+      await THDB.put(nyckel() + "static", s.txt); lagra(nyckel() + "har", "1"); kb += s.txt.length / 1024;
     }
     rita(); ritaMarkorer(); F.fas = "Kontrollerar vad som saknas …";
     // Varv 0 hamtar allt som saknas. Byts toppen under hamtningen fyller varv 1-2 pa det som da saknas.
@@ -907,7 +945,7 @@ async function hamtaAllt() {
         if (res.st !== 200) throw new Error("Hämtningen av +" + a + " till +" + b + " h misslyckades (svar " + res.st + "). Tryck Hämta igen för att fortsätta.");
         const sek = (performance.now() - F.t1) / 1000; F.t1 = 0; F.fas = "Ritar och förbereder nästa bit …";
         tider.push(sek.toFixed(0)); noteraBitTid(sek); kb += res.txt.length / 1024;
-        sparaBit(a, b, bu.etikett, res.txt); laggIn(res.txt, a, b, bu.etikett); rita(); visaForlopp();
+        await sparaBit(a, b, bu.etikett, res.txt); laggIn(res.txt, a, b, bu.etikett); rita(); visaForlopp();
       }
       if (!nagot) break;
     }
@@ -948,7 +986,7 @@ function laggTillEgen(lat, lon, r) {
 // 0 = ej hamtad, 1 = paborjad, 2 = hamtad for vald topp
 function hamtStatus(dtg, iy, ix) {
   const k = "mt:" + dtg + ":" + iy + ":" + ix + ":";
-  if (!lasa(k + "static")) return 0;
+  if (!lasa(k + "har")) return 0;
   return +(lasa(k + "klar") || 0) >= +$("topp").value ? 2 : 1;
 }
 function satVb(x, y, w) {
