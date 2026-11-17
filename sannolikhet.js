@@ -392,8 +392,40 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk, lista) {
 }
 // Visar ALLA sparade omraden for vald parameter och korning som har hela perioden.
 // Grovt rutnat ritas forst, finare ovanpa. Ramen visar vad som hamtas vid nasta Hamta fält.
+// ---------- Tidslinje under kartan ----------
+// En ruta per timme (+0 till +61). Farg = hamtad for omradet och parametern, ram = vald period,
+// tjock vanstergrans = nytt dygn (00 UTC). Klick flyttar perioden sa att den borjar dar.
+function ritaTidslinje() {
+  const el = $("tidslinje"), et = $("tidsEtiketter"); if (!el) return;
+  const o = berakna(); let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
+  const har = new Set();
+  if (o && P.dtg) for (const e of P.index) if (innehaller(e, { ...o, dtg: P.dtg })) e.tider.forEach(t => har.add(t));
+  const bas = P.dtg ? dtgDatum(P.dtg).getTime() : null;
+  el.textContent = ""; et.textContent = "";
+  for (let t = 0; t < ENS_TIDER; t++) {
+    const sp = document.createElement("span"); sp.dataset.t = t; sp.title = tidText(t) + (har.has(t) ? " – hämtad" : " – ej hämtad");
+    if (har.has(t)) sp.classList.add("har");
+    if (t >= a && t <= b) sp.classList.add("per");
+    if (bas !== null) {
+      const d = new Date(bas + t * 3600e3);
+      if (t > 0 && d.getUTCHours() === 0) sp.classList.add("dygn");
+      // forsta etiketten bara om nasta dygnsgrans ar en bit bort (annars krockar texterna)
+      if ((t === 0 && d.getUTCHours() <= 16) || (t > 0 && d.getUTCHours() === 0)) {
+        const l = document.createElement("span"); l.style.left = (t / ENS_TIDER * 100) + "%";
+        l.textContent = VECKODAG[d.getUTCDay()] + (t === 0 ? " " + p2(d.getUTCHours()) + "Z" : ""); et.append(l);
+      }
+    }
+    el.append(sp);
+  }
+}
+function tidslinjeKlick(ev) {
+  const t = +(ev.target.dataset && ev.target.dataset.t); if (!isFinite(t) || ev.target.dataset.t === undefined) return;
+  const L = Math.abs(+$("pTill").value - +$("pFran").value), na = Math.min(t, ENS_TIDER - 1 - L);
+  $("pFran").value = na; $("pTill").value = na + L; probVisa(); autoHamta();
+}
+
 async function probVisa() {
-  const g = $("kProb"); ritaPForklaring();
+  const g = $("kProb"); ritaPForklaring(); ritaTidslinje();
   const rensa = () => { g.textContent = ""; P.varden = null; $("pSam").textContent = ""; };
   if (lage !== "p" || !P.dtg) { rensa(); return; }
   const v = $("pParam").value, pa = PPARAM[v], { a, b, fran, lista, dt } = periodTimmar(), trosk = parseFloat($("pTrosk").value.replace(",", "."));
@@ -542,6 +574,16 @@ function bytLage(nytt) {
   $("pAuto").checked = lasa("mt:pAuto") !== "nej";
   $("pAuto").addEventListener("change", () => lagra("mt:pAuto", $("pAuto").checked ? "ja" : "nej"));
   $("pBak").addEventListener("click", () => flytta(-1)); $("pFram").addEventListener("click", () => flytta(1));
+  // Tidslinjen och stegknapparna under kartan, piltangenterna (inte nar man skriver i ett falt)
+  $("tBak").addEventListener("click", () => flytta(-1)); $("tFram").addEventListener("click", () => flytta(1));
+  $("tidslinje").addEventListener("click", tidslinjeKlick);
+  document.addEventListener("keydown", ev => {
+    if (lage !== "p" || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+    const tag = (document.activeElement && document.activeElement.tagName) || "";
+    if (["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return;
+    if (ev.key === "ArrowLeft") { ev.preventDefault(); flytta(-1); }
+    else if (ev.key === "ArrowRight") { ev.preventDefault(); flytta(1); }
+  });
   ["pStorlek", "pUppl"].forEach(id => $(id).addEventListener("change", () => { lagra("mt:" + id, $(id).value); probOmradeAndrat(); }));
   ["lat", "lon", "klistra"].forEach(id => $(id).addEventListener("input", () => { if (lage === "p") probOmradeAndrat(); }));
   $("punkt").addEventListener("change", () => { if (lage === "p") probOmradeAndrat(); });

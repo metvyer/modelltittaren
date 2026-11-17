@@ -83,7 +83,24 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .flikar button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
 body.p .baraTH { display: none; }
 body:not(.p) .baraP { display: none; }
-body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
+body.p .arbete { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); }
+/* Sannolikhet: kartan sa stor som skarmen tillater (hogst ca 78 % av hojden), samma proportioner */
+body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
+/* Tidslinje under kartan (sannolikhet) */
+.tidsrad { display: flex; gap: 6px; align-items: center; }
+.tidsrad button { min-width: 40px; font-size: 15px; }
+.tidsmitt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.tidslinje { display: flex; height: 24px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; cursor: pointer; background: var(--panel); }
+.tidslinje span { flex: 1; background: color-mix(in srgb, var(--grid) 45%, transparent); border-left: 1px solid var(--panel); }
+.tidslinje span.har { background: color-mix(in srgb, var(--acc) 55%, transparent); }
+.tidslinje span.per { box-shadow: inset 0 4px 0 var(--fg), inset 0 -4px 0 var(--fg); }
+.tidslinje span.har.per { background: var(--acc); }
+.tidslinje span.dygn { border-left: 2px solid var(--fg); }
+.tidslinje span:hover { outline: 2px solid var(--fg); outline-offset: -2px; }
+.tidsetiketter { position: relative; height: 14px; font-size: 11px; color: var(--dim); }
+.tidsetiketter span { position: absolute; top: 0; white-space: nowrap; transform: translateX(2px); }
+.tidsforkl { font-size: 11px; color: var(--dim); display: flex; gap: 12px; flex-wrap: wrap; }
+.tidsforkl i { display: inline-block; width: 12px; height: 10px; margin-right: 4px; vertical-align: -1px; border-radius: 2px; }
 @media (max-width: 860px) { body.p .arbete { grid-template-columns: minmax(0, 1fr); } }
 #vyP[hidden], #vyTH[hidden] { display: none; }
 .pkontroller { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
@@ -150,7 +167,13 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
     <g id="kGeo"></g><g id="kProb"></g><g id="kOmr"></g><g id="kMark"></g>
   </svg>
-  <div class="kartforklaring">
+  <div class="baraP tidsrad">
+    <button class="sek" id="tBak" title="Bakåt (vänsterpil)">◀</button>
+    <div class="tidsmitt"><div class="tidslinje" id="tidslinje" title="Klicka på en timme för att flytta perioden dit"></div><div class="tidsetiketter" id="tidsEtiketter"></div></div>
+    <button class="sek" id="tFram" title="Framåt (högerpil)">▶</button>
+  </div>
+  <div class="baraP tidsforkl"><span><i style="background:var(--acc)"></i>hämtad för området</span><span><i style="background:color-mix(in srgb, var(--grid) 45%, transparent)"></i>ej hämtad</span><span><i style="box-shadow:inset 0 3px 0 var(--fg),inset 0 -3px 0 var(--fg)"></i>vald period</span><span>← → stegar</span></div>
+  <div class="kartforklaring baraTH">
     <span><i class="mk tom"></i>ej hämtad</span><span><i class="mk halv"></i>påbörjad</span><span><i class="mk full"></i>hämtad</span><span><i class="mk vald"></i>vald</span>
   </div>
   <p class="karttips">Klicka på kartan för att hämta en punkt, eller på en markering. Håll muspekaren över en markering för namn. Skift-klick eller <b>Fri punkt</b> = ny punkt precis där du klickar. Hjul eller nyp = zooma, dra = flytta.</p>
@@ -1218,6 +1241,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261117-1815"></script>
+<script src="sannolikhet.js?v=20261117-2100"></script>
 </body>
 </html>
