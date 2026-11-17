@@ -116,12 +116,16 @@ function zoomaTillOmrade(o) {
 // Senaste kompletta ensemblekorning (letar bakat var 3:e timme, slutar vid den senast kanda).
 async function sokEnsKorning() {
   const d = new Date(); d.setUTCMinutes(0, 0, 0); d.setUTCHours(d.getUTCHours() - d.getUTCHours() % 3);
+  let kontakt = false;
   for (let i = 0; i <= 6; i++) {
     const dtg = dtgText(new Date(d.getTime() - i * 3 * 3600e3));
     if (P.senast && dtgDatum(dtg) <= dtgDatum(P.senast)) return P.senast;
     status("Letar senaste ensemblekörning " + dtg + " …");
     if (await ensFinns(dtg)) { P.ny = !!P.senast; P.senast = dtg; lagra("mt:ensSenast", dtg); return dtg; }
+    if (P.svar.st !== 0) kontakt = true;
+    else if (!kontakt && i >= 1) break;   // tva forsok utan nagon kontakt alls -> servern nas inte, sluta leta
   }
+  if (!P.senast && !kontakt) throw new Error(varforEj(""));
   return P.senast;
 }
 // Finns korningen komplett pa servern? Svaret sparas under besoket.
@@ -129,8 +133,17 @@ async function ensFinns(dtg) {
   if (P.finns.has(dtg)) return true;
   const r = await hamta(BAS + ENS_FIL(dtg) + ".ascii?time", false);
   const m = r.st === 200 ? r.txt.match(/\ntime\[(\d+)\]/) : null;
+  P.svar = { st: r.st, n: m ? +m[1] : 0 };   // for felmeddelandet
   if (m && +m[1] >= ENS_TIDER) { P.finns.add(dtg); return true; }
   return false;
+}
+// Varfor en korning inte kunde anvandas, i klartext
+function varforEj(dtg) {
+  const s = P.svar || { st: 0, n: 0 };
+  if (s.st === 0) return "Ingen kontakt med thredds.met.no (nätet, eller servern svarar inte just nu). Försök igen om en stund.";
+  if (s.st === 200) return "Körningen " + dtg + " är inte klar än (" + s.n + " av " + ENS_TIDER + " timmar finns). Välj en tidigare körning eller vänta.";
+  if (s.st === 404) return "Körningen " + dtg + " finns inte på servern (inte publicerad än, eller redan borttagen).";
+  return "Körningen " + dtg + " gick inte att läsa (svar " + s.st + ").";
 }
 // Byter aktiv korning och behaller samma KLOCKSLAG for Fran/Till (inte samma prognostimme).
 function bytKorning(nyDtg) {
@@ -151,7 +164,7 @@ function korningsListaP() {
 async function aktivKorning() {
   const val = $("pKorningVal").value;
   if (val === "senaste") { const s = await sokEnsKorning(); if (s) bytKorning(s); return s; }
-  if (!await ensFinns(val)) throw new Error("Körningen " + val + " finns inte (längre eller ännu) på servern.");
+  if (!await ensFinns(val)) throw new Error(varforEj(val));
   bytKorning(val); return val;
 }
 function tidText(t) {
@@ -191,7 +204,7 @@ async function probHamta(auto) {
   P.fragar = false; P.upptagen = true; stoppad = false; $("pHamta").disabled = true; $("pStopp").disabled = false;
   const t0 = performance.now(); let kb = 0; const tider = [];
   try {
-    if (!await aktivKorning()) throw new Error("Hittade ingen komplett ensemblekörning.");
+    if (!await aktivKorning()) throw new Error("Hittade ingen komplett ensemblekörning de senaste 18 timmarna. Senaste försöket: " + varforEj(""));
     const o = { ...o0, dtg: P.dtg }; ritaOmrade(); if (!auto) zoomaTillOmrade(o);
     const { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
     const antV = sakn.length * ENS_MEDL * o.ny * o.nx, mb = antV * ENS_BYTE[ensFormat] / 1048576;
@@ -449,6 +462,7 @@ function bytLage(nytt) {
     const kv = $("pKorningVal").value;
     if (kv !== "senaste") bytKorning(kv);
     else if (P.senast) bytKorning(P.senast);
+    else { P.dtg = null; fyllTider(); }   // ingen kand senaste korning an - visa inte en gammal vald
     ritaOmrade(); await probVisa();
     if (!P.varden && !P.upptagen) status("Tryck Hämta fält för att hämta i körningen " + (P.dtg || kv) + ".", "");
   });
