@@ -76,6 +76,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 /* Forlopp under hamtning */
 .forlopp { margin: 0 0 10px; display: grid; gap: 5px; }
 .forlopp[hidden] { display: none; }
+.fel a { color: inherit; text-decoration: underline; }
 .forklaring[hidden] { display: none; }
 .flikar { display: flex; gap: 4px; margin: 0 0 10px; border-bottom: 1px solid var(--line); }
 .flikar button { background: transparent; color: var(--dim); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 14px; font-weight: 600; }
@@ -278,7 +279,14 @@ function rensaGammalCache() {
   } catch (e) {}
 }
 let lage = "th";   // "th" = tid-hojd, "p" = sannolikhet
-function status(t, klass) { const e = $(lage === "p" ? "pStatus" : "iStatus"); e.textContent = t; e.className = klass || ""; }
+// Vid fel visas en lank till met.no:s driftstatus (status.met.no), dar storningar pa thredds meddelas.
+function status(t, klass) {
+  const e = $(lage === "p" ? "pStatus" : "iStatus"); e.textContent = t; e.className = klass || "";
+  if (klass === "fel" && /thredds|svar \d|servern|körning|misslyckades/i.test(t)) {   // bara serverfel, inte inmatningsfel
+    const a = document.createElement("a"); a.href = "https://status.met.no/"; a.target = "_blank"; a.rel = "noopener";
+    a.textContent = "status.met.no"; e.append(" Driftstatus hos met.no: ", a);
+  }
+}
 
 // Hamtar en URL. Ett anrop i taget, tidsgrans, omforsok vid 429/5xx.
 // binar = true: svaret lases som byte (ArrayBuffer) i .buf i stallet for text.
