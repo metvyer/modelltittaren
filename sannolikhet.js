@@ -3,14 +3,15 @@
 //  SANNOLIKHETSKARTOR FRAN MEPS-ENSEMBLEN (30 medlemmar)
 //  Fil: meps_lagged_6_h_subset_2_5km_<DTG>.ncml, [tid=62][1][medlem=30][y][x]
 //  Ett omrade kostar ungefar lika mycket servertid som en punkt (utsnittstest 16/11),
-//  det som vaxer ar datamangden. Data sparas i webblasarens databas (IndexedDB) ett dygn.
+//  det som vaxer ar datamangden. Data sparas i webblasarens databas (IndexedDB): de tva senaste
+//  korningarna, hogst 2 GB / 20 % av webblasarens utrymme (minst anvant tas bort forst).
 // ===================================================================
 const ENS_FIL = dtg => "meps_lagged_6_h_subset_2_5km_" + dtg + ".ncml";
 const ENS_MEDL = 30, ENS_TIDER = 62, ENS_BIT = 13;   // hogst 13 timmar per anrop (t.ex. +0 till +12) = 390 kartfalt
 const ENS_GRANS_MB = 150;                            // fraga forst over sa har mycket att hamta
 const ENS_MAX_MB_ANROP = { txt: 40, bin: 150 };      // hogst per anrop (thredds: text ca 50 MB, binart ca 500 MB)
 const ENS_BYTE = { txt: 9, bin: 4 };                 // ungefar sa manga byte per varde
-const ENS_MAX_VARDEN = 250e6;                        // hard sparr: fler varden an sa far inte plats i webblasaren
+const ENS_MAX_VARDEN = 200e6;                        // hard sparr per hamtning (skyddar webblasaren och met.no)
 let ensFormat = "bin";                               // binart (.dods) forst, text (.ascii) som reserv
 // Parametrar. villkor ">=" eller "<". agg = hur timmarna i perioden slas ihop per medlem.
 const PPARAM = {
@@ -69,14 +70,61 @@ let visaOmr = lasa("mt:visaOmr") !== "nej";   // ramar runt hamtade omraden
 const P = { senast: null, ny: false, finns: new Set(), dtg: null, tid: [], omr: null, data: new Map(), index: [], upptagen: false, varden: null };
 // index: [{ dtg, v, s, y0, y1, x0, x1, tider: [t...] }] – vilka omraden och timmar som finns sparade
 
+// ---------- Lagring: de tva senaste korningarna, tak for disk och arbetsminne ----------
+// Disk (IndexedDB): bara de SPARA_KORNINGAR senaste korningarna som har data (oavsett alder -
+// vid avbrott raderas alltsa inget). Over taket tas det minst nyligen anvanda omradet bort.
+// Taket = det lagsta av LAGER_MAX_MB och LAGER_ANDEL av det webblasaren tillater (annars LAGER_STD_MB).
+// Arbetsminne: hogst MINNE_MAX_MB; det som slapps ligger kvar pa disken och lases in igen vid behov.
+const SPARA_KORNINGAR = 2;
+const LAGER_STD_MB = 500, LAGER_MAX_MB = 2048, LAGER_ANDEL = 0.2, MINNE_MAX_MB = 300;
+let lagerTak = LAGER_STD_MB * 1048576;
+async function bestamLagerTak() {
+  try { const u = await navigator.storage.estimate(); if (u && u.quota > 0) lagerTak = Math.min(LAGER_MAX_MB * 1048576, u.quota * LAGER_ANDEL); } catch (e) {}
+}
+const storlekE = e => e.tider.length * ENS_MEDL * ((e.y1 - e.y0) / e.s + 1) * ((e.x1 - e.x0) / e.s + 1) * PPARAM[e.v].bitar / 8;
+const lagerSumma = () => P.index.reduce((s, e) => s + storlekE(e), 0);
+function taBortE(e) {
+  for (const t of e.tider) { const k = nyckelE(e, t); DB.del(k); minneTaBort(k); }
+  P.index = P.index.filter(x => x !== e);
+}
+// skydd = omradet som hamtas just nu (tas aldrig bort)
+async function stadaLager(skydd) {
+  const dtgs = [...new Set(P.index.map(e => e.dtg))].sort().reverse();
+  const behall = new Set(dtgs.slice(0, SPARA_KORNINGAR)); if (P.dtg) behall.add(P.dtg);
+  let andrat = false;
+  for (const e of [...P.index]) if (!behall.has(e.dtg) && e !== skydd) { taBortE(e); andrat = true; }
+  let sum = lagerSumma();
+  while (sum > lagerTak) {
+    const kand = P.index.filter(e => e !== skydd).sort((a, b) => (a.anv || 0) - (b.anv || 0));
+    if (!kand.length) break;
+    sum -= storlekE(kand[0]); taBortE(kand[0]); andrat = true;
+  }
+  if (andrat) await DB.put("index", P.index);
+  visaLager();
+}
+function visaLager() {
+  const el = $("pLager"); if (!el) return;
+  const mb = lagerSumma() / 1048576;
+  el.textContent = "Sparat i webbläsaren: " + (mb < 10 ? mb.toFixed(1) : Math.round(mb)) + " av " + Math.round(lagerTak / 1048576) +
+    " MB. De två senaste körningarna sparas; blir det fullt tas det minst använda området bort först.";
+}
+// Arbetsminnet (P.data): senast anvant sist i ordningen, aldst slapps forst
+let minneByte = 0;
+function minneTaBort(k) { const a = P.data.get(k); if (a) { P.data.delete(k); minneByte -= a.byteLength; } }
+function minneSatt(k, arr) {
+  minneTaBort(k); P.data.set(k, arr); minneByte += arr.byteLength;
+  for (const [k2, a2] of P.data) {
+    if (minneByte <= MINNE_MAX_MB * 1048576) break;
+    if (k2 === k) continue;
+    P.data.delete(k2); minneByte -= a2.byteLength;
+  }
+}
+function minneHamta(k) { const a = P.data.get(k); if (a) { P.data.delete(k); P.data.set(k, a); } return a; }
+
 async function laddaIndex() {
   P.index = (await DB.get("index")) || [];
-  const gr = Date.now() - 864e5, kvar = [];
-  for (const e of P.index) {
-    if (dtgDatum(e.dtg).getTime() >= gr) { kvar.push(e); continue; }
-    for (const t of e.tider) DB.del(nyckelE(e, t));
-  }
-  if (kvar.length !== P.index.length) { P.index = kvar; await DB.put("index", P.index); }
+  await bestamLagerTak();
+  await stadaLager(null);
 }
 const nyckelE = (e, t) => [e.dtg, e.v, e.s, e.y0, e.y1, e.x0, e.x1, t].join(":");
 const innehaller = (e, o) => e.dtg === o.dtg && e.v === o.v && e.s === o.s && e.y0 <= o.y0 && e.y1 >= o.y1 && e.x0 <= o.x0 && e.x1 >= o.x1;
@@ -256,10 +304,11 @@ async function probHamta(auto) {
       }
       for (let k = 0; k < nt; k++) {
         const t = g0 + k * st, arr = ut[k];
-        await DB.put(nyckelE(e, t), arr); P.data.set(nyckelE(e, t), arr);
+        await DB.put(nyckelE(e, t), arr); minneSatt(nyckelE(e, t), arr); e.anv = Date.now();
         if (!e.tider.includes(t)) e.tider.push(t);
       }
       await DB.put("index", P.index);
+      await stadaLager(e);
       await probVisa();
     }
     const tot = ((performance.now() - t0) / 1000).toFixed(0);
@@ -307,8 +356,9 @@ function visaPForlopp(i, n, g0, g1, antal) {
 // Hamtar timme t for omradet o ur ett sparat (eventuellt storre) omrade. Returnerar Float32Array [medlem][y][x] eller null.
 async function timData(o, t) {
   const e = P.index.find(x => innehaller(x, o) && x.tider.includes(t)); if (!e) return null;
-  const k = nyckelE(e, t); let arr = P.data.get(k);
-  if (!arr) { arr = await DB.get(k); if (!arr) return null; P.data.set(k, arr); }
+  const k = nyckelE(e, t); let arr = minneHamta(k);
+  if (!arr) { arr = await DB.get(k); if (!arr) return null; minneSatt(k, arr); }
+  e.anv = Date.now();
   if (e.y0 === o.y0 && e.x0 === o.x0 && e.y1 === o.y1 && e.x1 === o.x1) return arr;
   const eny = (e.y1 - e.y0) / e.s + 1, enx = (e.x1 - e.x0) / e.s + 1, dy = (o.y0 - e.y0) / e.s, dx = (o.x0 - e.x0) / e.s;
   const ut = new arr.constructor(ENS_MEDL * o.ny * o.nx);

@@ -183,7 +183,8 @@ body.p .arbete { grid-template-columns: minmax(280px, 620px) minmax(0, 1fr); }
   <div class="forlopp" id="pForlopp" hidden><div class="stapel" id="pStapel"></div><div class="forlopptext" id="pForloppText" aria-live="polite"></div></div>
   <p class="psam" id="pSam"></p>
   <div class="forklaring" id="pForkl"></div>
-  <p class="karttips">Varje färgad ruta är en hämtad punkt. Sannolikheten = andel av de 30 medlemmarna som når tröskeln någon gång under perioden (nederbörd: summan över perioden). Håll muspekaren över kartan för medlemmarnas värden. Data äldre än ett dygn rensas.</p>
+  <p class="karttips">Varje färgad ruta är en hämtad punkt. Sannolikheten = andel av de 30 medlemmarna som når tröskeln någon gång under perioden (nederbörd: summan över perioden). Håll muspekaren över kartan för medlemmarnas värden.</p>
+  <p class="karttips" id="pLager"></p>
 </div>
 <div id="vyTH">
 <dl class="info">
@@ -294,31 +295,39 @@ const THDB = (() => {
   return {
     get: k => tx("readonly", s => s.get(k)).then(v => v !== undefined ? v : minne.get(k)).catch(() => minne.get(k)),
     put: (k, v) => tx("readwrite", s => s.put(v, k)).then(() => true).catch(() => { minne.set(k, v); return false; }),
-    // tar bort allt fran korningar aldre an gr (ms)
-    rensa: gr => tx("readwrite", s => {
+    // tar bort allt fran korningar dar bort(dtg) ar sant
+    rensa: bort => tx("readwrite", s => {
       const c = s.openKeyCursor();
       c.onsuccess = () => {
         const cur = c.result; if (!cur) return;
         const m = String(cur.key).match(/^mt:(\d{8}T\d{2}Z):/);
-        if (m && dtgDatum(m[1]).getTime() < gr) s.delete(cur.key);
+        if (m && bort(m[1])) s.delete(cur.key);
         cur.continue();
       };
       return null;
     }).catch(() => {})
   };
 })();
+// Sparar bara de TID_KORNINGAR senaste korningarna som har data (oavsett alder - vid
+// avbrott raderas alltsa inget), plus den som visas just nu.
+const TID_KORNINGAR = 2;
 function rensaGammalCache() {
-  const gr = Date.now() - 864e5;   // ett dygn racker
+  let behall = [];
   try {
     const flytt = lasa("mt:thFormat") !== "idb";   // forsta gangen: ta bort gamla tid-hojd-texter i localStorage
+    const dtgs = new Set(), nycklar = [];
     for (let i = localStorage.length - 1; i >= 0; i--) {
       const k = localStorage.key(i);
       const m = k && k.match(/^mt:(\d{8}T\d{2}Z):/);
-      if (m && (flytt || dtgDatum(m[1]).getTime() < gr)) localStorage.removeItem(k);
+      if (!m) continue;
+      if (flytt) { localStorage.removeItem(k); continue; }
+      nycklar.push([k, m[1]]); if (k.endsWith(":har")) dtgs.add(m[1]);
     }
     if (flytt) lagra("mt:thFormat", "idb");
+    behall = [...dtgs].sort().reverse().slice(0, TID_KORNINGAR); if (M) behall.push(M.dtg);
+    for (const [k, d] of nycklar) if (!behall.includes(d)) localStorage.removeItem(k);
   } catch (e) {}
-  THDB.rensa(gr);
+  if (behall.length) THDB.rensa(d => !behall.includes(d));
 }
 let lage = "th";   // "th" = tid-hojd, "p" = sannolikhet
 // Vid fel visas en lank till met.no:s driftstatus (status.met.no), dar storningar pa thredds meddelas.
@@ -1176,6 +1185,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261117-0520"></script>
+<script src="sannolikhet.js?v=20261117-1815"></script>
 </body>
 </html>
