@@ -254,7 +254,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <span id="fIs" hidden>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt km (horisontell, 2 m), avrundat nedåt, en decimal under 10 km</span>
   <span>Bas hft = modellens molnbas i hundratal fot över mark</span>
-  <span id="fMetar" hidden>METAR (observerat, magenta, ett streck per observation vid observationstiden, underkant = molnbas):<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="7" width="12" height="2" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>FEW<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="5" width="12" height="4" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>SCT<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="3" width="12" height="6" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>BKN<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="1" width="12" height="8" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>OVC<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="2" width="12" height="6" fill="#fff" stroke="#c000c0" stroke-width="1.6" stroke-dasharray="3 2"/></svg>VV (vertikal sikt) – hela texten i hovringen. Raderna Sikt obs och T obs: varje METAR vid sin observationstid (HH:20 och HH:50); sikt 10 = 9999 (10 km eller mer).</span>
+  <span id="fMetar" hidden>METAR (observerat, magenta, ett streck per observation vid observationstiden, underkant = molnbas):<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="7" width="12" height="2" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>FEW<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="5" width="12" height="4" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>SCT<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="3" width="12" height="6" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>BKN<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="1" width="12" height="8" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>OVC<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="2" width="12" height="6" fill="#fff" stroke="#c000c0" stroke-width="1.6" stroke-dasharray="3 2"/></svg>VV (vertikal sikt) – hela texten i hovringen. Raderna Sikt obs och T obs: varje METAR vid sin observationstid (HH:20 och HH:50); samma värde hela timmen skrivs en gång; >10 = 9999/CAVOK.</span>
 </div>
 </div>
 </section>
@@ -709,7 +709,9 @@ function skala() {
   return { topp, y, fot, botten, segH };
 }
 // Sikt i km for tabellen: avrundat nedat, en decimal under 10 km (alltid tva siffror: 0.8, 4.5, 12)
-function siktKm(m) { if (!isFinite(m)) return ""; const k = m / 1000; return k < 10 ? (Math.floor(k * 10) / 10).toFixed(1) : String(Math.floor(k)); }
+// (X.0 skrivs utan decimal: 4.0 -> 4)
+function enDec(v) { const s = (Math.floor(v * 10) / 10).toFixed(1); return s.endsWith(".0") ? s.slice(0, -2) : s; }
+function siktKm(m) { if (!isFinite(m)) return ""; const k = m / 1000; return k < 10 ? enDec(k) : String(Math.floor(k)); }
 function vv(m) {
   if (!isFinite(m)) return ""; if (m < 100) return "00"; if (m <= 5000) return p2(Math.floor(m / 100)); if (m < 6000) return "50";
   if (m <= 30000) return String(50 + Math.floor(m / 1000)); if (m <= 70000) return String(80 + Math.floor((m / 1000 - 30) / 5)); return "89";
@@ -943,7 +945,7 @@ function rita() {
     const d = new Date(t0 + t * 3600e3); txt(t, R.tid, p2(d.getUTCHours()), c("--dim"));
     // molnbas i hundratal fot, avrundat nedat som i METAR: en decimal under 10 hft, hela hundratal fran 10 hft
     // (visar hur diskret modellen ar - basen hamnar pa modellnivaerna)
-    if (isFinite(M.cb[t])) { const h = M.cb[t] * FOT / 100; txt(t, R.bas, h < 10 ? (Math.floor(h * 10) / 10).toFixed(1) : String(Math.floor(h)), c("--bastext")); }
+    if (isFinite(M.cb[t])) { const h = M.cb[t] * FOT / 100; txt(t, R.bas, h < 10 ? enDec(h) : String(Math.floor(h)), c("--bastext")); }
     if (!M.ytaOK[t]) continue;
     const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
     if (isFinite(tk)) txt(t, R.t, String(Math.round(tk - 273.15)), c("--red"));
@@ -964,12 +966,18 @@ function rita() {
     if (isFinite(nb) && nb >= 0.05) txt(t, R.nb, nb.toFixed(1));
     if (R.is !== undefined && M.isKat && M.isKat[t]) txt(t, R.is, ISNAMN[M.isKat[t]], c("--red"));
   }
-  // observerat: varje METAR/SPECI vid sin observationstid (samma x som strecken i diagrammet), liten magenta text
-  if (R.siktObs !== undefined) for (const o of M.metar) {
-    const x = (o.t - t0) / 3600e3 * COL; if (x < 4 || x > B - 4) continue;
-    const ut = (i, v) => svg.appendChild(el("text", { x, y: yRad(i), "font-size": 7.5, "text-anchor": "middle", fill: METAR_FARG }, v));
-    if (isFinite(o.sikt)) ut(R.siktObs, o.sikt >= 9999 ? "10" : siktKm(o.sikt));   // 9999/CAVOK (10 km eller mer) = 10
-    if (isFinite(o.tc)) ut(R.tObs, String(o.tc));
+  // observerat: METAR/SPECI per timkolumn. Samma varde i hela timmen -> skrivs en gang mitt i kolumnen;
+  // olika varden -> alla i tidsordning, jamnt fordelade i kolumnen.
+  if (R.siktObs !== undefined) {
+    const perTimme = new Map();
+    for (const o of M.metar) { const tt = Math.floor((o.t - t0) / 3600e3); if (tt < 0 || tt >= nt) continue; if (!perTimme.has(tt)) perTimme.set(tt, []); perTimme.get(tt).push(o); }
+    const ut = (i, x, v) => svg.appendChild(el("text", { x, y: yRad(i), "font-size": 7.5, "text-anchor": "middle", fill: METAR_FARG }, v));
+    for (const [tt, lista] of perTimme) for (const [rad, fn] of [[R.siktObs, o => isFinite(o.sikt) ? (o.sikt >= 9999 ? ">10" : siktKm(o.sikt)) : ""], [R.tObs, o => isFinite(o.tc) ? String(o.tc) : ""]]) {
+      const v = lista.map(o => ({ o, s: fn(o) })).filter(a => a.s !== "");
+      if (!v.length) continue;
+      if (v.every(a => a.s === v[0].s)) ut(rad, tt * COL + COL / 2, v[0].s);
+      else v.forEach((a, k) => ut(rad, tt * COL + COL * (k + 0.5) / v.length, a.s));   // i tidsordning, jamnt fordelade i kolumnen
+    }
   }
   // info
   const d0 = new Date(t0);
