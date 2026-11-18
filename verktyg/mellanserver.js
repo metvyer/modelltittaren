@@ -7,6 +7,8 @@ const TILLATNA_SIDOR = ["https://metvyer.github.io"];
 const THREDDS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
 // Tillåtna filnamn: meps_….ncml.ascii / .ncml.dods / .nc.ascii / .nc.dods
 const TILLATEN_FIL = /^\/mepslatest\/(meps_[A-Za-z0-9_]+\.(?:ncml|nc)\.(?:ascii|dods))$/;
+// METAR (18/11): /metar?ids=ESSA,ESGG&hours=6 -> aviationweather.gov, bara 1-20 ICAO-koder och 1-24 timmar
+const AWC = "https://aviationweather.gov/api/data/metar";
 
 export default {
   async fetch(req) {
@@ -23,6 +25,20 @@ export default {
       return new Response("Modelltittaren mellanserver OK", { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
 
     if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
+
+    if (url.pathname === "/metar") {
+      if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
+      const ids = (url.searchParams.get("ids") || "").toUpperCase(), h = +(url.searchParams.get("hours") || 6);
+      if (!/^[A-Z0-9]{4}(,[A-Z0-9]{4}){0,19}$/.test(ids) || !(h >= 1 && h <= 24))
+        return new Response("Fel ids/hours", { status: 400, headers: cors });
+      const svar = await fetch(AWC + "?ids=" + ids + "&format=json&hours=" + Math.round(h), {
+        headers: { "User-Agent": "Modelltittaren-mellanserver (github.com/metvyer/modelltittaren)" }
+      });
+      const hm = new Headers(cors);
+      hm.set("Content-Type", svar.headers.get("Content-Type") || "application/json");
+      hm.set("Cache-Control", "max-age=120");
+      return new Response(svar.body, { status: svar.status, headers: hm });
+    }
     const m = url.pathname.match(TILLATEN_FIL);
     if (!m) return new Response("Inte tillåten sökväg", { status: 403, headers: cors });
     if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });

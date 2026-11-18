@@ -227,6 +227,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button id="lMoln" aria-pressed="true">Moln</button><button id="lVind" aria-pressed="false">Vind</button>
   </div>
   <button class="sek liten" id="lNiv" aria-pressed="false" title="Visa modellnivåernas höjd (MEPS har 65 nivåer, 64 = lägsta)">Modellnivåer</button>
+  <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; ljust = FEW, mörkt = OVC, streckat = VV"></span>
   <span class="lagetips" id="lageTips"></span>
 </div>
 <div class="diagram">
@@ -707,6 +708,74 @@ function vader(nb, typ, sikt) {
 }
 function molnCirkel(f) { if (!isFinite(f)) return ""; if (f > 1.5) f /= 100; const o = Math.round(f * 8); return o === 0 ? "○" : o <= 2 ? "◔" : o <= 5 ? "◑" : o <= 7 ? "◕" : "●"; }
 
+// ---- METAR (aviationweather.gov) i tid-hojd ----
+// Narmaste flygplats (inom METAR_AVST km) till punkten. Hamtas direkt, annars via
+// mellanservern (/metar). Molnskikten ritas som smala band (ca 20 min) vid
+// observationstiden; hela METAR-texten finns i hovringen.
+const AWC = "https://aviationweather.gov/api/data/metar";
+const METAR_MELLAN = "https://modelltittaren.metvyer.workers.dev/metar";
+const METAR_AVST = 8, METAR_BAND_MIN = 20, METAR_TTL = 5 * 60e3;
+const METAR_FARG = ["", "#f0a8f0", "#e060e0", "#b000b0", "#600060"];   // FEW SCT BKN OVC (magenta)
+const metarCache = new Map();
+function narmasteICAO(lat, lon) {
+  const lista = PUNKTER.map(p => [p[1], p[2], p[3]]).concat(FLYG.map(f => [f[0], f[2], f[3]]));
+  let bast = null, bd = 1e9;
+  for (const [icao, la, lo] of lista) {
+    const dy = (la - lat) * 111.2, dx = (lo - lon) * 111.2 * Math.cos(lat * Math.PI / 180), d = Math.hypot(dx, dy);
+    if (d < bd) { bd = d; bast = icao; }
+  }
+  return bd <= METAR_AVST ? bast : null;
+}
+function tolkaMetar(raw) {
+  const lager = []; let vv = null, cavok = /\bCAVOK\b/.test(raw), nsc = /\b(NSC|NCD|SKC|CLR)\b/.test(raw);
+  for (const m of raw.matchAll(/\b(FEW|SCT|BKN|OVC)(\d{3})(CB|TCU)?\b/g)) lager.push({ kat: ["", "FEW", "SCT", "BKN", "OVC"].indexOf(m[1]), ft: +m[2] * 100, typ: m[3] || "" });
+  const v = raw.match(/\bVV(\d{3})\b/); if (v) vv = +v[1] * 100;
+  return { lager, vv, inga: cavok || nsc };
+}
+async function hamtaMetar(icao, timmar) {
+  const k = icao + ":" + timmar, c = metarCache.get(k); if (c && Date.now() - c.t < METAR_TTL) return c.obs;
+  const q = "?ids=" + icao + "&format=json&hours=" + timmar;
+  let data = null;
+  for (const bas of [AWC, METAR_MELLAN]) {
+    try {
+      const ctl = new AbortController(), tid = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(bas + q, { signal: ctl.signal }); clearTimeout(tid);
+      if (r.ok) { data = await r.json(); break; }
+    } catch (e) {}
+  }
+  if (!Array.isArray(data)) return null;
+  const obs = data.filter(o => o.rawOb && o.obsTime).map(o => ({ t: o.obsTime * 1000, raw: o.rawOb, ...tolkaMetar(o.rawOb) })).sort((a, b) => a.t - b.t);
+  metarCache.set(k, { t: Date.now(), obs }); return obs;
+}
+async function laddaMetar() {
+  if (!M || !M.t0) return;
+  const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
+  const icao = narmasteICAO(lat, lon), m = M, info = $("metarInfo"); M.metarIcao = icao;
+  if (!icao) { M.metar = null; info.textContent = "METAR: ingen flygplats inom " + METAR_AVST + " km"; return; }
+  info.textContent = "METAR " + icao + ": hämtar …";
+  const timmar = Math.max(1, Math.min(24, Math.ceil((Date.now() - M.t0) / 3600e3) + 1));
+  const obs = await hamtaMetar(icao, timmar);
+  if (M !== m) return;
+  M.metar = obs;
+  info.textContent = obs === null ? "METAR " + icao + ": gick inte att hämta" : obs.length ? "METAR " + icao + ": " + obs.length + " obs (magenta streck)" : "METAR " + icao + ": inga observationer";
+  rita();
+}
+function ritaMetar(svg, sk, zTopp) {
+  if (!M.metar || !M.metar.length) return;
+  const g = el("g", { "pointer-events": "none" }), w = Math.max(3, COL * METAR_BAND_MIN / 60), toppFt = zTopp * FOT;
+  for (const o of M.metar) {
+    const x = (o.t - M.t0) / 3600e3 * COL; if (x < 0 || x > M.nt * COL) continue;
+    const band = (ft, fyll, streck) => {
+      if (ft > toppFt) return; const y = sk.y(ft);
+      g.appendChild(el("rect", { x: x - w / 2, y: y - 6, width: w, height: 6, fill: fyll, stroke: "#ffffff", "stroke-width": 0.8, "stroke-dasharray": streck || "" }));
+    };
+    for (const l of o.lager) band(l.ft, METAR_FARG[l.kat]);
+    if (o.vv !== null) band(o.vv, "#b000b0", "2 1.5");
+    if (o.inga) g.appendChild(el("text", { x, y: TOPP_RAD + 10, "font-size": 8, "text-anchor": "middle", fill: "#b000b0" }, "–"));
+  }
+  svg.appendChild(g);
+}
+
 // Modellnivaerna som tunna linjer (fullnivaernas hojd, andras lite med marktrycket).
 // Nummer vid var 5:e niva i vanstra kanten; 64 = lagsta.
 function ritaNivaer(svg, sk, zTopp, c, fore) {
@@ -810,6 +879,7 @@ function rita() {
   }
   if (saknasStart >= 0) saknasRekt(saknasStart, nt - 1, 0);
   if (visaNiv) ritaNivaer(svg, sk, zTopp, c, gIs);
+  ritaMetar(svg, sk, zTopp);
   if (vindLage) ritaVind(svg, sk, zTopp, c);
   svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
 
@@ -966,6 +1036,11 @@ function tipsText(t, yPix) {
     if (M.cbHar[t]) rad.push(["Molnbas", isFinite(M.cb[t]) ? Math.round(M.cb[t] * FOT) + " ft (" + M.cb[t].toFixed(1) + " m) över mark, modellens värde" : "inget moln"]);
     if (isFinite(Y(9))) rad.push(["Totalt moln", Math.round((Y(9) > 1.5 ? Y(9) / 100 : Y(9)) * 8) + "/8"]);
     if (M.isKat && M.isKat[t]) rad.push(["Nedisning", ISNAMN[M.isKat[t]] + " (någonstans i höjdled)"]);
+    if (M.metar && M.metar.length) {
+      const tm = M.t0 + (t + 0.5) * 3600e3; let nb = null;
+      for (const o of M.metar) if (Math.abs(o.t - tm) <= 45 * 60e3 && (!nb || Math.abs(o.t - tm) < Math.abs(nb.t - tm))) nb = o;
+      if (nb) rad.push(["METAR", nb.raw]);
+    }
   } else rad.push(["", "markdata ej hämtade"]);
   return rad;
 }
@@ -1055,6 +1130,7 @@ async function hamtaAllt() {
       await THDB.put(nyckel() + "static", s.txt); lagra(nyckel() + "har", "1"); kb += s.txt.length / 1024;
     }
     rita(); ritaMarkorer(); F.fas = "Kontrollerar vad som saknas …";
+    laddaMetar();   // parallellt, ritar om nar den kommer
     // Varv 0 hamtar allt som saknas. Byts toppen under hamtningen fyller varv 1-2 pa det som da saknas.
     for (let varv = 0; varv < 3; varv++) {
       let nagot = false; F.varv = varv;
