@@ -8,7 +8,9 @@
 // ===================================================================
 const ENS_FIL = dtg => "meps_lagged_6_h_subset_2_5km_" + dtg + ".ncml";
 const ENS_MEDL = 30, ENS_TIDER = 62, ENS_BIT = 13;   // hogst 13 timmar per anrop (t.ex. +0 till +12) = 390 kartfalt
-const ENS_GRANS_MB = 150;                            // fraga forst over sa har mycket att hamta
+const ENS_GRANS_MB = 150;                            // hard grans per hamtning (18/11: ingen "Hamta anda" langre)
+const MAX_KM_25 = 400;                               // 2,5 km bara for omraden upp till 400 x 400 km
+const AUTO_MAX_MB = 100;                             // automatisk hamtning vid stegning bara under detta
 const ENS_MAX_MB_ANROP = { txt: 40, bin: 150 };      // hogst per anrop (thredds: text ca 50 MB, binart ca 500 MB)
 const ENS_BYTE = { txt: 9, bin: 4 };                 // ungefar sa manga byte per varde
 const ENS_MAX_VARDEN = 200e6;                        // hard sparr per hamtning (skyddar webblasaren och met.no)
@@ -257,7 +259,10 @@ async function probHamta(auto) {
     const { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
     const antV = sakn.length * ENS_MEDL * o.ny * o.nx, mb = antV * ENS_BYTE[ensFormat] / 1048576;
     if (antV > ENS_MAX_VARDEN) { status("För stort: " + Math.round(antV / 1e6) + " miljoner värden får inte plats i webbläsaren. Välj glesare upplösning, mindre område, kortare period eller var 3:e timme.", "fel"); P.fragar = true; return; }
-    if (mb > ENS_GRANS_MB && !confirmStor(mb)) return;   // knappen "Hämta ändå" visas i Status
+    // Sparrar mot mycket stora uttag (skyddar met.no, mellanservern och webblasaren)
+    if (o.s === 1 && Math.max(o.nx, o.ny) * 2.5 > MAX_KM_25 + 2.5) { status("2,5 km går bara för områden upp till " + MAX_KM_25 + " × " + MAX_KM_25 + " km. Välj 5 km eller ett mindre område.", "fel"); P.fragar = true; return; }
+    if (mb > ENS_GRANS_MB) { status("För stort uttag: ca " + Math.round(mb) + " MB (gräns " + ENS_GRANS_MB + " MB per hämtning). Välj glesare upplösning, mindre område, kortare period eller var 3:e timme.", "fel"); P.fragar = true; return; }
+    if (auto && mb > AUTO_MAX_MB) { status("Stort uttag (ca " + Math.round(mb) + " MB) hämtas inte automatiskt – tryck Hämta fält.", ""); P.fragar = true; return; }
     // grupper om hogst ENS_BIT sammanhangande timmar
     // grupper med jamnt steg (1, 3 eller 6 h), hogst ENS_BIT timmar per anrop
     const grupper = [];
@@ -336,15 +341,6 @@ function lasDods(buf, behov) {
   const ut = new Float32Array(n);
   for (let i = 0, q = p + 8; i < n; i++, q += 4) { const v = dv.getFloat32(q, false); ut[i] = Math.abs(v) > 9e35 ? NaN : v; }
   return ut;
-}
-// Vanlig fraga i en webbsida utan dialogrutor: tva klick pa Hamta inom 8 s bekraftar.
-let storOK = false;
-function confirmStor(mb) {
-  if (storOK) { storOK = false; return true; }
-  P.fragar = true;   // fragan ska inte skrivas over forran nagot andras
-  const e = $("pStatus"); e.className = "fel"; e.textContent = "Stort uttag: ca " + Math.round(mb) + " MB text (tar en stund och tar plats i webbläsaren). ";
-  const b = document.createElement("button"); b.className = "sek liten"; b.textContent = "Hämta ändå";
-  b.addEventListener("click", () => { storOK = true; probHamta(); }); e.append(b); return false;
 }
 function visaPForlopp(i, n, g0, g1, antal) {
   $("pForlopp").hidden = false; const st = $("pStapel"); st.textContent = "";
@@ -584,7 +580,15 @@ function bytLage(nytt) {
     if (ev.key === "ArrowLeft") { ev.preventDefault(); flytta(-1); }
     else if (ev.key === "ArrowRight") { ev.preventDefault(); flytta(1); }
   });
-  ["pStorlek", "pUppl"].forEach(id => $(id).addEventListener("change", () => { lagra("mt:" + id, $(id).value); probOmradeAndrat(); }));
+  // 2,5 km bara upp till MAX_KM_25: valen som inte gar ihop gras ut (och ett omojligt sparat val rattas)
+  const sparrUppl = () => {
+    const fin = $("pUppl").value === "1", stor = +$("pStorlek").value > MAX_KM_25;
+    for (const op of $("pStorlek").options) op.disabled = fin && +op.value > MAX_KM_25;
+    $("pUppl").querySelector('option[value="1"]').disabled = stor;
+    if (fin && stor) { $("pUppl").value = "2"; lagra("mt:pUppl", "2"); }
+  };
+  sparrUppl();
+  ["pStorlek", "pUppl"].forEach(id => $(id).addEventListener("change", () => { sparrUppl(); lagra("mt:" + id, $(id).value); probOmradeAndrat(); }));
   ["lat", "lon", "klistra"].forEach(id => $(id).addEventListener("input", () => { if (lage === "p") probOmradeAndrat(); }));
   $("punkt").addEventListener("change", () => { if (lage === "p") probOmradeAndrat(); });
   $("pHamta").addEventListener("click", probHamta);
