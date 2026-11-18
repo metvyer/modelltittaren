@@ -924,10 +924,15 @@ function tipsText(t, yPix) {
     }
     rad.push(["Höjd", "ca " + Math.round(fot / 50) * 50 + " ft (" + Math.round(z / 10) * 10 + " m) över mark" + fl]);
     const kFran = clKmin(t), zz = (kFran < NIV && M.ytaOK[t]) ? hojder(t, kFran) : null;
-    let moln = "ej hämtad";
+    let moln = "ej hämtad", nivRad = null;
     if (zz) for (let k = NIV - 1; k >= kFran; k--) {
       const zLo = k === NIV - 1 ? 0 : (zz[k] + zz[k + 1]) / 2, zHi = k === kFran ? zz[k] : (zz[k] + zz[k - 1]) / 2;
-      if (z >= zLo && z < zHi) { const v = M.cl[t * NIV + k], kat = v >= MOLN[3] ? 4 : v >= MOLN[2] ? 3 : v >= MOLN[1] ? 2 : v >= MOLN[0] ? 1 : 0; moln = Math.round(v) + " % (" + KAT[kat] + "), modellnivå " + k; break; }
+      if (z >= zLo && z < zHi) {
+        const v = M.cl[t * NIV + k], kat = v >= MOLN[3] ? 4 : v >= MOLN[2] ? 3 : v >= MOLN[1] ? 2 : v >= MOLN[0] ? 1 : 0; moln = Math.round(v) + " % (" + KAT[kat] + ")";
+        const ft = m => Math.round(m * FOT / 10) * 10;
+        nivRad = ["Modellnivå", k + ": ca " + ft(zz[k]) + " ft (" + Math.round(zz[k]) + " m), skiktet " + ft(zLo) + "–" + ft(zHi) + " ft"];
+        break;
+      }
     }
     rad.push(["Moln där", moln]);
     // vind: visas om den finns hamtad, aven i molnlaget
@@ -943,6 +948,8 @@ function tipsText(t, yPix) {
       const v = M.ice[t * NIS + jB], kat = !isFinite(v) ? 0 : v >= IS[3] ? 4 : v >= IS[2] ? 3 : v >= IS[1] ? 2 : v >= IS[0] ? 1 : 0;
       rad.push(["Isindex", (isFinite(v) ? v : "–") + (kat ? " (" + ISNAMN[kat] + ")" : "") + " vid " + M.h5[jB] + " m"]);
     }
+    // sist ovanfor strecket: vilken modellniva molnvardet ar hamtat fran
+    if (nivRad) rad.push(nivRad);
   }
   rad.push(["", "Marknivå", "avdel"]);
   if (M.ytaOK[t]) {
