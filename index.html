@@ -125,6 +125,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 .tips[hidden] { display: none; }
 .tips .rubrik { font-weight: 650; margin-bottom: 2px; }
 .tips .avdel { border-top: 1px solid var(--line); margin: 5px 0 3px; padding-top: 3px; font-weight: 650; color: var(--dim); }
+.tips .fet { font-weight: 650; }
 .ktips { white-space: pre-line; max-width: 260px; }
 .tips .k { display: inline-block; min-width: 78px; color: var(--dim); }
 .stapel { display: flex; gap: 3px; height: 12px; }
@@ -228,7 +229,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   </div>
   <button class="sek liten" id="lNiv" aria-pressed="false" title="Visa modellnivåernas höjd (MEPS har 65 nivåer, 64 = lägsta)">Modellnivåer</button>
   <button class="sek liten" id="lMetar" aria-pressed="false" title="Visa observerade molnskikt (METAR) från närmaste flygplats">METAR</button>
-  <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; ljust = FEW, mörkt = OVC, streckat = VV"></span>
+  <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; ljust = FEW, mörkt = OVC, vit med streckad kant = VV (vertikal sikt)"></span>
   <span class="lagetips" id="lageTips"></span>
 </div>
 <div class="diagram">
@@ -768,12 +769,13 @@ function ritaMetar(svg, sk, zTopp) {
   const g = el("g", { "pointer-events": "none" }), w = Math.max(3, COL * METAR_BAND_MIN / 60), toppFt = zTopp * FOT;
   for (const o of M.metar) {
     const x = (o.t - M.t0) / 3600e3 * COL; if (x < 0 || x > M.nt * COL) continue;
-    const band = (ft, fyll, streck) => {
+    const band = (ft, fyll, kant, bredd, streck) => {
       if (ft > toppFt) return; const y = sk.y(ft);
-      g.appendChild(el("rect", { x: x - w / 2, y: y - 6, width: w, height: 6, fill: fyll, stroke: "#ffffff", "stroke-width": 0.8, "stroke-dasharray": streck || "" }));
+      g.appendChild(el("rect", { x: x - w / 2, y: y - 6, width: w, height: 6, fill: fyll, stroke: kant, "stroke-width": bredd, "stroke-dasharray": streck || "" }));
     };
-    for (const l of o.lager) band(l.ft, METAR_FARG[l.kat]);
-    if (o.vv !== null) band(o.vv, "#b000b0", "2 1.5");
+    for (const l of o.lager) band(l.ft, METAR_FARG[l.kat], "#ffffff", 0.8);
+    // VV (vertikal sikt): vit ruta med streckad magenta kant - skiljer sig tydligt fran molnskikten
+    if (o.vv !== null) band(o.vv, "#ffffff", "#b000b0", 1.6, "3 2");
     if (o.inga) g.appendChild(el("text", { x, y: TOPP_RAD + 10, "font-size": 8, "text-anchor": "middle", fill: "#b000b0" }, "–"));
   }
   svg.appendChild(g);
@@ -982,7 +984,7 @@ function ritaVind(svg, sk, zTopp, c) {
 //  HOVRINGSRUTA I DIAGRAMMET (timme + hojd under pekaren)
 // ===================================================================
 const KAT = ["inga", "FEW", "SCT", "BKN", "OVC"];
-function tipsText(t, yPix) {
+function tipsText(t, yPix, xPix) {
   const rad = [], d = new Date(M.t0 + t * 3600e3);
   rad.push(["", VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + " h)", "rubrik"]);
   if (yPix !== null && yPix >= TOPP_RAD - 2 && yPix <= M.sk.botten) {
@@ -1039,10 +1041,15 @@ function tipsText(t, yPix) {
     if (M.cbHar[t]) rad.push(["Molnbas", isFinite(M.cb[t]) ? Math.round(M.cb[t] * FOT) + " ft (" + M.cb[t].toFixed(1) + " m) över mark, modellens värde" : "inget moln"]);
     if (isFinite(Y(9))) rad.push(["Totalt moln", Math.round((Y(9) > 1.5 ? Y(9) / 100 : Y(9)) * 8) + "/8"]);
     if (M.isKat && M.isKat[t]) rad.push(["Nedisning", ISNAMN[M.isKat[t]] + " (någonstans i höjdled)"]);
+    // Alla METAR/SPECI vars streck ligger i kolumnen, i tidsordning; den narmast
+    // muspekaren i fetstil (den fyrkant man pekar pa)
     if (visaMetar && M.metar && M.metar.length) {
-      const tm = M.t0 + (t + 0.5) * 3600e3; let nb = null;
-      for (const o of M.metar) if (Math.abs(o.t - tm) <= 45 * 60e3 && (!nb || Math.abs(o.t - tm) < Math.abs(nb.t - tm))) nb = o;
-      if (nb) rad.push(["METAR", nb.raw]);
+      const fran = M.t0 + t * 3600e3, till = fran + 3600e3;
+      const tm = M.t0 + (xPix != null ? xPix / COL : t + 0.5) * 3600e3;
+      const i = M.metar.filter(o => o.t >= fran && o.t < till);
+      let nb = null; for (const o of i) if (!nb || Math.abs(o.t - tm) < Math.abs(nb.t - tm)) nb = o;
+      for (const o of i) rad.push([/^SPECI/.test(o.raw) ? "SPECI" : "METAR",
+        o.raw + (o.vv !== null ? "  (VV " + o.vv + " ft)" : ""), o === nb && i.length > 1 ? "fet" : ""]);
     }
   } else rad.push(["", "markdata ej hämtade"]);
   return rad;
@@ -1052,7 +1059,7 @@ function visaTips(e) {
   const r = $("svg").getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, t = Math.floor(x / COL);
   if (t < 0 || t >= M.nt || y < 0 || y > r.height) { tip.hidden = true; return; }
   tip.innerHTML = "";
-  for (const [k, v, cl] of tipsText(t, y <= M.sk.botten ? y : null)) {
+  for (const [k, v, cl] of tipsText(t, y <= M.sk.botten ? y : null, x)) {
     const div = document.createElement("div"); if (cl) div.className = cl;
     if (k) { const b = document.createElement("span"); b.className = "k"; b.textContent = k; div.append(b); }
     div.append(v); tip.append(div);
