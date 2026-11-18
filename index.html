@@ -34,6 +34,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .info dt { color: var(--dim); }
 .info dd { margin: 0; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
 .ny { color: var(--ok); font-weight: 600; }
+.nyfinns { color: var(--warn); font-weight: 650; }
 .vald { color: var(--warn); font-weight: 600; }
 .fel { color: var(--bad); font-weight: 600; }
 .diagram { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
@@ -816,6 +817,30 @@ async function hamtaMetar(icao, timmar) {
   const obs = data.filter(o => o.rawOb && o.obsTime).map(o => ({ t: o.obsTime * 1000, raw: o.rawOb, ...tolkaMetar(o.rawOb) })).sort((a, b) => a.t - b.t);
   metarCache.set(k, { t: Date.now(), obs }); return obs;
 }
+// ---- Automatisk koll var 10:e minut medan fliken syns ----
+// METAR/TAF hamtas om (sma anrop, cachas i Cloudflare). Finns en nyare komplett korning visas
+// "Ny korning ... finns, tryck Hamta" - den hamtas INTE automatiskt (kan vara mycket data).
+// Fliken i bakgrunden: ingenting; nar den syns igen kollas direkt om det gatt mer an 10 min.
+const KOLL_MIN = 10;
+let senastKoll = Date.now(), kollPagar = false;
+async function automatiskKoll() {
+  if (document.hidden || kollPagar || !M || !M.stat || !M.dtg) return;
+  kollPagar = true; senastKoll = Date.now();
+  try {
+    if (visaMetar) await laddaMetar();
+    if (!M.vald && !M.nyFinns) {
+      const m = M, d = new Date(); d.setUTCMinutes(0, 0, 0); d.setUTCHours(d.getUTCHours() - d.getUTCHours() % INTERVALL);
+      for (let i = 0; i <= 3; i++) {
+        const dtg = dtgText(new Date(d.getTime() - i * INTERVALL * 3600e3));
+        if (dtgDatum(dtg) <= dtgDatum(m.dtg)) break;
+        if (await antalTider(dtg) >= KRAV_TIDER) { if (M === m) { M.nyFinns = dtg; rita(); } break; }
+      }
+    }
+  } catch (e) {} finally { kollPagar = false; }
+}
+setInterval(() => { if (Date.now() - senastKoll >= KOLL_MIN * 60e3) automatiskKoll(); }, 60e3);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - senastKoll >= KOLL_MIN * 60e3) automatiskKoll(); });
+
 async function laddaMetar() {
   if (!M || !M.t0) return;
   if (!visaMetar) { $("metarInfo").textContent = ""; laddaTaf(null); return; }
@@ -1003,6 +1028,7 @@ function rita() {
   const d0 = new Date(t0);
   $("iRuta").textContent = isFinite(M.glat) ? M.glat.toFixed(3) + "N " + M.glon.toFixed(3) + "E, " + avstand(M.lat, M.lon, M.glat, M.glon).toFixed(1) + " km från punkten, modellens markhöjd " + Math.round(M.terr) + " m (ruta y=" + M.iy + " x=" + M.ix + ")" : "–";
   const kt = $("iKorning"); kt.textContent = M.dtg + " (+0 = " + d0.getUTCDate() + "/" + (d0.getUTCMonth() + 1) + " " + p2(d0.getUTCHours()) + "Z)";
+  if (M.nyFinns) kt.insertAdjacentHTML("beforeend", ' <span class="nyfinns">– Ny körning ' + M.nyFinns + ' finns, tryck Hämta</span>');
   if (M.vald) { kt.insertAdjacentHTML("beforeend", ' <span class="vald">– vald körning</span>'); }
   else if (M.ny) { kt.insertAdjacentHTML("beforeend", ' <span class="ny">– NY KÖRNING</span>'); }
 }
