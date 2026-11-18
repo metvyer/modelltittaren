@@ -225,6 +225,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <div class="vaxel" role="group" aria-label="Visa i diagrammet">
     <button id="lMoln" aria-pressed="true">Moln</button><button id="lVind" aria-pressed="false">Vind</button>
   </div>
+  <button class="sek liten" id="lNiv" aria-pressed="false" title="Visa modellnivåernas höjd (MEPS har 65 nivåer, 64 = lägsta)">Modellnivåer</button>
   <span class="lagetips" id="lageTips"></span>
 </div>
 <div class="diagram">
@@ -295,6 +296,7 @@ const dtgText = d => d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCD
 const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(9, 11)));
 const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
 let avbryt = null, stoppad = false, vindLage = false;
+let visaNiv = lasa("mt:visaNiv") === "ja";   // tunna linjer for modellnivaerna i tid-hojd
 
 function lagra(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
 function lasa(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -703,6 +705,31 @@ function vader(nb, typ, sikt) {
 }
 function molnCirkel(f) { if (!isFinite(f)) return ""; if (f > 1.5) f /= 100; const o = Math.round(f * 8); return o === 0 ? "○" : o <= 2 ? "◔" : o <= 5 ? "◑" : o <= 7 ? "◕" : "●"; }
 
+// Modellnivaerna som tunna linjer (fullnivaernas hojd, andras lite med marktrycket).
+// Nummer vid var 5:e niva i vanstra kanten; 64 = lagsta.
+function ritaNivaer(svg, sk, zTopp, c, fore) {
+  const g = el("g", { "pointer-events": "none" }), nt = M.nt, zs = [];
+  for (let t = 0; t < nt; t++) zs[t] = M.ytaOK[t] ? hojder(t, 0) : null;
+  for (let k = NIV - 1; k >= 0; k--) {
+    let d = "", penna = false, synlig = false;
+    for (let t = 0; t < nt; t++) {
+      const z = zs[t] && zs[t][k];
+      if (!(z > 0) || z > zTopp) { penna = false; continue; }
+      const x = t * COL + COL / 2, y = sk.y(z * FOT).toFixed(1);
+      d += (penna ? "L" : "M") + x + " " + y; penna = true; synlig = true;
+    }
+    if (!synlig) continue;
+    // ljus kant under den morka linjen sa att den syns aven pa morkbla och svarta moln
+    g.appendChild(el("path", { d, fill: "none", stroke: c("--panel"), "stroke-width": k % 5 === 4 ? 2.2 : 1.6, opacity: 0.5 }));
+    g.appendChild(el("path", { d, fill: "none", stroke: c("--fg"), "stroke-width": k % 5 === 4 ? 1 : 0.6, opacity: k % 5 === 4 ? 0.85 : 0.55 }));
+    if (k % 5 === 4) {
+      const t = zs.findIndex(z => z && z[k] > 0 && z[k] <= zTopp);
+      if (t >= 0) g.appendChild(el("text", { x: t * COL + 2, y: sk.y(zs[t][k] * FOT) - 2, "font-size": 8, fill: c("--fg"), stroke: c("--bg"), "stroke-width": 2.5, "paint-order": "stroke" }, String(k)));
+    }
+  }
+  svg.insertBefore(g, fore.nextSibling);   // ovanpa moln och nedisning, under vind och tabell
+}
+
 function rita() {
   if (!M || !M.stat) return;
   const sk = skala(), nt = M.nt, B = nt * COL, EXTRA = vindLage ? VIND_UNDER : 0, H = TOPP_RAD + PLOT_H + 8 + EXTRA + RADER.length * RAD_H + 6;
@@ -780,6 +807,7 @@ function rita() {
     }
   }
   if (saknasStart >= 0) saknasRekt(saknasStart, nt - 1, 0);
+  if (visaNiv) ritaNivaer(svg, sk, zTopp, c, gIs);
   if (vindLage) ritaVind(svg, sk, zTopp, c);
   svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
 
@@ -1235,6 +1263,8 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
     if (v && M && M.stat && !upptagen) { let saknas = false; for (let a = 0; a < M.nt; a += BIT) if (bitUrl(a, Math.min(a + BIT - 1, M.nt - 1))) saknas = true; if (saknas) hamtaAllt(); }
   };
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
+  $("lNiv").setAttribute("aria-pressed", String(visaNiv));
+  $("lNiv").addEventListener("click", e => { visaNiv = !visaNiv; lagra("mt:visaNiv", visaNiv ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaNiv)); if (M && M.stat) rita(); });
   if (lasa("mt:lage") === "vind") satLage(true);
   const d = $("svg");
   d.addEventListener("pointermove", visaTips); d.addEventListener("pointerdown", visaTips); d.addEventListener("pointerleave", gomTips);
