@@ -3,7 +3,7 @@
 // Släpper bara igenom läsning (GET) av MEPS-filer i katalogen mepslatest och METAR, och bara från vår sida.
 // Ingen nyckel, inget lösenord. Data från MET Norway (CC BY 4.0) och NOAA aviationweather.gov.
 //
-// NYTT 18/11: delad cache (Cloudflare Workers Caching). Laddas upp automatiskt av Cloudflare
+// NYTT 18/11 kväll: /taf (senaste TAF). NYTT 18/11: delad cache (Cloudflare Workers Caching). Laddas upp automatiskt av Cloudflare
 // (Workers Builds, kopplat till detta repo, mapp verktyg) – klistra INTE in koden för hand längre,
 // då försvinner cache-inställningen. Inställningen finns i verktyg/wrangler.toml.
 //
@@ -20,7 +20,7 @@ const THREDDS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
 // Tillåtna filnamn: meps_….ncml.ascii / .ncml.dods / .nc.ascii / .nc.dods
 const TILLATEN_FIL = /^\/mepslatest\/(meps_[A-Za-z0-9_]+\.(?:ncml|nc)\.(?:ascii|dods))$/;
 // METAR: /metar?ids=ESSA,ESGG&hours=6 -> aviationweather.gov, bara 1-20 ICAO-koder och 1-24 timmar
-const AWC = "https://aviationweather.gov/api/data/metar";
+const AWC = "https://aviationweather.gov/api/data/";   // + metar / taf
 const UA = { "User-Agent": "Modelltittaren-mellanserver (github.com/metvyer/modelltittaren)" };
 
 // Hur länge ett svar får ligga i cachen (sekunder)
@@ -29,6 +29,7 @@ const CACHE_NY_KORNING = 300;     // körning yngre än 3 h: kan fortfarande fyl
 const CACHE_GAMMAL_KORNING = 21600; // äldre körning: ändras inte längre -> 6 h
 const CACHE_LATEST = 300;         // filer utan körningstid i namnet (…_latest)
 const CACHE_METAR = 120;          // METAR: 2 min
+const CACHE_TAF = 300;            // TAF: 5 min
 
 // Cachetid för en thredds-fråga: beror på frågan och körningens ålder (från filnamnet)
 function cachetid(fil, fraga) {
@@ -44,8 +45,8 @@ export class Kalla extends WorkerEntrypoint {
   async fetch(req) {
     const url = new URL(req.url);
     let kalla, tid;
-    if (url.pathname === "/metar") {
-      kalla = AWC + url.search; tid = CACHE_METAR;
+    if (url.pathname === "/metar" || url.pathname === "/taf") {
+      kalla = AWC + url.pathname.slice(1) + url.search; tid = url.pathname === "/taf" ? CACHE_TAF : CACHE_METAR;
     } else {
       const fil = url.pathname.replace(/^\/mepslatest\//, "");
       kalla = THREDDS + fil + url.search; tid = cachetid(fil, url.search);
@@ -78,7 +79,13 @@ export default {
     if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
 
     let vidare;
-    if (url.pathname === "/metar") {
+    if (url.pathname === "/taf") {
+      // TAF: /taf?ids=ESSA (1-20 ICAO-koder), senaste TAF per flygplats
+      const ids = (url.searchParams.get("ids") || "").toUpperCase();
+      if (!/^[A-Z0-9]{4}(,[A-Z0-9]{4}){0,19}$/.test(ids)) return new Response("Fel ids", { status: 400, headers: cors });
+      if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
+      vidare = url.origin + "/taf?ids=" + ids + "&format=json";
+    } else if (url.pathname === "/metar") {
       const ids = (url.searchParams.get("ids") || "").toUpperCase(), h = +(url.searchParams.get("hours") || 6);
       if (!/^[A-Z0-9]{4}(,[A-Z0-9]{4}){0,19}$/.test(ids) || !(h >= 1 && h <= 24))
         return new Response("Fel ids/hours", { status: 400, headers: cors });

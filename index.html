@@ -134,6 +134,8 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 .stapel > div.klar { background: var(--acc); }
 .stapel > div > span { position: absolute; inset: 0 auto 0 0; background: var(--acc); opacity: .65; transition: width .5s linear; }
 .stapel > div.aktiv { outline: 1px solid var(--acc); outline-offset: -1px; }
+.taf { margin: 6px 2px 8px; padding: 6px 10px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #c000c0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; }
+.taf[hidden] { display: none; }
 .forlopptext { font-size: 13px; font-variant-numeric: tabular-nums; }
 .forlopptext .dim { color: var(--dim); }
 </style>
@@ -229,10 +231,12 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button id="lMoln" aria-pressed="true">Moln</button><button id="lVind" aria-pressed="false">Vind</button>
   </div>
   <button class="sek liten" id="lNiv" aria-pressed="false" title="Visa modellnivåernas höjd (MEPS har 65 nivåer, 64 = lägsta)">Modellnivåer</button>
-  <button class="sek liten" id="lMetar" aria-pressed="false" title="Visa observerade molnskikt (METAR) från närmaste flygplats">METAR</button>
+  <button class="sek liten" id="lMetar" aria-pressed="false" title="Visa observerade molnskikt (METAR) och senaste TAF från närmaste flygplats">METAR/TAF</button>
+  <button class="sek liten" id="lIs" aria-pressed="false" title="Nedisning från MEPS isindex. TEST: gränserna är obekräftade och underskattar jämfört med SMHI">Nedisning (test)</button>
   <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; tunt = FEW, tjockt = OVC, vit med streckad kant = VV (vertikal sikt)"></span>
   <span class="lagetips" id="lageTips"></span>
 </div>
+<pre class="taf" id="tafText" hidden></pre>
 <div class="diagram">
   <svg class="axel" id="axel" width="56" height="10"></svg>
   <div class="skroll" id="skroll"><svg id="svg" width="10" height="10"></svg></div>
@@ -247,7 +251,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <span><span class="ruta" style="background:var(--sct)"></span>SCT 3–4/8</span>
   <span><span class="ruta" style="background:var(--bkn)"></span>BKN 5–7/8</span>
   <span><span class="ruta" style="background:var(--ovc)"></span>OVC 8/8</span>
-  <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
+  <span id="fIs" hidden>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt (horisontell, 2 m) i synoptisk kod (80 = 30 km)</span>
   <span>Bas hft = modellens molnbas i hundratal fot över mark</span>
   <span id="fMetar" hidden>METAR (observerat, magenta, ett streck per observation vid observationstiden, underkant = molnbas):<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="7" width="12" height="2" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>FEW<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="5" width="12" height="4" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>SCT<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="3" width="12" height="6" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>BKN<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="1" width="12" height="8" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>OVC<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="2" width="12" height="6" fill="#fff" stroke="#c000c0" stroke-width="1.6" stroke-dasharray="3 2"/></svg>VV (vertikal sikt) – hela texten i hovringen. Raderna Sikt obs och T obs: varje METAR vid sin observationstid (HH:20 och HH:50); sikt 60 = 9999 (10 km eller mer).</span>
@@ -304,6 +308,7 @@ const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.s
 const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
 let avbryt = null, stoppad = false, vindLage = false;
 let visaNiv = lasa("mt:visaNiv") === "ja";
+let visaIs = lasa("mt:visaIs") === "ja";   // nedisning (test) - av som standard tills metoden ar bekraftad
 let visaMetar = lasa("mt:visaMetar") === "ja";   // METAR i tid-hojd (av som standard)   // tunna linjer for modellnivaerna i tid-hojd
 
 function lagra(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
@@ -687,7 +692,7 @@ const COL = 22, PLOT_H = 400, TOPP_RAD = 30, RAD_H = 17;
 const RAD_NAMN = { tid: "Tid UTC", sikt: "Sikt", siktObs: "Sikt obs", bas: "Bas hft", t: "T °C", tObs: "T obs", td: "Td °C",
   pil: "Vind", vind: "Vind kt", by: "By kt", vader: "Väder", moln: "Moln", nb: "Nb mm/h", is: "Nedisning" };
 function tabellRader(obs) {
-  return ["tid", "sikt", ...(obs ? ["siktObs"] : []), "bas", "t", ...(obs ? ["tObs"] : []), "td", "pil", "vind", "by", "vader", "moln", "nb", "is"];
+  return ["tid", "sikt", ...(obs ? ["siktObs"] : []), "bas", "t", ...(obs ? ["tObs"] : []), "td", "pil", "vind", "by", "vader", "moln", "nb", ...(visaIs ? ["is"] : [])];
 }
 const NS = "http://www.w3.org/2000/svg";
 function el(namn, attr, text) { const e = document.createElementNS(NS, namn); for (const k in attr) e.setAttribute(k, attr[k]); if (text !== undefined) e.textContent = text; return e; }
@@ -727,6 +732,32 @@ const METAR_MELLAN = "https://modelltittaren.metvyer.workers.dev/metar";
 const METAR_AVST = 8, METAR_BAND_MIN = 20, METAR_TTL = 5 * 60e3;
 const METAR_FARG = "#c000c0", METAR_HOJD = [0, 2, 4, 6, 8];   // samma magenta; tjocklek (px) FEW SCT BKN OVC som i NfL Diagram
 const metarCache = new Map();
+const TAF_MELLAN = "https://modelltittaren.metvyer.workers.dev/taf", AWC_TAF = "https://aviationweather.gov/api/data/taf";
+// TAF med radbrytning fore BECMG/TEMPO/PROB/FM sa att den blir lattlast
+function tafRader(raw) { return raw.replace(/\s+/g, " ").replace(/\s(?=(BECMG|TEMPO|PROB\d{2}|FM\d{6})\b)/g, "\n  ").replace(/(PROB\d{2})\n  (TEMPO)/g, "$1 $2"); }
+async function hamtaTaf(icao) {
+  const k = "taf:" + icao, c = metarCache.get(k); if (c && Date.now() - c.t < METAR_TTL) return c.taf;
+  let data = null;
+  for (const bas of [AWC_TAF, TAF_MELLAN]) {
+    try {
+      const ctl = new AbortController(), tid = setTimeout(() => ctl.abort(), 8000);
+      const r = await fetch(bas + "?ids=" + icao + "&format=json", { signal: ctl.signal }); clearTimeout(tid);
+      if (r.ok) { data = await r.json(); break; }
+    } catch (e) {}
+  }
+  if (!Array.isArray(data)) return null;
+  const senaste = data.filter(d => d.rawTAF).sort((a, b) => (b.issueTime || "").localeCompare(a.issueTime || ""))[0];
+  const taf = senaste ? senaste.rawTAF : "";
+  metarCache.set(k, { t: Date.now(), taf }); return taf;
+}
+async function laddaTaf(icao) {
+  const e = $("tafText");
+  if (!visaMetar || !icao) { e.hidden = true; e.textContent = ""; return; }
+  e.hidden = false; e.textContent = "TAF " + icao + ": hämtar …";
+  const taf = await hamtaTaf(icao);
+  if (!visaMetar) { e.hidden = true; return; }
+  e.textContent = taf === null ? "TAF " + icao + ": gick inte att hämta" : taf ? tafRader(taf) : "TAF " + icao + ": ingen giltig TAF";
+}
 function narmasteICAO(lat, lon) {
   const lista = PUNKTER.map(p => [p[1], p[2], p[3]]).concat(FLYG.map(f => [f[0], f[2], f[3]]));
   let bast = null, bd = 1e9;
@@ -763,9 +794,10 @@ async function hamtaMetar(icao, timmar) {
 }
 async function laddaMetar() {
   if (!M || !M.t0) return;
-  if (!visaMetar) { $("metarInfo").textContent = ""; return; }
+  if (!visaMetar) { $("metarInfo").textContent = ""; laddaTaf(null); return; }
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
   const icao = narmasteICAO(lat, lon), m = M, info = $("metarInfo"); M.metarIcao = icao;
+  laddaTaf(icao);   // parallellt
   if (!icao) { M.metar = null; info.textContent = "METAR: ingen flygplats inom " + METAR_AVST + " km"; return; }
   info.textContent = "METAR " + icao + ": hämtar …";
   const timmar = Math.max(1, Math.min(24, Math.ceil((Date.now() - M.t0) / 3600e3) + 1));
@@ -851,7 +883,7 @@ function rita() {
   ax.appendChild(el("text", { x: 50, y: TOPP_RAD - 6, "font-size": 10, "text-anchor": "end", fill: c("--dim") }, "ft"));
 
   const dolj = vindLage ? { style: "display:none" } : {};
-  const gMoln = el("g", dolj), gSaknas = el("g", dolj), gIs = el("g", dolj); svg.insertBefore(gMoln, svg.children[1]); svg.appendChild(gSaknas); svg.appendChild(gIs);
+  const gMoln = el("g", dolj), gSaknas = el("g", dolj), gIs = el("g", vindLage || !visaIs ? { style: "display:none" } : {}); svg.insertBefore(gMoln, svg.children[1]); svg.appendChild(gSaknas); svg.appendChild(gIs);
   let saknasStart = -1;
   const saknasRekt = (t1, t2, zFran) => {
     const yLo = zFran > 0 ? sk.y(zFran * FOT) : sk.botten; if (yLo - TOPP_RAD < 2) return;
@@ -928,7 +960,7 @@ function rita() {
     txt(t, R.vader, vader(nb, Y(8), Y(6)));
     txt(t, R.moln, molnCirkel(Y(9)));
     if (isFinite(nb) && nb >= 0.05) txt(t, R.nb, nb.toFixed(1));
-    if (M.isKat && M.isKat[t]) txt(t, R.is, ISNAMN[M.isKat[t]], c("--red"));
+    if (R.is !== undefined && M.isKat && M.isKat[t]) txt(t, R.is, ISNAMN[M.isKat[t]], c("--red"));
   }
   // observerat: varje METAR/SPECI vid sin observationstid (samma x som strecken i diagrammet), liten magenta text
   if (R.siktObs !== undefined) for (const o of M.metar) {
@@ -1041,7 +1073,7 @@ function tipsText(t, yPix, xPix) {
     }
     // isindex pa narmaste indexhojd
     let jB = -1; M.h5.forEach((h, j) => { if (jB < 0 || Math.abs(h - z) < Math.abs(M.h5[jB] - z)) jB = j; });
-    if (jB >= 0 && M.iceHar[t * NIS + jB]) {
+    if (visaIs && jB >= 0 && M.iceHar[t * NIS + jB]) {
       const v = M.ice[t * NIS + jB], kat = !isFinite(v) ? 0 : v >= IS[3] ? 4 : v >= IS[2] ? 3 : v >= IS[1] ? 2 : v >= IS[0] ? 1 : 0;
       rad.push(["Isindex", (isFinite(v) ? v : "–") + (kat ? " (" + ISNAMN[kat] + ")" : "") + " vid " + M.h5[jB] + " m"]);
     }
@@ -1059,7 +1091,7 @@ function tipsText(t, yPix, xPix) {
     if (isFinite(nb)) rad.push(["Nederbörd", nb.toFixed(1) + " mm/h"]);
     if (M.cbHar[t]) rad.push(["Molnbas", isFinite(M.cb[t]) ? Math.round(M.cb[t] * FOT) + " ft (" + M.cb[t].toFixed(1) + " m) över mark, modellens värde" : "inget moln"]);
     if (isFinite(Y(9))) rad.push(["Totalt moln", Math.round((Y(9) > 1.5 ? Y(9) / 100 : Y(9)) * 8) + "/8"]);
-    if (M.isKat && M.isKat[t]) rad.push(["Nedisning", ISNAMN[M.isKat[t]] + " (någonstans i höjdled)"]);
+    if (visaIs && M.isKat && M.isKat[t]) rad.push(["Nedisning", ISNAMN[M.isKat[t]] + " (någonstans i höjdled)"]);
     // Alla METAR/SPECI vars streck ligger i kolumnen, i tidsordning; den narmast
     // muspekaren i fetstil (den fyrkant man pekar pa)
     if (visaMetar && M.metar && M.metar.length) {
@@ -1397,6 +1429,8 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   };
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
   $("lNiv").setAttribute("aria-pressed", String(visaNiv));
+  $("lIs").setAttribute("aria-pressed", String(visaIs)); $("fIs").hidden = !visaIs;
+  $("lIs").addEventListener("click", e => { visaIs = !visaIs; lagra("mt:visaIs", visaIs ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaIs)); $("fIs").hidden = !visaIs; if (M && M.stat) rita(); });
   $("lMetar").setAttribute("aria-pressed", String(visaMetar)); $("fMetar").hidden = !visaMetar;
   $("lMetar").addEventListener("click", e => {
     visaMetar = !visaMetar; lagra("mt:visaMetar", visaMetar ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaMetar));
