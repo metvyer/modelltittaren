@@ -1,0 +1,8 @@
+{
+  "name": "modelltittaren-mellanserver",
+  "private": true,
+  "description": "Mellanservern (Cloudflare Worker). Laddas upp av Cloudflare Workers Builds fran mappen verktyg.",
+  "devDependencies": {
+    "wrangler": "^4.164.0"
+  }
+}

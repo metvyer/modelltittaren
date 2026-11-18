@@ -1,4 +1,4 @@
-# Mellanservern (Cloudflare Worker) - laddas upp av GitHub Actions, se .github/workflows/mellanserver.yml
+# Mellanservern (Cloudflare Worker) - laddas upp av Cloudflare Workers Builds (Path/Root directory = verktyg)
 name = "modelltittaren"
 main = "mellanserver.js"
 compatibility_date = "2026-11-01"

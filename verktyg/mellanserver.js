@@ -3,8 +3,8 @@
 // Släpper bara igenom läsning (GET) av MEPS-filer i katalogen mepslatest och METAR, och bara från vår sida.
 // Ingen nyckel, inget lösenord. Data från MET Norway (CC BY 4.0) och NOAA aviationweather.gov.
 //
-// NYTT 18/11: delad cache (Cloudflare Workers Caching). Laddas upp av GitHub Actions
-// (.github/workflows/mellanserver.yml) med Wrangler – klistra INTE in koden för hand längre,
+// NYTT 18/11: delad cache (Cloudflare Workers Caching). Laddas upp automatiskt av Cloudflare
+// (Workers Builds, kopplat till detta repo, mapp verktyg) – klistra INTE in koden för hand längre,
 // då försvinner cache-inställningen. Inställningen finns i verktyg/wrangler.toml.
 //
 // Två delar:
