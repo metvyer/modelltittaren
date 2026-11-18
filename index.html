@@ -249,6 +249,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt (horisontell, 2 m) i synoptisk kod (80 = 30 km)</span>
   <span>Bas hft = modellens molnbas i hundratal fot över mark</span>
+  <span id="fMetar" hidden>METAR (observerat, magenta, ett streck per observation vid observationstiden, underkant = molnbas):<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="7" width="12" height="2" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>FEW<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="5" width="12" height="4" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>SCT<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="3" width="12" height="6" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>BKN<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="1" width="12" height="8" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>OVC<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="2" width="12" height="6" fill="#fff" stroke="#c000c0" stroke-width="1.6" stroke-dasharray="3 2"/></svg>VV (vertikal sikt) – hela texten i hovringen</span>
 </div>
 </div>
 </section>
@@ -1379,9 +1380,10 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   };
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
   $("lNiv").setAttribute("aria-pressed", String(visaNiv));
-  $("lMetar").setAttribute("aria-pressed", String(visaMetar));
+  $("lMetar").setAttribute("aria-pressed", String(visaMetar)); $("fMetar").hidden = !visaMetar;
   $("lMetar").addEventListener("click", e => {
     visaMetar = !visaMetar; lagra("mt:visaMetar", visaMetar ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaMetar));
+    $("fMetar").hidden = !visaMetar;
     if (M && M.stat) { rita(); laddaMetar(); } else $("metarInfo").textContent = "";
   });
   $("lNiv").addEventListener("click", e => { visaNiv = !visaNiv; lagra("mt:visaNiv", visaNiv ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaNiv)); if (M && M.stat) rita(); });
