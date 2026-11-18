@@ -3,7 +3,7 @@
 
 Kors av GitHub Actions (.github/workflows/forhamta.yml) var 10:e minut.
 Finns en ny komplett MEPS-korning (meps_det_2_5km) pa thredds.met.no hamtas
-samma data som sidan sjalv hamtar for en punkt - upp till TOPP_FL (FL200), alla
+samma data som sidan sjalv hamtar for en punkt - upp till TOPP_FL (FL450), alla
 timmar och vinden - och sparas som en fil per punkt:
 
     forhamtat/th/<DTG>/<iy>_<ix>.json  =  {"static": text, "bitar": [[a, b, etikett, text], ...]}
@@ -34,7 +34,7 @@ PUNKTER = [
     ("Landvetter", "ESGG", 57.6628, 12.2798), ("Hagshult", "ESMV", 57.2922, 14.1372)]
 # Molnen och vinden pa modellnivaer hamtas upp till TOPP_FL (det tunga). Tryckytor och
 # isbildning hamtas hela vagen (litet). Valjer man hogre topp pa sidan hamtar den sjalv resten.
-TOPP_FL = 200
+TOPP_FL = 450   # 18/11: tillbaka till FL450 (FL200 sparade lite tid)
 FOT = 3.28084
 
 # MEPS-rutnatet (Lambert konform, samma som LCC i index.html)
