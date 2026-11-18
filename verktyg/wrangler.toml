@@ -1,0 +1,22 @@
+# Mellanservern (Cloudflare Worker) - laddas upp av GitHub Actions, se .github/workflows/mellanserver.yml
+name = "modelltittaren"
+main = "mellanserver.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+# Delad cache (Workers Caching). Ingången "default" kollar och lägger på CORS (ingen cache),
+# "Kalla" hämtar från met.no/aviationweather och cachas.
+[cache]
+enabled = true
+
+[exports.default]
+type = "worker"
+
+  [exports.default.cache]
+  enabled = false
+
+[exports.Kalla]
+type = "worker"
+
+  [exports.Kalla.cache]
+  enabled = true
