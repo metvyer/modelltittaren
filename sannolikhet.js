@@ -424,6 +424,39 @@ function tidslinjeKlick(ev) {
   $("pFran").value = na; $("pTill").value = na + L; probVisa(); autoHamta();
 }
 
+// ---------- Sverige-oversikt fran GitHub (forhamta_sv.py) ----------
+// Byvind for Sverige + hav, 2,5 km, +0..+36 h, korningarna 00/06/12/18: en gratonsbild per
+// troskel och period dar varje punkt = antal medlemmar (0-30) som nar troskeln. Visas under
+// egna hamtade omraden nar parameter, troskel, period och korning stammer.
+let GHSV = null; const ghBilder = new Map();
+async function ghIndex() {
+  if (GHSV && Date.now() - GHSV.t < 10 * 60e3) return GHSV.idx;
+  let idx = null;
+  try { const r = await fetch("forhamtat/sv/index.json", { cache: "no-store" }); if (r.ok) idx = await r.json(); } catch (e) {}
+  GHSV = { t: Date.now(), idx }; return idx;
+}
+async function ghOmrade(v, trosk, a, b) {
+  if (v !== "by") return null;
+  const idx = await ghIndex(); if (!idx || idx.dtg !== P.dtg || !idx.troskel.includes(trosk)) return null;
+  const L = b - a + 1; if (!idx.perioder.includes(L) || a % L !== 0 || b >= idx.timmar) return null;
+  const fil = "forhamtat/sv/" + idx.dtg + "/by_" + trosk + "_" + L + "h_" + a + ".png";
+  const nx = idx.x1 - idx.x0 + 1, ny = idx.y1 - idx.y0 + 1;
+  let cnt = ghBilder.get(fil);
+  if (!cnt) {
+    try {
+      const r = await fetch(fil); if (!r.ok) return null;
+      const bm = await createImageBitmap(await r.blob(), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+      const cv = document.createElement("canvas"); cv.width = nx; cv.height = ny;
+      const cx = cv.getContext("2d", { willReadFrequently: true }); cx.drawImage(bm, 0, 0);
+      const px = cx.getImageData(0, 0, nx, ny).data; cnt = new Uint8Array(nx * ny);
+      for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) cnt[y * nx + x] = px[((ny - 1 - y) * nx + x) * 4];   // bildens rad 0 = norr
+    } catch (e) { return null; }
+    ghBilder.set(fil, cnt); if (ghBilder.size > 40) ghBilder.delete(ghBilder.keys().next().value);
+  }
+  const prob = new Float32Array(nx * ny); for (let i = 0; i < prob.length; i++) prob[i] = cnt[i] / ENS_MEDL;
+  return { o: { x0: idx.x0, x1: idx.x1, y0: idx.y0, y1: idx.y1, s: 1, nx, ny, dtg: idx.dtg }, prob, gh: true };
+}
+
 async function probVisa() {
   const g = $("kProb"); ritaPForklaring(); ritaTidslinje();
   const rensa = () => { g.textContent = ""; P.varden = null; $("pSam").textContent = ""; };
@@ -432,6 +465,7 @@ async function probVisa() {
   if (!isFinite(trosk)) { rensa(); return; }
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === v).sort((x, y) => y.s - x.s);
   const vis = []; let pmax = 0;
+  const gh = await ghOmrade(v, trosk, a, b); if (gh) vis.push(gh);   // Sverige-oversikten underst
   for (const e of kand) { const r = await beraknaOmrade(e, pa, a, b, fran, trosk, lista); if (r) vis.push(r); }
   // Under automatisk hamtning vid stegning visas den gamla bilden tills den nya perioden finns.
   if (!vis.length && (P.upptagen || P.autoVantar)) return;
@@ -454,9 +488,17 @@ async function probVisa() {
   }
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
-  if (!vis.length) { if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
+  if (!vis.length) {
+    if (!P.upptagen && !P.fragar) {
+      const idx = v === "by" ? await ghIndex() : null;
+      const tips = idx && idx.dtg === P.dtg ? " (Sverige-översikten finns för " + idx.troskel.join("/") + " kt och perioder på " + idx.perioder.join("/") + " h som börjar på jämn timme, t.ex. +6 – +11.)" : "";
+      status((kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.") + tips, "");
+    }
+    return;
+  }
+  if (gh && vis.length === 1 && !P.upptagen && !P.fragar) status("Sverige-översikt från GitHub. Hämta fält för medlemmarnas värden, fri tröskel eller period.", "");
   $("pSam").textContent = pa.namn + " " + pa.villkor + " " + trosk.toLocaleString("sv-SE") + " " + pa.enhet + (pa.agg === "summa" ? "" : " någon gång") + " " + tidText(a) + " – " + tidText(b) + (pa.agg !== "summa" && dt > 1 && b > a ? " (var " + dt + ":e timme)" : "") +
-    ". Högsta sannolikhet: " + Math.round(pmax * 100) + " %." + (aktuell ? "" : " Ramen (ditt valda område) är inte hämtad med vald upplösning – tryck Hämta fält.");
+    ". Högsta sannolikhet: " + Math.round(pmax * 100) + " %." + (gh ? " Sverige-översikt förberäknad på GitHub (2,5 km)." : "") + (aktuell || gh ? "" : " Ramen (ditt valda område) är inte hämtad med vald upplösning – tryck Hämta fält.");
 }
 
 function ritaPForklaring() {
@@ -471,6 +513,11 @@ function probTips(e) {
   for (const r of V.vis) {
     const o = r.o, y = Math.round((fy - o.y0) / o.s), x = Math.round((p.x - o.x0) / o.s);
     if (y < 0 || y >= o.ny || x < 0 || x >= o.nx) continue;
+    if (r.gh) {
+      const i = y * o.nx + x, ll = franRuta(o.x0 + x, o.y0 + y);
+      visaKTips("Sannolikhet " + Math.round(r.prob[i] * 100) + " % (" + Math.round(r.prob[i] * ENS_MEDL) + " av " + ENS_MEDL + ")\nFörberäknad Sverige-översikt (GitHub) – medlemmarnas värden finns inte här;\nhämta ett område för detaljer.\n" + ll.lat.toFixed(2) + "N " + ll.lon.toFixed(2) + "E (rutnät 2,5 km)", e.clientX + 14, e.clientY + 14);
+      return;
+    }
     const i = y * o.nx + x, n = o.ny * o.nx, med = [];
     for (let m = 0; m < ENS_MEDL; m++) { const w = r.agg[m * n + i]; if (isFinite(w)) med.push(w); }
     const ll = franRuta(o.x0 + x * o.s, o.y0 + y * o.s), plats = "\n" + ll.lat.toFixed(2) + "N " + ll.lon.toFixed(2) + "E (rutnät " + (o.s * 2.5).toLocaleString("sv-SE") + " km)";
@@ -495,8 +542,16 @@ function autoHamta() {
     if (P.upptagen) { P.autoIgen = true; return; }
     const o0 = berakna(); if (!o0 || !P.dtg) { P.autoVantar = false; probVisa(); return; }
     if (!saknadeTimmar({ ...o0, dtg: P.dtg }, periodTimmar().lista).length) { P.autoVantar = false; probVisa(); return; }
-    probHamta(true);
+    ghTacker(o0).then(ja => { if (ja) { P.autoVantar = false; probVisa(); } else probHamta(true); });
   }, 500);
+}
+
+// Tacker Sverige-oversikten det valda omradet for nuvarande parameter/troskel/period? (da behovs ingen auto-hamtning)
+async function ghTacker(o0) {
+  const v = $("pParam").value, pa = PPARAM[v], { a, b } = periodTimmar();
+  const trosk = parseFloat($("pTrosk").value.replace(",", ".")); if (v !== "by" || !isFinite(trosk)) return false;
+  const gh = await ghOmrade(v, trosk, a, b); if (!gh) return false;
+  return o0.y0 >= gh.o.y0 && o0.y1 <= gh.o.y1 && o0.x0 >= gh.o.x0 && o0.x1 <= gh.o.x1;
 }
 
 // Den troskel som ett inskrivet varde i praktiken motsvarar, givet hur vardena lagras:

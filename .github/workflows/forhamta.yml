@@ -2,7 +2,8 @@
 #
 # Var 10:e minut (GitHub kor det i praktiken ca en gang i timmen): finns en ny
 # komplett MEPS-korning hamtas tid-hojd for de forvalda flygplatserna
-# (verktyg/forhamta.py). Datat sparas pa grenen "data" (skrivs over varje gang -
+# (verktyg/forhamta.py) och, for 00/06/12/18, byvind-oversikten for Sverige
+# (verktyg/forhamta_sv.py). Datat sparas pa grenen "data" (skrivs over varje gang -
 # ingen historik som vaxer). Nar korningen ar klar startar "Publicera"
 # (publicera.yml), som lagger ut sidan med datat.
 name: Förhämtning
@@ -22,7 +23,7 @@ concurrency:
 jobs:
   forhamta:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - name: Hämta koden
         uses: actions/checkout@v4
@@ -37,12 +38,22 @@ jobs:
           fi
           ls -R forhamtat | head -20
 
-      - name: Förhämta ny körning
+      - name: Förhämta ny körning (tid-höjd, flygplatserna)
         id: hamta
         run: python3 verktyg/forhamta.py forhamtat
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Förhämta Sverige-översikt (byvind, 00/06/12/18)
+        id: sv
+        run: |
+          python -m pip install --quiet numpy
+          python verktyg/forhamta_sv.py forhamtat
+
       - name: Spara datat på grenen data
-        if: steps.hamta.outputs.andrat == 'ja'
+        if: steps.hamta.outputs.andrat == 'ja' || steps.sv.outputs.andrat == 'ja'
         run: |
           cd forhamtat
           git init -q
