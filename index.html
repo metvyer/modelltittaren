@@ -976,7 +976,7 @@ function rita() {
       const v = lista.map(o => ({ o, s: fn(o) })).filter(a => a.s !== "");
       if (!v.length) continue;
       if (v.every(a => a.s === v[0].s)) ut(rad, tt * COL + COL / 2, v[0].s);
-      else v.forEach((a, k) => ut(rad, tt * COL + COL * (k + 0.5) / v.length, a.s));   // i tidsordning, jamnt fordelade i kolumnen
+      else v.forEach((a, k) => ut(rad, tt * COL + COL * (k + 0.5) / v.length, a.s.replace(">", "")));   // i tidsordning, jamnt fordelade; ">" skippas (plats)
     }
   }
   // info

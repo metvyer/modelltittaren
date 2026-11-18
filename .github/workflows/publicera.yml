@@ -53,4 +53,18 @@ jobs:
         with:
           path: _site
 
-      - uses: actions/deploy-pages@v4
+      # GitHubs publiceringstjanst ger ibland tillfalliga fel ("Fetching artifact metadata failed").
+      # Forsta forsoket far misslyckas tyst; da vantar vi en minut och forsoker en gang till.
+      # Felmejl kommer bara om aven andra forsoket misslyckas.
+      - name: Publicera (forsok 1)
+        id: forsok1
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Vanta en minut
+        if: steps.forsok1.outcome == 'failure'
+        run: sleep 60
+
+      - name: Publicera (forsok 2)
+        if: steps.forsok1.outcome == 'failure'
+        uses: actions/deploy-pages@v4
