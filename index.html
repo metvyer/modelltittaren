@@ -134,6 +134,8 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 .stapel > div.klar { background: var(--acc); }
 .stapel > div > span { position: absolute; inset: 0 auto 0 0; background: var(--acc); opacity: .65; transition: width .5s linear; }
 .stapel > div.aktiv { outline: 1px solid var(--acc); outline-offset: -1px; }
+.vagval { margin: 14px 2px 0; font-size: 12px; color: var(--dim); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.vagval select { font-size: 12px; }
 .taf { margin: 6px 2px 8px; padding: 6px 10px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #c000c0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; }
 .taf[hidden] { display: none; }
 .forlopptext { font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -261,6 +263,14 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 </div>
 <div class="tips" id="tips" hidden></div>
 <div class="tips ktips" id="kTips" hidden></div>
+<div class="vagval"><label for="vagVal">Hämta MEPS via mellanservern (Cloudflare):</label>
+  <select id="vagVal">
+    <option value="auto">Auto – bara när thredds inte nås direkt (t.ex. jobbnätet)</option>
+    <option value="alltid">Alltid – delar cache med kollegorna, avlastar met.no</option>
+    <option value="av">Av – alltid direkt till thredds.met.no</option>
+  </select>
+  <span class="lagetips" title="Gäller MEPS-data. METAR/TAF går alltid via mellanservern när de inte kan hämtas direkt.">ⓘ</span>
+</div>
 <p class="kalla">Data från MET Norway (thredds.met.no), CC BY 4.0. Höjd över modellens mark, beräknad från geopotential på tryckytorna. Modellmoln per modellnivå. Kartunderlag: Natural Earth. Flygplatser: OurAirports.<span id="vagInfo"></span></p>
 
 <script>
@@ -381,6 +391,14 @@ function status(t, klass) {
 // Provas en gang per besok: forst thredds direkt (kort tidsgrans), annars
 // mellanservern. Alla svar fran servern (aven 404) raknas som kontakt.
 let VAG = null, vagLofte = null;
+// Installning (sparas i webblasaren): auto = direkt forst, mellanservern om thredds inte svarar;
+// alltid = via mellanservern (delad cache), direkt bara om mellanservern inte svarar; av = alltid direkt.
+let VAG_LAGE = ["auto", "alltid", "av"].includes(lasa("mt:vag")) ? lasa("mt:vag") : "auto";
+function visaVag() {
+  const e = $("vagInfo"); if (!e) return;
+  e.textContent = VAG !== "mellan" ? "" : VAG_LAGE === "alltid" ? " Hämtar via mellanserver (Cloudflare), enligt inställningen."
+    : " Hämtar via mellanserver (Cloudflare), eftersom thredds.met.no inte nås direkt från det här nätet.";
+}
 async function svarar(bas, sek) {
   const c = new AbortController(); const t = setTimeout(() => c.abort(), sek * 1000);
   try { const r = await fetch(bas + PROV_FIL, { signal: c.signal, cache: "no-store" }); clearTimeout(t); return r.status > 0; }
@@ -389,13 +407,15 @@ async function svarar(bas, sek) {
 function valjVag() {
   if (VAG) return Promise.resolve(VAG);
   if (!vagLofte) vagLofte = (async () => {
-    if (await svarar(BAS, PROV_DIREKT_S)) return (VAG = "direkt");
-    status("thredds.met.no svarar inte direkt härifrån – provar mellanservern …");
-    if (await svarar(MELLAN, PROV_MELLAN_S)) {
-      VAG = "mellan";
-      const e = $("vagInfo"); if (e) e.textContent = " Hämtar via mellanserver (Cloudflare), eftersom thredds.met.no inte nås direkt från det här nätet.";
-      return VAG;
+    if (VAG_LAGE === "av") { VAG = "direkt"; visaVag(); return VAG; }
+    if (VAG_LAGE === "alltid") {
+      if (await svarar(MELLAN, PROV_MELLAN_S)) { VAG = "mellan"; visaVag(); return VAG; }
+      status("Mellanservern svarar inte – hämtar direkt från thredds.met.no …");
+      VAG = "direkt"; visaVag(); return VAG;
     }
+    if (await svarar(BAS, PROV_DIREKT_S)) { VAG = "direkt"; visaVag(); return VAG; }
+    status("thredds.met.no svarar inte direkt härifrån – provar mellanservern …");
+    if (await svarar(MELLAN, PROV_MELLAN_S)) { VAG = "mellan"; visaVag(); return VAG; }
     vagLofte = null; return "direkt";   // ingen kontakt alls - prova igen nasta gang
   })();
   return vagLofte;
@@ -1439,6 +1459,8 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   };
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
   $("lNiv").setAttribute("aria-pressed", String(visaNiv));
+  $("vagVal").value = VAG_LAGE;
+  $("vagVal").addEventListener("change", e => { VAG_LAGE = e.target.value; lagra("mt:vag", VAG_LAGE); VAG = null; vagLofte = null; visaVag(); });
   $("lIs").setAttribute("aria-pressed", String(visaIs)); $("fIs").hidden = !visaIs;
   $("lIs").addEventListener("click", e => { visaIs = !visaIs; lagra("mt:visaIs", visaIs ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaIs)); $("fIs").hidden = !visaIs; if (M && M.stat) rita(); });
   $("lMetar").setAttribute("aria-pressed", String(visaMetar)); $("fMetar").hidden = !visaMetar;
