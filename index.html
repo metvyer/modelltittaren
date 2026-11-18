@@ -121,9 +121,10 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 #vindSkala span { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
 #vindSkala i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
 /* Hovringsruta */
-.tips { position: fixed; z-index: 10; pointer-events: none; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.18); max-width: 300px; font-variant-numeric: tabular-nums; }
+.tips { position: fixed; z-index: 10; pointer-events: none; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font-size: 12px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.18); max-width: 340px; font-variant-numeric: tabular-nums; }
 .tips[hidden] { display: none; }
 .tips .rubrik { font-weight: 650; margin-bottom: 2px; }
+.tips .avdel { border-top: 1px solid var(--line); margin: 5px 0 3px; padding-top: 3px; font-weight: 650; color: var(--dim); }
 .ktips { white-space: pre-line; max-width: 260px; }
 .tips .k { display: inline-block; min-width: 78px; color: var(--dim); }
 .stapel { display: flex; gap: 3px; height: 12px; }
@@ -292,6 +293,7 @@ const VINDFARG = [[0, "#7f8b97"], [10, "#2f7fc1"], [20, "#1f9e6e"], [30, "#c9a00
 const $ = id => document.getElementById(id);
 const enc = s => s.replace(/\[/g, "%5B").replace(/\]/g, "%5D");
 const p2 = n => String(n).padStart(2, "0");
+const p3 = n => String(n).padStart(3, "0");
 const dtgText = d => d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCDate()) + "T" + p2(d.getUTCHours()) + "Z";
 const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(9, 11)));
 const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
@@ -909,7 +911,18 @@ function tipsText(t, yPix) {
   rad.push(["", VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + " h)", "rubrik"]);
   if (yPix !== null && yPix >= TOPP_RAD - 2 && yPix <= M.sk.botten) {
     const fot = Math.max(0, M.sk.fot(yPix)), z = fot / FOT;
-    rad.push(["Höjd", "ca " + Math.round(fot / 50) * 50 + " ft (" + Math.round(z / 10) * 10 + " m) över mark"]);
+    // flygniva (tryckhojd, standardatmosfar) fran modellnivaernas tryck vid denna hojd
+    let fl = "";
+    const zAlla = M.ytaOK[t] ? hojder(t, 0) : null, ps = M.ytaOK[t] ? M.yta[0][t] : NaN;
+    if (zAlla && ps > 0) {
+      let p = NaN;
+      if (z <= zAlla[NIV - 1]) p = ps + (M.ap[NIV - 1] + M.b[NIV - 1] * ps - ps) * z / zAlla[NIV - 1];
+      else for (let k = NIV - 1; k > 0; k--) if (z >= zAlla[k] && z < zAlla[k - 1]) {
+        const p0 = Math.log(M.ap[k] + M.b[k] * ps), p1 = Math.log(M.ap[k - 1] + M.b[k - 1] * ps);
+        p = Math.exp(p0 + (p1 - p0) * (z - zAlla[k]) / (zAlla[k - 1] - zAlla[k])); break; }
+      if (p > 0) fl = ", FL" + p3(Math.max(0, Math.round((1 - (p / 101325) ** 0.190263) * 145366.45 / 100)));
+    }
+    rad.push(["Höjd", "ca " + Math.round(fot / 50) * 50 + " ft (" + Math.round(z / 10) * 10 + " m) över mark" + fl]);
     const kFran = clKmin(t), zz = (kFran < NIV && M.ytaOK[t]) ? hojder(t, kFran) : null;
     let moln = "ej hämtad";
     if (zz) for (let k = NIV - 1; k >= kFran; k--) {
@@ -917,10 +930,12 @@ function tipsText(t, yPix) {
       if (z >= zLo && z < zHi) { const v = M.cl[t * NIV + k], kat = v >= MOLN[3] ? 4 : v >= MOLN[2] ? 3 : v >= MOLN[1] ? 2 : v >= MOLN[0] ? 1 : 0; moln = Math.round(v) + " % (" + KAT[kat] + "), modellnivå " + k; break; }
     }
     rad.push(["Moln där", moln]);
-    if (vindLage) {
+    // vind: visas om den finns hamtad, aven i molnlaget
+    {
       const t3 = Math.min(Math.round(t / VIND_DT) * VIND_DT, Math.floor((M.nt - 1) / VIND_DT) * VIND_DT), pts = vindPunkter(t3);
       let nb = null; for (const p of pts) if (!nb || Math.abs(p.z - z) < Math.abs(nb.z - z)) nb = p;
-      rad.push(["Vind där", nb ? p2(Math.round(nb.dir / 10) % 36 || 36) + "0° " + Math.round(nb.kt) + " kt (vid " + Math.round(nb.z * FOT / 50) * 50 + " ft" + (t3 !== t ? ", " + p2(new Date(M.t0 + t3 * 3600e3).getUTCHours()) + " UTC" : "") + ")" : "ej hämtad"]);
+      if (nb) rad.push(["Vind där", p2(Math.round(nb.dir / 10) % 36 || 36) + "0° " + Math.round(nb.kt) + " kt (vid " + Math.round(nb.z * FOT / 50) * 50 + " ft" + (t3 !== t ? ", " + p2(new Date(M.t0 + t3 * 3600e3).getUTCHours()) + " UTC" : "") + ")"]);
+      else if (vindLage) rad.push(["Vind där", "ej hämtad"]);
     }
     // isindex pa narmaste indexhojd
     let jB = -1; M.h5.forEach((h, j) => { if (jB < 0 || Math.abs(h - z) < Math.abs(M.h5[jB] - z)) jB = j; });
@@ -929,15 +944,18 @@ function tipsText(t, yPix) {
       rad.push(["Isindex", (isFinite(v) ? v : "–") + (kat ? " (" + ISNAMN[kat] + ")" : "") + " vid " + M.h5[jB] + " m"]);
     }
   }
+  rad.push(["", "Marknivå", "avdel"]);
   if (M.ytaOK[t]) {
     const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
     rad.push(["T / Td", (isFinite(tk) ? (tk - 273.15).toFixed(1) : "–") + " / " + (isFinite(td) ? td.toFixed(1) : "–") + " °C"]);
     if (isFinite(Y(3))) rad.push(["Vind", (isFinite(Y(4)) ? p2(Math.round(Y(4) / 10) % 36 || 36) + "0° " : "") + Math.round(Y(3) * KT) + " kt, byar " + (isFinite(Y(5)) ? Math.round(Y(5) * KT) : "–") + " kt"]);
     if (isFinite(Y(6))) rad.push(["Sikt", Y(6) >= 10000 ? Math.round(Y(6) / 1000) + " km" : Math.round(Y(6) / 100) * 100 + " m"]);
     let nb = NaN; if (t > 0 && M.ytaOK[t - 1]) nb = Math.max(0, Y(7) - M.yta[7][t - 1]);
+    const vd = vader(nb, Y(8), Y(6)); if (vd) rad.push(["Väder", vd]);
     if (isFinite(nb)) rad.push(["Nederbörd", nb.toFixed(1) + " mm/h"]);
     if (M.cbHar[t]) rad.push(["Molnbas", isFinite(M.cb[t]) ? Math.round(M.cb[t] * FOT / 10) * 10 + " ft (" + Math.round(M.cb[t]) + " m) över mark" : "inget moln"]);
     if (isFinite(Y(9))) rad.push(["Totalt moln", Math.round((Y(9) > 1.5 ? Y(9) / 100 : Y(9)) * 8) + "/8"]);
+    if (M.isKat && M.isKat[t]) rad.push(["Nedisning", ISNAMN[M.isKat[t]] + " (någonstans i höjdled)"]);
   } else rad.push(["", "markdata ej hämtade"]);
   return rad;
 }
