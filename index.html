@@ -249,7 +249,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <span>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt (horisontell, 2 m) i synoptisk kod (80 = 30 km)</span>
   <span>Bas hft = modellens molnbas i hundratal fot över mark</span>
-  <span id="fMetar" hidden>METAR (observerat, magenta, ett streck per observation vid observationstiden, underkant = molnbas):<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="7" width="12" height="2" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>FEW<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="5" width="12" height="4" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>SCT<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="3" width="12" height="6" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>BKN<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="1" width="12" height="8" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>OVC<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="2" width="12" height="6" fill="#fff" stroke="#c000c0" stroke-width="1.6" stroke-dasharray="3 2"/></svg>VV (vertikal sikt) – hela texten i hovringen</span>
+  <span id="fMetar" hidden>METAR (observerat, magenta, ett streck per observation vid observationstiden, underkant = molnbas):<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="7" width="12" height="2" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>FEW<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="5" width="12" height="4" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>SCT<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="3" width="12" height="6" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>BKN<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="1" width="12" height="8" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>OVC<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="2" width="12" height="6" fill="#fff" stroke="#c000c0" stroke-width="1.6" stroke-dasharray="3 2"/></svg>VV (vertikal sikt) – hela texten i hovringen. Raderna Sikt obs och T obs = METAR närmast hela timmen (±30 min).</span>
 </div>
 </div>
 </section>
@@ -682,7 +682,19 @@ function hojder(t, kFran) {
 //  RITA
 // ===================================================================
 const COL = 22, PLOT_H = 400, TOPP_RAD = 30, RAD_H = 17;
-const RADER = ["Tid UTC", "T °C", "Td °C", "Vind", "Vind kt", "By kt", "Sikt", "Väder", "Moln", "Bas hft", "Nb mm/h", "Nedisning"];
+// Tabellraderna under diagrammet (nyckel, etikett). Obs-raderna (magenta) visas bara nar METAR ar pa.
+const RAD_NAMN = { tid: "Tid UTC", sikt: "Sikt", siktObs: "Sikt obs", bas: "Bas hft", t: "T °C", tObs: "T obs", td: "Td °C",
+  pil: "Vind", vind: "Vind kt", by: "By kt", vader: "Väder", moln: "Moln", nb: "Nb mm/h", is: "Nedisning" };
+const METAR_MATCH_MIN = 30;   // obs inom sa manga minuter fran modelltiden raknas till timmen
+function tabellRader(obs) {
+  return ["tid", "sikt", ...(obs ? ["siktObs"] : []), "bas", "t", ...(obs ? ["tObs"] : []), "td", "pil", "vind", "by", "vader", "moln", "nb", "is"];
+}
+// Observationen narmast tiden tm (ms), inom METAR_MATCH_MIN minuter
+function narmasteObs(tm) {
+  if (!visaMetar || !M.metar) return null; let nb = null;
+  for (const o of M.metar) if (Math.abs(o.t - tm) <= METAR_MATCH_MIN * 60e3 && (!nb || Math.abs(o.t - tm) < Math.abs(nb.t - tm))) nb = o;
+  return nb;
+}
 const NS = "http://www.w3.org/2000/svg";
 function el(namn, attr, text) { const e = document.createElementNS(NS, namn); for (const k in attr) e.setAttribute(k, attr[k]); if (text !== undefined) e.textContent = text; return e; }
 
@@ -734,7 +746,11 @@ function tolkaMetar(raw) {
   const lager = []; let vv = null, cavok = /\bCAVOK\b/.test(raw), nsc = /\b(NSC|NCD|SKC|CLR)\b/.test(raw);
   for (const m of raw.matchAll(/\b(FEW|SCT|BKN|OVC)(\d{3})(CB|TCU)?\b/g)) lager.push({ kat: ["", "FEW", "SCT", "BKN", "OVC"].indexOf(m[1]), ft: +m[2] * 100, typ: m[3] || "" });
   const v = raw.match(/\bVV(\d{3})\b/); if (v) vv = +v[1] * 100;
-  return { lager, vv, inga: cavok || nsc };
+  // sikt: forsta fyrsiffriga gruppen efter vinden (9999 = 10 km eller mer); CAVOK = 9999
+  let sikt = cavok ? 9999 : NaN; const s = raw.match(/\b(?:\d{5}|VRB\d{2})(?:G\d{2,3})?KT(?:\s+\d{3}V\d{3})?\s+(\d{4})(?:NDV)?\b/); if (s) sikt = +s[1];
+  // temperatur: TT/TdTd (M = minus)
+  const tt = raw.match(/\s(M?\d{2})\/(M?\d{2})?(?=\s)/), tc = tt ? parseInt(tt[1].replace("M", "-"), 10) : NaN;
+  return { lager, vv, inga: cavok || nsc, sikt, tc };
 }
 async function hamtaMetar(icao, timmar) {
   const k = icao + ":" + timmar, c = metarCache.get(k); if (c && Date.now() - c.t < METAR_TTL) return c.obs;
@@ -810,6 +826,7 @@ function ritaNivaer(svg, sk, zTopp, c, fore) {
 
 function rita() {
   if (!M || !M.stat) return;
+  const RADER = tabellRader(visaMetar && M.metar && M.metar.length > 0), R = Object.fromEntries(RADER.map((k, i) => [k, i]));
   const sk = skala(), nt = M.nt, B = nt * COL, EXTRA = vindLage ? VIND_UNDER : 0, H = TOPP_RAD + PLOT_H + 8 + EXTRA + RADER.length * RAD_H + 6;
   const svg = $("svg"), ax = $("axel"); svg.innerHTML = ""; ax.innerHTML = "";
   svg.setAttribute("width", B); svg.setAttribute("height", H); ax.setAttribute("height", H);
@@ -892,33 +909,38 @@ function rita() {
 
   // tabellrader
   const yRad = i => sk.botten + 8 + EXTRA + i * RAD_H + 12;
-  RADER.forEach((r, i) => ax.appendChild(el("text", { x: 4, y: yRad(i), "font-size": 10, fill: c("--dim") }, r)));
+  RADER.forEach((r, i) => ax.appendChild(el("text", { x: 4, y: yRad(i), "font-size": 10, fill: /Obs$/.test(r) ? METAR_FARG : c("--dim") }, RAD_NAMN[r])));
   const txt = (t, i, s, f) => { if (s !== "" && s !== undefined) svg.appendChild(el("text", { x: t * COL + COL / 2, y: yRad(i), "font-size": String(s).length >= 4 ? 8.5 : 10, "text-anchor": "middle", fill: f || c("--fg") }, s)); };
   for (let t = 0; t < nt; t++) {
-    const d = new Date(t0 + t * 3600e3); txt(t, 0, p2(d.getUTCHours()), c("--dim"));
-    // molnbas i hundratal fot med en decimal - visar hur diskret modellen ar (basen hamnar pa modellnivaerna)
-    // (en decimal under 10 hft, hela hundratal fran 10 hft)
-    // avrundat nedat som i METAR: en decimal under 10 hft, hela hundratal fran 10 hft
-    if (isFinite(M.cb[t])) { const h = M.cb[t] * FOT / 100; txt(t, 9, h < 10 ? (Math.floor(h * 10) / 10).toFixed(1) : String(Math.floor(h)), c("--bastext")); }
+    const d = new Date(t0 + t * 3600e3); txt(t, R.tid, p2(d.getUTCHours()), c("--dim"));
+    // observerat (METAR narmast modelltiden), magenta
+    if (R.siktObs !== undefined) {
+      const o = narmasteObs(t0 + t * 3600e3);
+      if (o && isFinite(o.sikt)) txt(t, R.siktObs, o.sikt >= 9999 ? "60+" : vv(o.sikt), METAR_FARG);
+      if (o && isFinite(o.tc)) txt(t, R.tObs, String(o.tc), METAR_FARG);
+    }
+    // molnbas i hundratal fot, avrundat nedat som i METAR: en decimal under 10 hft, hela hundratal fran 10 hft
+    // (visar hur diskret modellen ar - basen hamnar pa modellnivaerna)
+    if (isFinite(M.cb[t])) { const h = M.cb[t] * FOT / 100; txt(t, R.bas, h < 10 ? (Math.floor(h * 10) / 10).toFixed(1) : String(Math.floor(h)), c("--bastext")); }
     if (!M.ytaOK[t]) continue;
     const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
-    if (isFinite(tk)) txt(t, 1, String(Math.round(tk - 273.15)), c("--red"));
-    if (isFinite(td)) txt(t, 2, String(Math.round(td)), c("--red"));
+    if (isFinite(tk)) txt(t, R.t, String(Math.round(tk - 273.15)), c("--red"));
+    if (isFinite(td)) txt(t, R.td, String(Math.round(td)), c("--red"));
     if (Y(3) > 0.5 && isFinite(Y(4))) {
-      const cx = t * COL + COL / 2, cy = yRad(3) - 4, L = 7, r = (Y(4) + 180) * Math.PI / 180;
+      const cx = t * COL + COL / 2, cy = yRad(R.pil) - 4, L = 7, r = (Y(4) + 180) * Math.PI / 180;
       const x1 = cx - Math.sin(r) * L, y1 = cy + Math.cos(r) * L, x2 = cx + Math.sin(r) * L, y2 = cy - Math.cos(r) * L;
       svg.appendChild(el("line", { x1, y1, x2, y2, stroke: c("--fg"), "stroke-width": 1.2 }));
       const a = Math.atan2(y2 - y1, x2 - x1);
       svg.appendChild(el("path", { d: `M${x2} ${y2} L${x2 - 4 * Math.cos(a - 0.5)} ${y2 - 4 * Math.sin(a - 0.5)} L${x2 - 4 * Math.cos(a + 0.5)} ${y2 - 4 * Math.sin(a + 0.5)} Z`, fill: c("--fg") }));
     }
-    if (isFinite(Y(3))) txt(t, 4, String(Math.round(Y(3) * KT)));
-    if (isFinite(Y(5))) txt(t, 5, String(Math.round(Y(5) * KT)));
-    txt(t, 6, vv(Y(6)));
+    if (isFinite(Y(3))) txt(t, R.vind, String(Math.round(Y(3) * KT)));
+    if (isFinite(Y(5))) txt(t, R.by, String(Math.round(Y(5) * KT)));
+    txt(t, R.sikt, vv(Y(6)));
     let nb = NaN; if (t === 0) nb = 0; else if (M.ytaOK[t - 1] && isFinite(Y(7)) && isFinite(M.yta[7][t - 1])) nb = Math.max(0, Y(7) - M.yta[7][t - 1]);
-    txt(t, 7, vader(nb, Y(8), Y(6)));
-    txt(t, 8, molnCirkel(Y(9)));
-    if (isFinite(nb) && nb >= 0.05) txt(t, 10, nb.toFixed(1));
-    if (M.isKat && M.isKat[t]) txt(t, 11, ISNAMN[M.isKat[t]], c("--red"));
+    txt(t, R.vader, vader(nb, Y(8), Y(6)));
+    txt(t, R.moln, molnCirkel(Y(9)));
+    if (isFinite(nb) && nb >= 0.05) txt(t, R.nb, nb.toFixed(1));
+    if (M.isKat && M.isKat[t]) txt(t, R.is, ISNAMN[M.isKat[t]], c("--red"));
   }
   // info
   const d0 = new Date(t0);
