@@ -229,7 +229,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   </div>
   <button class="sek liten" id="lNiv" aria-pressed="false" title="Visa modellnivåernas höjd (MEPS har 65 nivåer, 64 = lägsta)">Modellnivåer</button>
   <button class="sek liten" id="lMetar" aria-pressed="false" title="Visa observerade molnskikt (METAR) från närmaste flygplats">METAR</button>
-  <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; ljust = FEW, mörkt = OVC, vit med streckad kant = VV (vertikal sikt)"></span>
+  <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; tunt = FEW, tjockt = OVC, vit med streckad kant = VV (vertikal sikt)"></span>
   <span class="lagetips" id="lageTips"></span>
 </div>
 <div class="diagram">
@@ -718,7 +718,7 @@ function molnCirkel(f) { if (!isFinite(f)) return ""; if (f > 1.5) f /= 100; con
 const AWC = "https://aviationweather.gov/api/data/metar";
 const METAR_MELLAN = "https://modelltittaren.metvyer.workers.dev/metar";
 const METAR_AVST = 8, METAR_BAND_MIN = 20, METAR_TTL = 5 * 60e3;
-const METAR_FARG = ["", "#f0a8f0", "#e060e0", "#b000b0", "#600060"];   // FEW SCT BKN OVC (magenta)
+const METAR_FARG = "#c000c0", METAR_HOJD = [0, 2, 4, 6, 8];   // samma magenta; tjocklek (px) FEW SCT BKN OVC som i NfL Diagram
 const metarCache = new Map();
 function narmasteICAO(lat, lon) {
   const lista = PUNKTER.map(p => [p[1], p[2], p[3]]).concat(FLYG.map(f => [f[0], f[2], f[3]]));
@@ -769,13 +769,14 @@ function ritaMetar(svg, sk, zTopp) {
   const g = el("g", { "pointer-events": "none" }), w = Math.max(3, COL * METAR_BAND_MIN / 60), toppFt = zTopp * FOT;
   for (const o of M.metar) {
     const x = (o.t - M.t0) / 3600e3 * COL; if (x < 0 || x > M.nt * COL) continue;
-    const band = (ft, fyll, kant, bredd, streck) => {
+    // bandets underkant = molnbasen; tjockare ju mer moln (FEW tunt ... OVC tjockt)
+    const band = (ft, h, fyll, kant, bredd, streck) => {
       if (ft > toppFt) return; const y = sk.y(ft);
-      g.appendChild(el("rect", { x: x - w / 2, y: y - 6, width: w, height: 6, fill: fyll, stroke: kant, "stroke-width": bredd, "stroke-dasharray": streck || "" }));
+      g.appendChild(el("rect", { x: x - w / 2, y: y - h, width: w, height: h, fill: fyll, stroke: kant, "stroke-width": bredd, "stroke-dasharray": streck || "" }));
     };
-    for (const l of o.lager) band(l.ft, METAR_FARG[l.kat], "#ffffff", 0.8);
+    for (const l of o.lager) band(l.ft, METAR_HOJD[l.kat], METAR_FARG, "#ffffff", 0.6);
     // VV (vertikal sikt): vit ruta med streckad magenta kant - skiljer sig tydligt fran molnskikten
-    if (o.vv !== null) band(o.vv, "#ffffff", "#b000b0", 1.6, "3 2");
+    if (o.vv !== null) band(o.vv, 6, "#ffffff", METAR_FARG, 1.6, "3 2");
     if (o.inga) g.appendChild(el("text", { x, y: TOPP_RAD + 10, "font-size": 8, "text-anchor": "middle", fill: "#b000b0" }, "–"));
   }
   svg.appendChild(g);
