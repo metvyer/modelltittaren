@@ -1,0 +1,56 @@
+# Modelltittaren - publicera sidan (GitHub Pages via Actions)
+#
+# Kors nar koden i main andras, nar en forhamtning ar klar och for hand.
+# Bygger sidan av main + det senaste forhamtade datat (grenen "data", mappen
+# forhamtat/) och publicerar. Tar ungefar en minut.
+name: Publicera
+
+on:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: ["Förhämtning"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publicera
+  cancel-in-progress: true
+
+jobs:
+  publicera:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+    steps:
+      - name: Hämta koden
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Hämta förhämtat data (grenen data)
+        run: |
+          mkdir -p forhamtat
+          if git ls-remote --exit-code origin data >/dev/null 2>&1; then
+            git fetch --depth 1 origin data:refs/remotes/origin/data
+            git --work-tree=forhamtat checkout origin/data -- .
+            git reset -q
+          fi
+          cat forhamtat/th/index.json 2>/dev/null | head -3 || true
+
+      - name: Bygg sidan
+        run: |
+          mkdir -p _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' ./ _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - uses: actions/deploy-pages@v4

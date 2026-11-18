@@ -1,26 +1,19 @@
 # Modelltittaren - forhamtning och publicering
 #
-# Var 10:e minut: finns en ny komplett MEPS-korning hamtas tid-hojd for de
-# forvalda flygplatserna (verktyg/forhamta.py). Datat sparas pa grenen "data"
-# (skrivs over varje gang - ingen historik som vaxer) och sidan publiceras med
-# datat i mappen forhamtat/. Kors aven vid andringar i main och for hand.
-#
-# Publiceringen kraver att Settings -> Pages -> Source = "GitHub Actions".
-# Ar den inte installd an hamtas och sparas datat anda, men sidan publiceras
-# som forut direkt fran main (steget hoppas over).
+# Var 10:e minut (GitHub kor det i praktiken ca en gang i timmen): finns en ny
+# komplett MEPS-korning hamtas tid-hojd for de forvalda flygplatserna
+# (verktyg/forhamta.py). Datat sparas pa grenen "data" (skrivs over varje gang -
+# ingen historik som vaxer). Nar korningen ar klar startar "Publicera"
+# (publicera.yml), som lagger ut sidan med datat.
 name: Förhämtning
 
 on:
   schedule:
     - cron: "2,12,22,32,42,52 * * * *"
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: forhamtning
@@ -29,8 +22,6 @@ concurrency:
 jobs:
   forhamta:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
     timeout-minutes: 90
     steps:
       - name: Hämta koden
@@ -60,29 +51,3 @@ jobs:
           git -c user.name="modelltittaren-bot" -c user.email="actions@users.noreply.github.com" commit -q -m "Förhämtat data $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
           rm -rf .git
-
-      - name: Publiceras sidan via Actions?
-        id: pages
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          typ=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null || echo okand)
-          echo "Pages build_type: $typ"
-          echo "typ=$typ" >> "$GITHUB_OUTPUT"
-
-      - name: Bygg sidan med datat
-        if: steps.pages.outputs.typ == 'workflow' && (steps.hamta.outputs.andrat == 'ja' || github.event_name != 'schedule')
-        run: |
-          mkdir -p _site
-          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' ./ _site/
-          ls _site _site/forhamtat || true
-
-      - name: Ladda upp sidan
-        if: steps.pages.outputs.typ == 'workflow' && (steps.hamta.outputs.andrat == 'ja' || github.event_name != 'schedule')
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Publicera
-        if: steps.pages.outputs.typ == 'workflow' && (steps.hamta.outputs.andrat == 'ja' || github.event_name != 'schedule')
-        uses: actions/deploy-pages@v4
