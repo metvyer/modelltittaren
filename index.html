@@ -821,7 +821,8 @@ function rita() {
     const d = new Date(t0 + t * 3600e3); txt(t, 0, p2(d.getUTCHours()), c("--dim"));
     // molnbas i hundratal fot med en decimal - visar hur diskret modellen ar (basen hamnar pa modellnivaerna)
     // (en decimal under 10 hft, hela hundratal fran 10 hft)
-    if (isFinite(M.cb[t])) { const h = M.cb[t] * FOT / 100; txt(t, 9, h < 9.95 ? h.toFixed(1) : String(Math.round(h)), c("--bastext")); }
+    // avrundat nedat som i METAR: en decimal under 10 hft, hela hundratal fran 10 hft
+    if (isFinite(M.cb[t])) { const h = M.cb[t] * FOT / 100; txt(t, 9, h < 10 ? (Math.floor(h * 10) / 10).toFixed(1) : String(Math.floor(h)), c("--bastext")); }
     if (!M.ytaOK[t]) continue;
     const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
     if (isFinite(tk)) txt(t, 1, String(Math.round(tk - 273.15)), c("--red"));
