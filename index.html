@@ -266,8 +266,8 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 <div class="tips ktips" id="kTips" hidden></div>
 <div class="vagval"><label for="vagVal">Hämta MEPS via mellanservern (Cloudflare):</label>
   <select id="vagVal">
+    <option value="alltid">Alltid (standard) – delar cache med kollegorna, avlastar met.no; direkt om den inte svarar</option>
     <option value="auto">Auto – bara när thredds inte nås direkt (t.ex. jobbnätet)</option>
-    <option value="alltid">Alltid – delar cache med kollegorna, avlastar met.no</option>
     <option value="av">Av – alltid direkt till thredds.met.no</option>
   </select>
   <span class="lagetips" title="Gäller MEPS-data. METAR/TAF går alltid via mellanservern när de inte kan hämtas direkt.">ⓘ</span>
@@ -394,7 +394,8 @@ function status(t, klass) {
 let VAG = null, vagLofte = null;
 // Installning (sparas i webblasaren): auto = direkt forst, mellanservern om thredds inte svarar;
 // alltid = via mellanservern (delad cache), direkt bara om mellanservern inte svarar; av = alltid direkt.
-let VAG_LAGE = ["auto", "alltid", "av"].includes(lasa("mt:vag")) ? lasa("mt:vag") : "auto";
+// Standard (18/11): alltid via mellanservern - delad cache, avlastar met.no; direkt om den inte svarar.
+let VAG_LAGE = ["auto", "alltid", "av"].includes(lasa("mt:vag")) ? lasa("mt:vag") : "alltid";
 function visaVag() {
   const e = $("vagInfo"); if (!e) return;
   e.textContent = VAG !== "mellan" ? "" : VAG_LAGE === "alltid" ? " Hämtar via mellanserver (Cloudflare), enligt inställningen."
@@ -425,6 +426,7 @@ function valjVag() {
 // Hamtar en URL. Ett anrop i taget, tidsgrans, omforsok vid 429/5xx.
 // binar = true: svaret lases som byte (ArrayBuffer) i .buf i stallet for text.
 async function hamta(url, medRetry = true, binar = false) {
+  const orig = url;
   if ((await valjVag()) === "mellan" && url.startsWith(BAS)) url = MELLAN + url.slice(BAS.length);
   for (let f = 1; f <= 4; f++) {
     if (stoppad) throw new Error("stoppad");
@@ -437,6 +439,11 @@ async function hamta(url, medRetry = true, binar = false) {
     } catch (e) { if (stoppad) throw new Error("stoppad"); st = 0; }
     clearTimeout(tid);
     if (st === 0 && VAG === "direkt") { VAG = null; vagLofte = null; }   // natet bytt? prova vagen igen nasta anrop
+    // mellanservern svarar inte alls mitt i en hamtning -> resten av besoket direkt till thredds
+    if (st === 0 && url !== orig && VAG === "mellan") {
+      VAG = "direkt"; vagLofte = Promise.resolve("direkt"); visaVag(); url = orig;
+      status("Mellanservern svarar inte – fortsätter direkt mot thredds.met.no …"); f--; continue;
+    }
     if (st === 200) return { st, txt, buf };
     if (st === 404 || st === 400 || st === 403) return { st, txt };
     if (!medRetry && st !== 429) return { st, txt };
