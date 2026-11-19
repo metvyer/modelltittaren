@@ -1,0 +1,46 @@
+# Modelltittaren - testkorning mot riktiga data (NYTT 19/11)
+#
+# Startas bara FOR HAND: Actions -> "Testa thredds" -> Run workflow (valj
+# flygplats). Kor verktyg/testa_thredds.py: senaste ensemblekorning, medlems-
+# attributen (.das), meteogramfragan, ett sannolikhetsomrade (binart) och
+# mellanservern jamfort med direkt. Resultatet visas i korningens Summary och
+# som fil under Artifacts. Andrar ingenting i repot och publicerar inget.
+name: Testa thredds
+
+on:
+  workflow_dispatch:
+    inputs:
+      punkt:
+        description: "Flygplats (ICAO) bland de förvalda, t.ex. ESCM, ESDF, ESIB"
+        default: "ESCM"
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testa-thredds
+  cancel-in-progress: false
+
+jobs:
+  testa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Hämta koden
+        uses: actions/checkout@v4
+
+      - name: Testa mot thredds
+        env:
+          MT_PUNKT: ${{ inputs.punkt }}
+        run: python3 verktyg/testa_thredds.py
+
+      - name: Spara resultatet
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testresultat
+          path: |
+            testresultat.md
+            das_ensemble.txt
+          if-no-files-found: ignore

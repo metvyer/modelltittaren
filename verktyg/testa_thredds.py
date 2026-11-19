@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Modelltittaren - testkorning mot riktiga data (NYTT 19/11, punkt 1 och 2 i lagesbilden).
+
+Startas FOR HAND i GitHub: Actions -> "Testa thredds" -> Run workflow.
+GitHub nar thredds.met.no aven nar Jakob inte sitter vid datorn, sa har testas
+samma anrop som sidan gor - utan webblasare:
+
+  A. Senaste kompletta ensemblekorning (subset-filen, 62 tider).
+  B. .das for ensemblefilen -> attributen for ensemble_member (vilken medlem
+     ar kontroll, vilken korning varje medlem kommer fran) - punkt 2.
+  C. Meteogram (samma fraga som knappen "Meteogram har"): 30 medlemmar x 62
+     timmar for byvind, nederbord, sikt och molnbas i en punkt. Tid, storlek,
+     antal varden, saknade varden, rimlighet (min/median/max).
+  D. Sannolikhetsomrade (samma fraga som "Hamta falt"): byvind +0..+12 h,
+     150 x 150 km kring punkten i 2,5 km, binart (.dods). Tid, storlek, och
+     per timme: andel medlemmar >= 32 kt, medel och hogsta - samma tal som
+     sidans Visa = Sannolikhet / Medel / Hogsta ska ge i den punkten.
+  E. Mellanservern (Cloudflare) jamfors med direkt: samma lilla anrop via
+     workern och direkt, status + borjan av svaret (morgonens 500-fel).
+
+Isolinjerna ritas i webblasaren och kan inte testas har - bara datat under dem.
+Resultatet skrivs i korningens sammanfattning (Summary) och som fil
+(testresultat.md + das_ensemble.txt) under Artifacts.
+
+Ett anrop i taget, paus mellan anropen, samma User-Agent som forhamtningen.
+Data fran MET Norway (thredds.met.no), CC BY 4.0. Bara standardbiblioteket.
+"""
+import math, os, re, statistics, struct, sys, time, urllib.error, urllib.request
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import forhamta as F   # ruta(), enc(), PUNKTER - samma rakning som sidan
+
+# ---- Installningar (andras har) ----
+BAS = "https://thredds.met.no/thredds/dodsC/mepslatest/"
+MELLAN = "https://modelltittaren.metvyer.workers.dev/mepslatest/"
+SIDA = "https://metvyer.github.io"           # mellanservern slapper bara igenom anrop "fran" sidan
+ENS_FIL = lambda dtg: "meps_lagged_6_h_subset_2_5km_" + dtg + ".ncml"
+PROV_FIL = "meps_lagged_6_h_latest_2_5km_latest.nc.ascii?time"
+UA = "Modelltittaren-test (github.com/metvyer/modelltittaren)"
+MEDL, TIDER = 30, 62
+PAUS = 3                                      # sekunder mellan anropen (snallt mot thredds)
+KT = 3600 / 1852
+FOT = 3.28084
+TROSK_KT = 32
+OMR_KM, OMR_TIMMAR = 150, 13                  # D: 150 x 150 km, +0..+12 h
+# Meteogrammets parametrar: namn, variabel, omrakning, enhet (samma som PPARAM i sannolikhet.js)
+PARAM = [("Byvind", "wind_speed_of_gust", lambda v: v * KT, "kt"),
+         ("Nederbörd ack", "precipitation_amount_acc", lambda v: v, "mm"),
+         ("Sikt", "visibility_in_air", lambda v: v, "m"),
+         ("Molnbas", "cloud_base_altitude", lambda v: v * FOT, "ft")]
+
+UT = []                                       # rader till sammanfattningen (markdown)
+def skriv(s=""):
+    print(s, flush=True); UT.append(s)
+
+
+def hamta(url, ursprung=None, tidsgrans=180, binart=False):
+    """Ett anrop. Returnerar (status, data, sekunder, byte). 429 -> en ny chans efter 30 s."""
+    for forsok in (1, 2):
+        h = {"User-Agent": UA}
+        if ursprung: h["Origin"] = ursprung
+        t0 = time.time(); st, data = 0, b""
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=tidsgrans) as r:
+                st, data = r.status, r.read()
+        except urllib.error.HTTPError as e:
+            st = e.code
+            try: data = e.read()
+            except Exception: data = b""
+        except Exception as e:
+            st, data = 0, str(e).encode()
+        sek = time.time() - t0
+        time.sleep(PAUS)
+        if st == 429 and forsok == 1:
+            print("  429 - vantar 30 s", flush=True); time.sleep(30); continue
+        return st, (data if binart else data.decode("utf-8", "replace")), sek, len(data)
+
+
+def tolka_grid(txt, var):
+    """Alla varden for variabeln ur ett ascii-svar (Grid: forsta blocket ar sjalva faltet)."""
+    vals, inne = [], False
+    for rad in txt.replace("\r", "").split("\n"):
+        r = rad.strip()
+        if r.startswith(var + "." + var + "[") or (r.startswith(var + "[") and r.endswith("]") and "," not in r):
+            inne = True; continue
+        if inne:
+            if not r: break
+            if r[0] == "[":
+                vals += [float(x) for x in r[r.rindex("]") + 1:].lstrip(",").split(",") if x.strip()]
+            elif "[" in r and r.endswith("]"):
+                break
+    return vals
+
+
+def ok_varde(v):
+    return math.isfinite(v) and abs(v) < 1e30   # _FillValue 9.96921E36 = saknas
+
+
+def las_dods(buf, n):
+    """Forsta arrayen i ett DAP2-binarsvar: DDS-text, 'Data:\\n', langd x2 (XDR), float32 big-endian."""
+    i = buf.find(b"\nData:\n")
+    if i < 0: return None
+    p = i + 7
+    antal = struct.unpack(">I", buf[p:p + 4])[0]
+    if antal < n or len(buf) < p + 8 + 4 * antal: return None
+    return struct.unpack(">%df" % antal, buf[p + 8:p + 8 + 4 * antal])
+
+
+def senaste_ens():
+    nu = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    d = nu - timedelta(hours=nu.hour % 3)
+    for i in range(6):
+        dtg = (d - timedelta(hours=3 * i)).strftime("%Y%m%dT%HZ")
+        st, txt, sek, _ = hamta(BAS + ENS_FIL(dtg) + ".ascii?time", tidsgrans=60)
+        m = re.search(r"\ntime\[(\d+)\]", txt) if st == 200 else None
+        n = int(m.group(1)) if m else 0
+        skriv(f"- {dtg}: svar {st}, {n} tider ({sek:.1f} s)")
+        if n >= TIDER: return dtg
+    return None
+
+
+def main():
+    punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
+    p = next((x for x in F.PUNKTER if x[1] == punkt), F.PUNKTER[5])
+    namn, icao, lat, lon = p
+    iy, ix = F.ruta(lat, lon)
+    skriv(f"# Test mot thredds {datetime.now(timezone.utc):%Y-%m-%d %H:%MZ}")
+    skriv(f"Punkt: {namn} {icao} ({lat}, {lon}) -> ruta iy={iy} ix={ix}")
+    skriv()
+
+    # ---- A. Senaste ensemblekorning ----
+    skriv("## A. Senaste kompletta ensemblekörning")
+    dtg = senaste_ens()
+    if not dtg:
+        skriv("**Ingen komplett körning hittad - testet avbryts.**"); return spara(1)
+    skriv(f"Vald: **{dtg}**"); skriv()
+
+    # ---- B. .das -> medlemsattribut ----
+    skriv("## B. ensemble_member-attribut (.das)")
+    st, das, sek, by = hamta(BAS + ENS_FIL(dtg) + ".das", tidsgrans=120)
+    skriv(f"Svar {st}, {by/1024:.0f} kB, {sek:.1f} s")
+    if st == 200:
+        with open("das_ensemble.txt", "w", encoding="utf-8") as f: f.write(das)
+        m = re.search(r"\n\s*ensemble_member \{(.*?)\n\s*\}", das, re.S)
+        skriv("```"); skriv(m.group(1).strip() if m else "(inget block ensemble_member hittat)"); skriv("```")
+        # globala rader som kan saga nagot om lagged-medlemmarna
+        glob = [r.strip() for r in das.split("\n") if re.search(r"lag|member|control|ensemble", r, re.I) and "ensemble_member {" not in r]
+        if glob:
+            skriv("Andra rader som nämner lag/member/control/ensemble (högst 25):"); skriv("```"); skriv("\n".join(glob[:25])); skriv("```")
+    # Ar det en variabel med varden? Hamta den (liten).
+    st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?ensemble_member", tidsgrans=60)
+    skriv(f"ensemble_member som värden: svar {st}, {sek:.1f} s")
+    if st == 200:
+        rader = [r for r in txt.split("\n") if r.strip() and not r.startswith("Dataset")][-3:]
+        skriv("```"); skriv("\n".join(rader)[:600]); skriv("```")
+    skriv()
+
+    # ---- C. Meteogram ----
+    skriv("## C. Meteogram (30 medlemmar × 62 h, samma fråga som sidan)")
+    skriv("| Parameter | Svar | Tid | kB | Värden | Saknas | +0 min/median/max | +24 min/median/max |")
+    skriv("|---|---|---|---|---|---|---|---|")
+    for pnamn, var, konv, enh in PARAM:
+        fraga = F.enc(f"{var}[0:1:{TIDER-1}][0][0:{MEDL-1}][{iy}][{ix}]")
+        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + fraga)
+        v = tolka_grid(txt, var) if st == 200 else []
+        sakn = sum(1 for x in v if not ok_varde(x))
+        def tre(t):
+            w = sorted(konv(x) for x in v[t*MEDL:(t+1)*MEDL] if ok_varde(x))
+            return f"{w[0]:.1f} / {statistics.median(w):.1f} / {w[-1]:.1f} {enh}" if w else "-"
+        okt = len(v) >= TIDER * MEDL
+        skriv(f"| {pnamn} | {st} | {sek:.1f} s | {by/1024:.0f} | {len(v)}{'' if okt else ' ⚠'} | {sakn} | {tre(0) if okt else '-'} | {tre(24) if okt else '-'} |")
+    skriv()
+
+    # ---- D. Sannolikhetsomrade, binart ----
+    skriv(f"## D. Sannolikhetsområde: byvind +0..+{OMR_TIMMAR-1} h, {OMR_KM}×{OMR_KM} km, 2,5 km, binärt")
+    halv = OMR_KM * 1000 // 2500 // 2
+    y0, y1, x0, x1 = iy - halv, iy + halv, ix - halv, ix + halv
+    ny, nx = y1 - y0 + 1, x1 - x0 + 1
+    fraga = F.enc(f"wind_speed_of_gust[0:1:{OMR_TIMMAR-1}][0][0:{MEDL-1}][{y0}:1:{y1}][{x0}:1:{x1}]")
+    n = OMR_TIMMAR * MEDL * ny * nx
+    st, buf, sek, by = hamta(BAS + ENS_FIL(dtg) + ".dods?" + fraga, tidsgrans=300, binart=True)
+    v = las_dods(buf, n) if st == 200 else None
+    skriv(f"Svar {st}, {by/1048576:.1f} MB, {sek:.1f} s, {ny}×{nx} rutor, väntat {n:,} värden -> {'OK' if v else 'KUNDE INTE LÄSAS'}".replace(",", " "))
+    if v:
+        cy, cx = iy - y0, ix - x0
+        skriv(f"I punkten ({namn}), per timme - det sidan ska visa för Sannolikhet ≥{TROSK_KT} kt / Medel / Högsta / Medlem 0:")
+        skriv("| Tid | ≥32 kt | Medel kt | Högsta kt | Medlem 0 kt |"); skriv("|---|---|---|---|---|")
+        for t in range(OMR_TIMMAR):
+            w = [v[((t * MEDL + m) * ny + cy) * nx + cx] * KT for m in range(MEDL)]
+            w = [x for x in w if math.isfinite(x) and x < 1e6]
+            if not w: skriv(f"| +{t} | - | - | - | - |"); continue
+            over = sum(1 for x in w if x >= TROSK_KT)
+            skriv(f"| +{t} | {over}/{len(w)} ({100*over/len(w):.0f} %) | {statistics.mean(w):.1f} | {max(w):.1f} | {w[0]:.1f} |")
+        # hela omradet: hur manga rutor nar 30 % / 70 % nagon gang i perioden (underlag for isolinjerna)
+        n30 = n70 = 0
+        for y in range(ny):
+            for x in range(nx):
+                over = 0
+                for m in range(MEDL):
+                    if any(v[((t * MEDL + m) * ny + y) * nx + x] * KT >= TROSK_KT for t in range(OMR_TIMMAR)): over += 1
+                n30 += over >= 0.3 * MEDL; n70 += over >= 0.7 * MEDL
+        skriv(f"Hela området, byvind ≥{TROSK_KT} kt någon gång +0..+{OMR_TIMMAR-1}: {n30} rutor ≥30 %, {n70} rutor ≥70 % av {ny*nx} (isolinjerna ska omsluta dessa).")
+    skriv()
+
+    # ---- E. Mellanservern mot direkt ----
+    skriv("## E. Mellanservern (Cloudflare) jämfört med direkt")
+    skriv("| Väg | Fil | Svar | Tid | Början av svaret |"); skriv("|---|---|---|---|---|")
+    for vag, bas, urs in (("direkt", BAS, None), ("mellanserver", MELLAN, SIDA)):
+        for fil in (PROV_FIL, ENS_FIL(dtg) + ".ascii?time"):
+            st, txt, sek, by = hamta(bas + fil, ursprung=urs, tidsgrans=60)
+            borjan = " ".join(txt.split())[:120].replace("|", "/")
+            skriv(f"| {vag} | {fil.split('.ascii')[0].split('.nc')[0]} | {st} | {sek:.1f} s | {borjan if st != 200 else '(OK)'} |")
+    skriv()
+    skriv("Isolinjerna ritas i webbläsaren och testas inte här. Data: MET Norway, CC BY 4.0.")
+    return spara(0)
+
+
+def spara(kod):
+    text = "\n".join(UT) + "\n"
+    with open("testresultat.md", "w", encoding="utf-8") as f: f.write(text)
+    sam = os.environ.get("GITHUB_STEP_SUMMARY")
+    if sam:
+        with open(sam, "a", encoding="utf-8") as f: f.write(text)
+    return kod
+
+
+if __name__ == "__main__":
+    sys.exit(main())
