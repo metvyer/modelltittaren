@@ -540,7 +540,7 @@ function probTips(e) {
 // ---------- Meteogram for en punkt (NYTT 19/11) ----------
 // Knappen "Meteogram har": hela korningen (+0..+61) for vald parameter i vald punkt, alla 30 medlemmar.
 // En liten fraga (30 x 62 varden) -> sparas i minnet och via mellanserverns cache. Ritar per timme en lada
-// (10-90 % av medlemmarna), median, streck min-max, medlem 0 som linje, troskeln och vald period skuggad.
+// (bred 25-75 %, smal 10-90 % av medlemmarna), median, streck min-max, medlem 0 som linje, troskeln och vald period skuggad.
 // Nederbord visas ackumulerad fran +0.
 const METEO_TAK = { by: null, nb: null, sikt: 10000, bas: 5000 };   // y-axelns tak (m / ft) for sikt och bas
 const meteoCache = new Map();
@@ -608,11 +608,13 @@ function ritaMeteogram() {
   const lada = "#7aa7e0", visa = visaLage(), vm = /^m\d+$/.test(visa) ? +visa.slice(1) : null;
   for (let t = 0; t < nt; t++) {
     const s = S.map(u => u[t]).filter(isFinite).sort((p, q) => p - q); if (!s.length) continue;
-    const x = VM + t * KOL + KOL / 2, q10 = kvantil(s, 0.1), q50 = kvantil(s, 0.5), q90 = kvantil(s, 0.9);
+    const x = VM + t * KOL + KOL / 2, q10 = kvantil(s, 0.1), q25 = kvantil(s, 0.25), q50 = kvantil(s, 0.5), q75 = kvantil(s, 0.75), q90 = kvantil(s, 0.9);
     g("line", { x1: x, x2: x, y1: y(s[0]), y2: y(s[s.length - 1]), stroke: lada, "stroke-width": 1 });
-    g("rect", { x: x - KOL * 0.33, y: y(q90), width: KOL * 0.66, height: Math.max(1, y(q10) - y(q90)), fill: lada, opacity: 0.75 });
+    // smal lada 10-90 %, bred lada 25-75 % ovanpa
+    g("rect", { x: x - KOL * 0.18, y: y(q90), width: KOL * 0.36, height: Math.max(1, y(q10) - y(q90)), fill: "#a9c6ec" });
+    g("rect", { x: x - KOL * 0.38, y: y(q75), width: KOL * 0.76, height: Math.max(1, y(q25) - y(q75)), fill: lada });
     g("line", { x1: x - KOL * 0.38, x2: x + KOL * 0.38, y1: y(q50), y2: y(q50), stroke: "#1b3a6b", "stroke-width": 1.6 });
-    const ti = el("title"); ti.textContent = tidText(t) + "\nmin " + s[0].toFixed(1) + " · 10 % " + q10.toFixed(1) + " · median " + q50.toFixed(1) + " · 90 % " + q90.toFixed(1) + " · max " + s[s.length - 1].toFixed(1) + " " + pa.enhet +
+    const ti = el("title"); ti.textContent = tidText(t) + "\nmin " + s[0].toFixed(1) + " · 10 % " + q10.toFixed(1) + " · 25 % " + q25.toFixed(1) + " · median " + q50.toFixed(1) + " · 75 % " + q75.toFixed(1) + " · 90 % " + q90.toFixed(1) + " · max " + s[s.length - 1].toFixed(1) + " " + pa.enhet +
       (isFinite(trosk) && !ack ? "\n" + s.filter(w => pa.villkor === "≥" ? w >= trosk : w < trosk).length + " av " + s.length + " " + pa.villkor + " " + trosk + " " + pa.enhet : "");
     const hit = el("rect", { x: VM + t * KOL, y: TOPP, width: KOL, height: H, fill: "transparent" }); hit.appendChild(ti); svg.appendChild(hit);
   }
@@ -624,7 +626,7 @@ function ritaMeteogram() {
   if (isFinite(trosk) && !ack) { g("line", { x1: VM, x2: VM + B, y1: y(trosk), y2: y(trosk), stroke: "#f97316", "stroke-width": 1.4, "stroke-dasharray": "6 3" });
     g("text", { x: VM + B - 2, y: y(trosk) - 3, "font-size": 9.5, "text-anchor": "end", fill: "#c2410c" }, "tröskel " + trosk.toLocaleString("sv-SE") + " " + pa.enhet); }
   $("pMeteoTitel").textContent = "Meteogram " + pa.namn.split(",")[0].toLowerCase() + (ack ? " (ackumulerad från +0)" : "") + " – " + M0.lat.toFixed(2) + "N " + M0.lon.toFixed(2) + "E, körning " + M0.dtg;
-  $("pMeteoForkl").textContent = "Låda = 10–90 % av medlemmarna, mörkt streck = median, tunt streck = min–max. Röd linje = medlem 0" +
+  $("pMeteoForkl").textContent = "Bred låda = 25–75 % av medlemmarna, smal låda = 10–90 %, mörkt streck = median, tunt streck = min–max. Röd linje = medlem 0" +
     (vm !== null && vm !== 0 ? ", svart streckad = medlem " + vm : "") + (isFinite(trosk) && !ack ? ", orange = tröskel" : "") + ". Blå skuggning = vald period. Håll musen över en timme för värden." +
     (METEO_TAK[M0.v] ? " Skalan slutar vid " + METEO_TAK[M0.v].toLocaleString("sv-SE") + " " + pa.enhet + "." : "");
   ruta_.hidden = false;
