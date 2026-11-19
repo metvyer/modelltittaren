@@ -39,8 +39,9 @@ function cachetid(fil, fraga) {
   if (fraga === "?time") return CACHE_TIDFRAGA;
   const m = fil.match(/_(\d{4})(\d{2})(\d{2})T(\d{2})Z/);
   if (!m) return CACHE_LATEST;
-  const bas = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4]);
-  return Date.now() - bas < 3 * 3600e3 ? CACHE_NY_KORNING : CACHE_GAMMAL_KORNING;
+  // 19/11 kvall: sidan hamtar bara ur KOMPLETTA korningar, och ett lyckat svar for en timme andras inte -> 6 h aven
+  // for nya korningar (fasta block: kollegor som tittar pa samma omrade far svaret ur cachen)
+  return CACHE_GAMMAL_KORNING;
 }
 
 // ---- Statistik ----

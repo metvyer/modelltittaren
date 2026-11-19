@@ -507,10 +507,11 @@ async function hamta(url, medRetry = true, binar = false) {
     if (stoppad) throw new Error("stoppad");
     avbryt = new AbortController();
     const tid = setTimeout(() => avbryt.abort(), TIMEOUT_S * 1000);
-    let st = 0, txt = "", buf = null;
+    let st = 0, txt = "", buf = null, cache = null;
     try {
       const r = await fetch(url, { signal: avbryt.signal, cache: "no-store" });
-      st = r.status; if (binar && r.ok) buf = await r.arrayBuffer(); else txt = await r.text();
+      st = r.status; cache = r.headers.get("Cf-Cache-Status");   // HIT = svaret kom ur mellanserverns cache
+      if (binar && r.ok) buf = await r.arrayBuffer(); else txt = await r.text();
     } catch (e) { if (stoppad) throw new Error("stoppad"); st = 0; }
     clearTimeout(tid);
     if (st === 0 && VAG === "direkt") { VAG = null; vagLofte = null; }   // natet bytt? prova vagen igen nasta anrop
@@ -529,7 +530,7 @@ async function hamta(url, medRetry = true, binar = false) {
         f--; continue;
       }
     }
-    if (st === 200) return { st, txt, buf };
+    if (st === 200) return { st, txt, buf, cache };
     if (st === 404 || st === 400 || st === 403) return { st, txt };
     if (!medRetry && st !== 429) return { st, txt };
     if (f < 4) {
@@ -1923,6 +1924,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261119-1915"></script>
+<script src="sannolikhet.js?v=20261119-2115"></script>
 </body>
 </html>

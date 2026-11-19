@@ -311,64 +311,71 @@ function periodTimmar() {
   else { lista = []; for (let t = a; t <= b; t++) if (t % dt === 0) lista.push(t); if (!lista.length) lista = [a]; }
   return { a, b, fran, lista, dt };
 }
+// NYTT 19/11 kvall - FASTA BLOCK (delad cache i mellanservern):
+//  * Omradet som hamtas "snapps" ut till jamna rutor om ENS_SNAPP gitterpunkter (i vald upplosning). Tva kolleger som
+//    klickar nara varandra (inom ca 20 km vid 2,5 km) staller da exakt samma fraga -> Cloudflare svarar ur cachen.
+//    Lite overhamtning (hogst ENS_SNAPP-1 punkter per sida), men aldrig fler anrop an forut.
+//  * Tiden hamtas i fasta block +0-12, +12-24, +24-36 ... (13 timmar, var 3:e/6:e timme om det ar valt).
+//    Nederbord behover bara start och slut och hamtas timme for timme.
+//  * Medlemmarna hamtas i tva halvor: 0-14 och 15-29. Finns forra korningens data sparad (15-29 = 0-14 dar,
+//    3 h forskjutet) hoppas andra halvan over.
+const ENS_SNAPP = 8, ENS_TBLOCK = 12;
 async function probHamta(auto) {
   auto = auto === true;
   if (P.upptagen) return;
   const o0 = berakna(); if (!o0) { status("Klicka på kartan eller ange lat/lon för områdets mitt.", "fel"); return; }
   P.fragar = false; P.upptagen = true; stoppad = false; $("pHamta").disabled = true; $("pStopp").disabled = false;
-  const t0 = performance.now(); let kb = 0; const tider = [];
+  const t0 = performance.now(); let kb = 0; const tider = []; let cacheTraff = 0, anrop = 0;
   try {
     if (!await aktivKorning()) throw new Error("Hittade ingen komplett ensemblekörning de senaste 18 timmarna. Senaste försöket: " + varforEj(""));
     const o = { ...o0, dtg: P.dtg }; ritaOmrade(); if (!auto) zoomaTillOmrade(o);
-    const { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
-    const antV = sakn.length * ENS_MEDL * o.ny * o.nx, mb = antV * ENS_BYTE[ensFormat] / 1048576;
+    const pa = PPARAM[o.v], { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
+    // snappat hamtomrade
+    const snapp = (a, b, max) => { const g = ENS_SNAPP * o.s, maxA = Math.floor(max / o.s) * o.s;
+      let lo = Math.floor(a / g) * g, hi = Math.ceil((b + o.s) / g) * g - o.s; if (hi > maxA) hi = maxA; return [lo, hi]; };
+    const [hy0, hy1] = snapp(o.y0, o.y1, LCC.ny - 1), [hx0, hx1] = snapp(o.x0, o.x1, LCC.nx - 1);
+    const oH = { ...o, y0: hy0, y1: hy1, x0: hx0, x1: hx1, ny: (hy1 - hy0) / o.s + 1, nx: (hx1 - hx0) / o.s + 1 }, n = oH.ny * oH.nx;
+    // tidsblock
+    const dt = +$("pDt").value || 1, block = new Map();
+    for (const t of sakn) {
+      if (pa.agg === "summa") { block.set("t" + t, [t, t, 1]); continue; }
+      // block b = timmarna 12b..12b+12 (13 timmar - slutet delas med nasta block, sa att standardperioden +0..+12 ryms i ett)
+      const st = t % dt === 0 ? dt : 1; let b = Math.floor(t / ENS_TBLOCK);
+      if (t % ENS_TBLOCK === 0 && b > 0 && block.has((b - 1) + ":" + st)) b--;
+      let a = b * ENS_TBLOCK; while (a % st) a++;
+      let z = Math.min(b * ENS_TBLOCK + ENS_TBLOCK, ENS_TIDER - 1); while (z % st) z--;
+      block.set(b + ":" + st, [a, z, st]);
+    }
+    const grupper = [...block.values()].sort((x, y) => x[0] - y[0]);
+    const tim = g => { const u = []; for (let t = g[0]; t <= g[1]; t += g[2]) u.push(t); return u; };
+    const antT = grupper.reduce((s_, g) => s_ + tim(g).length, 0);
+    const antV = antT * ENS_MEDL * n, mb = antV * ENS_BYTE[ensFormat] / 1048576;
     if (antV > ENS_MAX_VARDEN) { status("För stort: " + Math.round(antV / 1e6) + " miljoner värden får inte plats i webbläsaren. Välj glesare upplösning, mindre område, kortare period eller var 3:e timme.", "fel"); P.fragar = true; return; }
     // Sparrar mot mycket stora uttag (skyddar met.no, mellanservern och webblasaren)
     if (o.s === 1 && Math.max(o.nx, o.ny) * 2.5 > MAX_KM_25 + 2.5) { status("2,5 km går bara för områden upp till " + MAX_KM_25 + " × " + MAX_KM_25 + " km. Välj 5 km eller ett mindre område.", "fel"); P.fragar = true; return; }
     if (mb > ENS_GRANS_MB) { status("För stort uttag: ca " + Math.round(mb) + " MB (gräns " + ENS_GRANS_MB + " MB per hämtning). Välj glesare upplösning, mindre område, kortare period eller var 3:e timme.", "fel"); P.fragar = true; return; }
     if (auto && mb > AUTO_MAX_MB) { status("Stort uttag (ca " + Math.round(mb) + " MB) hämtas inte automatiskt – tryck Hämta fält.", ""); P.fragar = true; return; }
-    // NYTT 19/11 kvall: finns samma omrade i korningen 3 h tidigare (timme t+3) kopieras medlem 15-29 darifran.
-    // gamla[t] = forra korningens data [medlem][y][x] for timme t+3, mMax[t] = hogsta medlem som maste hamtas.
-    const dtgF = dtgText(new Date(dtgDatum(o.dtg).getTime() - ENS_LAGG_H * 3600e3)), oF = { ...o, dtg: dtgF };
-    const gamla = new Map(), mMax = new Map();
-    for (const t of sakn) {
-      const g = t + ENS_LAGG_H <= ENS_TIDER - 1 ? await timData(oF, t + ENS_LAGG_H) : null;
-      if (!g) { mMax.set(t, ENS_MEDL - 1); continue; }
-      // medlemmar som saknar data helt i forra filen (t.ex. medlem 0 for sikt/molnbas) hamtas i den nya
-      const ms = SAKN[PPARAM[o.v].bitar], n0 = o.ny * o.nx; let mx = ENS_NYA - 1;
-      for (let m = 0; m < ENS_NYA; m++) { let tom = true; for (let i = 0; i < n0; i++) if (g[m * n0 + i] !== ms) { tom = false; break; } if (tom) mx = Math.max(mx, ENS_NYA + m); }
-      gamla.set(t, g); mMax.set(t, mx);
-    }
-    // grupper med jamnt steg (1, 3 eller 6 h), hogst ENS_BIT timmar per anrop, samma antal medlemmar i hela gruppen
-    const grupper = [];
-    for (const t of sakn) {
-      const g = grupper[grupper.length - 1];
-      if (g && g[3] === mMax.get(t)) { const d = t - g[1], st = g[2] || d;
-        if (d === st && (d <= 6 || sakn.length === 2) && (g[1] - g[0]) / st + 2 <= ENS_BIT) { g[2] = st; g[1] = t; continue; } }
-      grupper.push([t, t, 0, mMax.get(t)]);   // [forsta, sista, steg, hogsta medlem att hamta]
-    }
+    // forra korningen (3 h aldre) for medlem 15-29
+    const dtgF = dtgText(new Date(dtgDatum(o.dtg).getTime() - ENS_LAGG_H * 3600e3)), oF = { ...oH, dtg: dtgF }, ms = SAKN[pa.bitar];
+    const gamlaTimme = async t => {   // forra korningens data for timme t+3, eller null (saknas / medlem 0 tom)
+      if (t + ENS_LAGG_H > ENS_TIDER - 1) return null; const d = await timData(oF, t + ENS_LAGG_H); if (!d) return null;
+      for (let i = 0; i < n; i++) if (d[i] !== ms) return d; return null;
+    };
+    let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === oH.y0 && x.y1 === oH.y1 && x.x0 === oH.x0 && x.x1 === oH.x1);
+    if (!e && grupper.length) { e = { dtg: o.dtg, v: o.v, s: o.s, y0: oH.y0, y1: oH.y1, x0: oH.x0, x1: oH.x1, tider: [] }; P.index.push(e); }
     let ateranvant = 0, detM0 = false;
-    let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === o.y0 && x.y1 === o.y1 && x.x0 === o.x0 && x.x1 === o.x1);
-    if (!e && grupper.length) { e = { dtg: o.dtg, v: o.v, s: o.s, y0: o.y0, y1: o.y1, x0: o.x0, x1: o.x1, tider: [] }; P.index.push(e); }
-    const pa = PPARAM[o.v], n = o.ny * o.nx;
-    for (let gi = 0; gi < grupper.length; gi++) {
-      const [g0, g1, , gm] = grupper[gi], nm = gm + 1;   // nm = antal medlemmar som hamtas (0..gm)
-      visaPForlopp(gi, grupper.length, g0, g1, (g1 - g0) / (grupper[gi][2] || 1) + 1, nm);
-      const st = grupper[gi][2] || 1, nt = (g1 - g0) / st + 1;
-      // thredds svarar inte med mer an ca 50 MB text per anrop -> dela omradet i rad-band vid behov.
-      // Varje band kostar servern lika mycket som hela omradet, sa banden halls sa fa som mojligt.
-      const radPerBand = Math.max(1, Math.floor(ENS_MAX_MB_ANROP[ensFormat] * 1048576 / (nt * nm * o.nx * ENS_BYTE[ensFormat])));
-      const ut = []; for (let k = 0; k < nt; k++) ut.push(nyKod(pa, ENS_MEDL * n));
-      for (let r0 = 0; r0 < o.ny; r0 += radPerBand) {
-        const r1 = Math.min(o.ny - 1, r0 + radPerBand - 1), nb = r1 - r0 + 1;
-        if (o.ny > radPerBand) $("pForloppText").textContent = "Anrop " + (gi + 1) + " av " + grupper.length + ", band " + (r0 / radPerBand + 1) + " av " + Math.ceil(o.ny / radPerBand) + ": +" + g0 + " till +" + g1 + " h";
-        const fraga = enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][0:" + gm + "][" + (o.y0 + r0 * o.s) + ":" + o.s + ":" + (o.y0 + r1 * o.s) + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
-        const behov = nt * nm * nb * o.nx, t1 = performance.now();
-        let v = null;
+    // ett anrop (eventuellt i rad-band) for timmarna i g och medlemmarna ma..mb, avkodat in i ut[k]
+    const hamtaDel = async (g, ma, mb_, ut) => {
+      const [g0, g1, st] = g, nt = (g1 - g0) / st + 1, nm = mb_ - ma + 1;
+      const radPerBand = Math.max(1, Math.floor(ENS_MAX_MB_ANROP[ensFormat] * 1048576 / (nt * nm * oH.nx * ENS_BYTE[ensFormat])));
+      for (let r0 = 0; r0 < oH.ny; r0 += radPerBand) {
+        const r1 = Math.min(oH.ny - 1, r0 + radPerBand - 1), nb = r1 - r0 + 1;
+        const fraga = enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][" + ma + ":" + mb_ + "][" + (oH.y0 + r0 * o.s) + ":" + o.s + ":" + (oH.y0 + r1 * o.s) + "][" + oH.x0 + ":" + o.s + ":" + oH.x1 + "]");
+        const behov = nt * nm * nb * oH.nx, t1 = performance.now();
+        let v = null; anrop++;
         if (ensFormat === "bin") {
-          // Binart forst. Fungerar det inte gar sidan over till text for resten av besoket.
           const res = await hamta(BAS + ENS_FIL(o.dtg) + ".dods?" + fraga, false, true);
-          if (res.st === 200 && res.buf) { v = lasDods(res.buf, behov); kb += res.buf.byteLength / 1024; }
+          if (res.st === 200 && res.buf) { v = lasDods(res.buf, behov); kb += res.buf.byteLength / 1024; if (res.cache === "HIT") cacheTraff++; }
           if (!v) { ensFormat = "txt"; status("Binärt format fungerade inte (svar " + res.st + ") – hämtar som text i stället …"); }
         }
         if (!v) {
@@ -379,28 +386,37 @@ async function probHamta(auto) {
         }
         tider.push(((performance.now() - t1) / 1000).toFixed(0));
         for (let k = 0; k < nt; k++) for (let m = 0; m < nm; m++) for (let y = 0; y < nb; y++) {
-          const fr = ((k * nm + m) * nb + y) * o.nx, till = (m * o.ny + r0 + y) * o.nx;
-          for (let x = 0; x < o.nx; x++) koda(pa, ut[k], till + x, v[fr + x]);
+          const fr = ((k * nm + m) * nb + y) * oH.nx, till = ((ma + m) * oH.ny + r0 + y) * oH.nx;
+          for (let x = 0; x < oH.nx; x++) koda(pa, ut[k], till + x, v[fr + x]);
         }
       }
-      // NYTT 19/11 kvall: medlem 0 = det-filens korning (testkorning I: identiska varden). Ensemblefilen saknar
-      // sikt och molnbas for medlem 0 -> hamtas ur meps_det_2_5km_<DTG> (en medlem, litet anrop). Gar det inte
-      // (det-filen inte klar an) blir medlem 0 tom och raknas inte (som forut).
+    };
+    const totDelar = grupper.length;
+    for (let gi = 0; gi < grupper.length; gi++) {
+      const g = grupper[gi], [g0, g1, st] = g, nt = (g1 - g0) / st + 1;
+      const gamla = []; for (let k = 0; k < nt; k++) gamla.push(await gamlaTimme(g0 + k * st));
+      const nGamla = gamla.filter(Boolean).length;
+      visaPForlopp(gi, totDelar, g0, g1, nt, nGamla === nt ? ENS_NYA : ENS_MEDL);
+      const ut = []; for (let k = 0; k < nt; k++) ut.push(nyKod(pa, ENS_MEDL * n));
+      await hamtaDel(g, 0, ENS_NYA - 1, ut);
+      // medlem 15-29: kopiera dar forra korningen finns, hamta resten (sammanhangande delar av blocket)
+      for (let k = 0; k < nt; k++) if (gamla[k]) { for (let m = ENS_NYA; m < ENS_MEDL; m++) ut[k].set(gamla[k].subarray((m - ENS_NYA) * n, (m - ENS_NYA + 1) * n), m * n); ateranvant++; }
+      for (let k = 0; k < nt; ) { if (gamla[k]) { k++; continue; } let k2 = k; while (k2 + 1 < nt && !gamla[k2 + 1]) k2++;
+        if (nGamla === 0) { await hamtaDel(g, ENS_NYA, ENS_MEDL - 1, ut); break; }
+        const del = [], sub = [g0 + k * st, g0 + k2 * st, st]; for (let q = k; q <= k2; q++) del.push(nyKod(pa, ENS_MEDL * n));
+        await hamtaDel(sub, ENS_NYA, ENS_MEDL - 1, del);
+        for (let q = k; q <= k2; q++) ut[q].set(del[q - k].subarray(ENS_NYA * n), ENS_NYA * n);
+        k = k2 + 1; }
+      // medlem 0:s sikt/molnbas ur det-filen (saknas i ensemblefilen)
       if (o.v === "sikt" || o.v === "bas") {
-        const ms = SAKN[pa.bitar]; let tom = true;
+        let tom = true;
         for (let k = 0; k < nt && tom; k++) for (let i = 0; i < n; i++) if (ut[k][i] !== ms) { tom = false; break; }
         if (tom) try {
-          const fr = enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][" + o.y0 + ":" + o.s + ":" + o.y1 + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
+          const fr = enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][" + oH.y0 + ":" + o.s + ":" + oH.y1 + "][" + oH.x0 + ":" + o.s + ":" + oH.x1 + "]");
           const res = await hamta(BAS + DET_FIL(o.dtg) + ".dods?" + fr, false, true);
           const v = res.st === 200 && res.buf ? lasDods(res.buf, nt * n) : null;
           if (v) { kb += res.buf.byteLength / 1024; detM0 = true; for (let k = 0; k < nt; k++) for (let i = 0; i < n; i++) koda(pa, ut[k], i, v[k * n + i]); }
         } catch (x) { if (stoppad) throw x; }
-      }
-      // medlemmar som inte hamtades: kopiera fran forra korningen (medlem m i nya = m-15 i gamla, 3 h senare giltighetstid)
-      if (nm < ENS_MEDL) for (let k = 0; k < nt; k++) {
-        const g = gamla.get(g0 + k * st); if (!g) continue;
-        for (let m = nm; m < ENS_MEDL; m++) ut[k].set(g.subarray((m - ENS_NYA) * n, (m - ENS_NYA + 1) * n), m * n);
-        ateranvant++;
       }
       for (let k = 0; k < nt; k++) {
         const t = g0 + k * st, arr = ut[k];
@@ -412,8 +428,10 @@ async function probHamta(auto) {
       await probVisa();
     }
     const tot = ((performance.now() - t0) / 1000).toFixed(0);
-    status(tider.length ? "Klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + (kb / 1024).toFixed(1) + " MB " + (ensFormat === "bin" ? "binärt" : "text") + "." +
-      (ateranvant ? " För " + ateranvant + " av " + sakn.length + " timmar togs medlem 15–29 från körningen " + dtgF + " (redan sparad) – bara de nya medlemmarna hämtades." : "") + (detM0 ? " Medlem 0:s " + pa.namn.split(",")[0].toLowerCase() + " togs ur det-filen (saknas i ensemblefilen)." : "") : "Klart: allt fanns redan sparat (" + tot + " s).");
+    status(tider.length ? "Klart: " + tot + " s, " + anrop + " anrop (" + tider.join(", ") + " s), " + (kb / 1024).toFixed(1) + " MB " + (ensFormat === "bin" ? "binärt" : "text") + "." +
+      (cacheTraff ? " " + cacheTraff + " av " + anrop + " anrop fanns redan i mellanserverns cache (någon annan hade hämtat samma)." : "") +
+      (ateranvant ? " För " + ateranvant + " timmar togs medlem 15–29 från körningen " + dtgF + " (redan sparad)." : "") +
+      (detM0 ? " Medlem 0:s " + pa.namn.split(",")[0].toLowerCase() + " togs ur det-filen (saknas i ensemblefilen)." : "") : "Klart: allt fanns redan sparat (" + tot + " s).");
   } catch (err) {
     status(stoppad || err.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas." : err.message, stoppad ? "" : "fel");
     if (!stoppad) P.fragar = true;   // felmeddelandet ska synas tills nagot andras
