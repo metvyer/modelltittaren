@@ -253,6 +253,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button id="lMoln" aria-pressed="true">Moln</button><button id="lVind" aria-pressed="false">Vind</button>
   </div>
   <button class="sek liten" id="lNiv" aria-pressed="false" title="Visa modellnivåernas höjd (MEPS har 65 nivåer, 64 = lägsta)">Modellnivåer</button>
+  <button class="sek liten" id="lIso" aria-pressed="true" title="0, −10 och −20 °C ur modellens temperatur på alla modellnivåer (förhämtade flygplatser: varje timme +3 till +23, var 3:e timme +24 till +45)">Isotermer</button>
   <button class="sek liten" id="lMetar" aria-pressed="false" title="Visa observerade molnskikt (METAR) och senaste TAF från närmaste flygplats">METAR/TAF</button>
   <button class="sek liten" id="lIs" aria-pressed="false" title="Nedisning från MEPS isindex. TEST: gränserna är obekräftade och underskattar jämfört med SMHI">Nedisning (test)</button>
   <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; tunt = FEW, tjockt = OVC, vit med streckad kant = VV (vertikal sikt)"></span>
@@ -338,6 +339,9 @@ const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.s
 const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
 let avbryt = null, stoppad = false, vindLage = false;
 let visaNiv = lasa("mt:visaNiv") === "ja";
+let visaIsoT = lasa("mt:visaIsoT") !== "nej";   // NYTT 19/11 em: 0/-10/-20 °C-linjer (pa som standard)
+// Isotermerna: farg, bredd. Glesare tidssteg (var 3:e timme efter +23) ritas blekare.
+const ISOTERM = [{ t: 0, farg: "#dc2626", bredd: 2, namn: "0°" }, { t: -10, farg: "#d97706", bredd: 1.6, namn: "−10°" }, { t: -20, farg: "#7c3aed", bredd: 1.4, namn: "−20°" }];
 let visaIs = lasa("mt:visaIs") === "ja";   // nedisning (test) - av som standard tills metoden ar bekraftad
 let visaMetar = lasa("mt:visaMetar") === "ja";   // METAR i tid-hojd (av som standard)   // tunna linjer for modellnivaerna i tid-hojd
 
@@ -583,7 +587,9 @@ function nyModell(dtg, nt, iy, ix) {
     ice: new Float64Array(nt * NIS).fill(NaN), iceHar: new Uint8Array(nt * NIS),
     cb: new Float64Array(nt).fill(NaN), cbHar: new Uint8Array(nt),   // modellens molnbas (m over modellens mark)
     wx: new Float64Array(nt * NIV).fill(NaN), wy: new Float64Array(nt * NIV).fill(NaN), wHar: new Uint8Array(nt * NIV),
-    px: new Float64Array(nt * NTRYCK).fill(NaN), py: new Float64Array(nt * NTRYCK).fill(NaN), pwHar: new Uint8Array(nt * NTRYCK) };
+    px: new Float64Array(nt * NTRYCK).fill(NaN), py: new Float64Array(nt * NTRYCK).fill(NaN), pwHar: new Uint8Array(nt * NTRYCK),
+    // NYTT 19/11 em: temperatur (K) och specifik fukt (kg/kg) pa modellnivaerna (forhamtat fran GitHub, varv 2)
+    ta: new Float64Array(nt * NIV).fill(NaN), qv: new Float64Array(nt * NIV).fill(NaN), tqHar: new Uint8Array(nt * NIV) };
 }
 function lasStatik(txt) {
   const d = tolka(txt); if (!d.time || !d.ap || !d.b) return false;
@@ -607,6 +613,15 @@ function laggIn(txt, a, b, etikett) {
     }
     const m = del.slice(1).match(/^(\d+)-(\d+)$/); if (!m) continue;
     const r1 = +m[1], r2 = +m[2], nr = r2 - r1 + 1;
+    if (typ === "T") {   // NYTT 19/11 em: T + q pa modellnivaer r1..r2, var x:e timme (".x3" i etiketten)
+      const xm = etikett.match(/(?:^|\.)x(\d+)(?:\.|$)/), st = xm ? +xm[1] : 1, ntt = Math.floor((b - a) / st) + 1;
+      const vt = d.air_temperature_ml, vq = d.specific_humidity_ml; if (!vt) continue;
+      for (let i = 0; i < ntt && a + i * st < M.nt; i++) for (let k = 0; k < nr; k++) {
+        const w = vt[i * nr + k]; if (w === undefined || !isFinite(w)) continue;
+        const j = (a + i * st) * NIV + r1 + k; M.ta[j] = w; if (vq && isFinite(vq[i * nr + k])) M.qv[j] = vq[i * nr + k]; M.tqHar[j] = 1;
+      }
+      continue;
+    }
     if (typ === "u" || typ === "v") {   // vind: var VIND_DT:e timme, modellnivaer var VIND_DK:e
       const steg = typ === "u" ? VIND_DK : 1, nn = Math.floor((r2 - r1) / steg) + 1, n3 = Math.floor((b - a) / VIND_DT) + 1;
       const [xn, yn, br, X, Y, H] = typ === "u" ? ["x_wind_ml", "y_wind_ml", NIV, M.wx, M.wy, M.wHar] : ["x_wind_pl", "y_wind_pl", NTRYCK, M.px, M.py, M.pwHar];
@@ -645,8 +660,16 @@ async function hamtaForhamtat() {
   const fil = idx.punkter[M.iy + ":" + M.ix]; if (!fil) return false;
   try {
     status("Hämtar förberäknad data (GitHub) …");
-    const r = await fetch("forhamtat/th/" + idx.dtg + "/" + fil); if (!r.ok) return false;
+    const r = await fetch("forhamtat/th/" + idx.dtg + "/" + fil, { cache: "no-store" }); if (!r.ok) return false;
     const d = await r.json(), m = M, k = nyckel(); if (!d.static || !d.bitar) return false;
+    if (d.bitar.some(x => String(x[2]).startsWith("T"))) lagra(k + "tq", "1");
+    // NYTT 19/11 em: punkten finns redan (moln hamtade forut) -> lagg bara till T + q, rör inte resten
+    if (M.stat) {
+      const lista = JSON.parse(lasa(k + "bitar") || "[]"), har = new Set(lista.map(x => x.join("|")));
+      for (const [a, b, e, txt] of d.bitar) { if (!String(e).startsWith("T") || har.has([a, b, e].join("|"))) continue;
+        await THDB.put(k + "t" + a + "-" + b + ":" + e, txt); lista.push([a, b, e]); if (M === m) laggIn(txt, a, b, e); }
+      lagra(k + "bitar", JSON.stringify(lista)); return true;
+    }
     await THDB.put(k + "static", d.static);
     const lista = [];
     for (const [a, b, e, txt] of d.bitar) { await THDB.put(k + "t" + a + "-" + b + ":" + e, txt); lista.push([a, b, e]); }
@@ -936,6 +959,59 @@ function ritaNivaer(svg, sk, zTopp, c, fore) {
   svg.insertBefore(g, fore.nextSibling);   // ovanpa moln och nedisning, under vind och tabell
 }
 
+// NYTT 19/11 em: isotermer (0/-10/-20 °C) med marching squares i rutnatet tid x modellniva.
+// Hornen ligger i (timmens mitt, nivans hojd), sa linjen foljer modellens verkliga temperatur aven
+// vid inversioner (flera skarningar). Bara timmar med T pa nivaerna anvands; mellan timmar langre
+// an en timme isar (var 3:e timme efter +23) ritas linjen blekare.
+function tqTider() { const ut = []; for (let t = 0; t < M.nt; t++) if (M.tqHar[t * NIV + NIV - 1] && M.ytaOK[t]) ut.push(t); return ut; }
+function ritaIsotermer(svg, sk, zTopp) {
+  const ts = tqTider(); if (ts.length < 2) return;
+  const g = el("g", { "pointer-events": "none", "clip-path": "url(#plotklipp)" });
+  const kol = ts.map(t => { let k0 = NIV - 1; while (k0 > 0 && M.tqHar[t * NIV + k0 - 1]) k0--; const z = hojder(t, k0); return { t, k0, z }; });
+  for (const iso of ISOTERM) {
+    let tat = "", gles = "", etikett = null;
+    for (let i = 0; i + 1 < kol.length; i++) {
+      const A = kol[i], B = kol[i + 1]; if (!A.z || !B.z) continue;
+      const xA = A.t * COL + COL / 2, xB = B.t * COL + COL / 2, k0 = Math.max(A.k0, B.k0);
+      let d = "";
+      for (let k = NIV - 1; k > k0; k--) {   // cell mellan nivaerna k (lagre) och k-1 (hogre)
+        const P = [[xA, A.z[k], M.ta[A.t * NIV + k]], [xB, B.z[k], M.ta[B.t * NIV + k]], [xB, B.z[k - 1], M.ta[B.t * NIV + k - 1]], [xA, A.z[k - 1], M.ta[A.t * NIV + k - 1]]];
+        if (P.some(p => !isFinite(p[2]) || !(p[1] >= 0))) continue;
+        if (Math.min(P[0][1], P[1][1]) * 0.98 > zTopp) break;   // over diagrammets topp
+        const f = P.map(p => p[2] - 273.15 - iso.t), sk_ = [];
+        for (let e = 0; e < 4; e++) { const p = P[e], q = P[(e + 1) % 4], fa = f[e], fb = f[(e + 1) % 4];
+          if ((fa < 0) !== (fb < 0)) { const r = fa / (fa - fb); sk_.push([p[0] + (q[0] - p[0]) * r, p[1] + (q[1] - p[1]) * r]); } }
+        for (let j = 0; j + 1 < sk_.length; j += 2) {   // 2 (vanligt) eller 4 skarningar (sadel) -> en eller tva strackor
+          d += "M" + sk_[j][0].toFixed(1) + " " + sk.y(sk_[j][1] * FOT).toFixed(1) + "L" + sk_[j + 1][0].toFixed(1) + " " + sk.y(sk_[j + 1][1] * FOT).toFixed(1);
+          if (!etikett || sk_[j][0] < etikett[0]) etikett = [sk_[j][0], sk_[j][1]];
+        }
+      }
+      if (B.t - A.t > 1) gles += d; else tat += d;
+    }
+    const linje = (dd, op) => { if (!dd) return;
+      g.appendChild(el("path", { d: dd, fill: "none", stroke: "#fff", "stroke-width": iso.bredd + 1.6, opacity: 0.55 * op, "stroke-linecap": "round" }));
+      g.appendChild(el("path", { d: dd, fill: "none", stroke: iso.farg, "stroke-width": iso.bredd, opacity: op, "stroke-linecap": "round" })); };
+    linje(tat, 1); linje(gles, 0.55);
+    if (etikett && etikett[1] <= zTopp) g.appendChild(el("text", { x: etikett[0] - 3, y: sk.y(etikett[1] * FOT) - 4, "font-size": 10, "font-weight": 700, "text-anchor": "end", fill: iso.farg, stroke: "#fff", "stroke-width": 2.5, "paint-order": "stroke" }, iso.namn));
+  }
+  svg.appendChild(g);
+}
+// T och Td (°C) pa hojden z (m over mark) vid timme t, eller null
+function tTdPaHojd(t, z) {
+  if (!M.tqHar[t * NIV + NIV - 1] || !M.ytaOK[t]) return null;
+  let k0 = NIV - 1; while (k0 > 0 && M.tqHar[t * NIV + k0 - 1]) k0--;
+  const zz = hojder(t, k0), ps = M.yta[0][t]; if (!zz) return null;
+  const td = k => { const p = M.ap[k] + M.b[k] * ps, q = M.qv[t * NIV + k]; if (!(q > 0)) return NaN;
+    const e = q * p / (0.622 + 0.378 * q) / 100, l = Math.log(e / 6.112); return 243.12 * l / (17.62 - l); };
+  for (let k = NIV - 1; k > k0; k--) if (z >= (k === NIV - 1 ? 0 : zz[k]) && z < zz[k - 1]) {
+    const lo = k === NIV - 1 && z < zz[k] ? k : k, r = Math.max(0, Math.min(1, (z - zz[lo]) / (zz[k - 1] - zz[lo])));
+    const T = (M.ta[t * NIV + k] + (M.ta[t * NIV + k - 1] - M.ta[t * NIV + k]) * r) - 273.15;
+    const D = td(k) + (td(k - 1) - td(k)) * r;
+    return { T, Td: D };
+  }
+  return null;
+}
+
 function rita() {
   if (!M || !M.stat) return;
   const RADER = tabellRader(visaMetar && M.metar && M.metar.length > 0), R = Object.fromEntries(RADER.map((k, i) => [k, i]));
@@ -946,6 +1022,7 @@ function rita() {
   const farg = [null, c("--few"), c("--sct"), c("--bkn"), c("--ovc")];
   const defs = el("defs", {}); const pat = el("pattern", { id: "snett", width: 6, height: 6, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" });
   pat.appendChild(el("line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: c("--hatch"), "stroke-width": 1.5 })); defs.appendChild(pat); svg.appendChild(defs);
+  { const cp = el("clipPath", { id: "plotklipp" }); cp.appendChild(el("rect", { x: 0, y: TOPP_RAD, width: B, height: sk.botten - TOPP_RAD })); defs.appendChild(cp); }
   const t0 = M.tid[0] * 1000, { k1 } = behov(), zTopp = sk.topp * 100 / FOT;
   M.sk = sk; M.t0 = t0;
 
@@ -1015,6 +1092,7 @@ function rita() {
   }
   if (saknasStart >= 0) saknasRekt(saknasStart, nt - 1, 0);
   if (visaNiv) ritaNivaer(svg, sk, zTopp, c, gIs);
+  if (visaIsoT && !vindLage) ritaIsotermer(svg, sk, zTopp);
   ritaMetar(svg, sk, zTopp);
   if (vindLage) ritaVind(svg, sk, zTopp, c);
   svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
@@ -1157,6 +1235,7 @@ function tipsText(t, yPix, xPix) {
       }
     }
     rad.push(["Moln där", moln]);
+    { const tt = tTdPaHojd(t, z); if (tt) rad.push(["T / Td där", tt.T.toFixed(1) + " / " + (isFinite(tt.Td) ? tt.Td.toFixed(1) : "–") + " °C"]); }
     // vind: visas om den finns hamtad, aven i molnlaget
     {
       const t3 = Math.min(Math.round(t / VIND_DT) * VIND_DT, Math.floor((M.nt - 1) / VIND_DT) * VIND_DT), pts = vindPunkter(t3);
@@ -1275,6 +1354,7 @@ async function hamtaAllt() {
     if (!M || M.dtg !== dtg || M.iy !== r.iy || M.ix !== r.ix || M.nt !== nt) { M = nyModell(dtg, nt, r.iy, r.ix); await laddaCache(); }
     let franGH = false;
     if (!M.stat) franGH = await hamtaForhamtat();
+    else if (!lasa(nyckel() + "tq")) { const idx = await forhamtatIndex(); if (idx && idx.tq && idx.dtg === M.dtg) await hamtaForhamtat(); }   // T + q har kommit sedan sist
     M.lat = lat; M.lon = lon; M.ny = ny; M.vald = val !== "senaste";
     if (!M.stat) {
       F.fas = "Hämtar fasta data (tider, nivåer, markhöjd) …"; status("Hämtar fasta data …"); visaForlopp();
@@ -1522,6 +1602,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   };
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
   $("lNiv").setAttribute("aria-pressed", String(visaNiv));
+  $("lIso").setAttribute("aria-pressed", String(visaIsoT));
   $("vagVal").value = VAG_LAGE;
   $("vagVal").addEventListener("change", e => { VAG_LAGE = e.target.value; lagra("mt:vag", VAG_LAGE); VAG = null; vagLofte = null; visaVag(); });
   $("lIs").setAttribute("aria-pressed", String(visaIs)); $("fIs").hidden = !visaIs;
@@ -1532,6 +1613,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
     $("fMetar").hidden = !visaMetar;
     if (M && M.stat) { rita(); laddaMetar(); } else $("metarInfo").textContent = "";
   });
+  $("lIso").addEventListener("click", e => { visaIsoT = !visaIsoT; lagra("mt:visaIsoT", visaIsoT ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaIsoT)); if (M && M.stat) rita(); });
   $("lNiv").addEventListener("click", e => { visaNiv = !visaNiv; lagra("mt:visaNiv", visaNiv ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaNiv)); if (M && M.stat) rita(); });
   if (lasa("mt:lage") === "vind") satLage(true);
   const d = $("svg");
