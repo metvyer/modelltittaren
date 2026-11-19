@@ -17,6 +17,13 @@ samma anrop som sidan gor - utan webblasare:
      sidans Visa = Sannolikhet / Medel / Hogsta ska ge i den punkten.
   E. Mellanservern (Cloudflare) jamfors med direkt: samma lilla anrop via
      workern och direkt, status + borjan av svaret (morgonens 500-fel).
+  F. (NYTT 19/11 em, punkt 4) Tid-hojd med/utan temperatur + fukt pa
+     modellnivaer: samma 24 h-bit som forhamtningen i fyra varianter
+     (som i dag / + T,q till FL450 varje timme / + T,q till FL200 varje
+     timme / + T,q till FL450 var 3:e timme). V0 och V1 kors tva ganger
+     for att se spridningen. Ger en uppskattning av forhamtningens tid.
+
+Vilka delar som kors valjs med MT_DELAR (t.ex. "ABCDE" = standard, "F", "ABCDEF").
 
 Isolinjerna ritas i webblasaren och kan inte testas har - bara datat under dem.
 Resultatet skrivs i korningens sammanfattning (Summary) och som fil
@@ -120,14 +127,69 @@ def senaste_ens():
     return None
 
 
+def matTQ(iy, ix):
+    """F: tid for en 24 h-bit tid-hojd (som forhamtningen) med och utan T + q pa modellnivaer."""
+    skriv("## F. Tid-höjd med/utan temperatur + fukt på modellnivåer (24 h-bit, som förhämtningen)")
+    dtg, nt = F.senaste_korning()
+    if not dtg:
+        skriv("Ingen komplett det-körning hittad - F hoppas över."); skriv(); return
+    yx = f"[{iy}][{ix}]"
+    st, stat, sek, by = hamta(F.BAS + F.FIL(dtg) + ".ascii?" + F.enc(
+        "time,ap,b,pressure,height5,latitude" + yx + ",longitude" + yx + ",surface_geopotential[0][0]" + yx))
+    if st != 200:
+        skriv(f"Fasta data: svar {st} - F hoppas över."); skriv(); return
+    gammal = F.TOPP_FL
+    F.TOPP_FL = 450; ks450 = F.lagsta_niva(stat)
+    F.TOPP_FL = 200; ks200 = F.lagsta_niva(stat)
+    F.TOPP_FL = gammal
+    a, b = 0, F.BIT - 1
+    tt, t3 = f"[{a}:{b}]", f"[{a}:{F.VIND_DT}:{b}]"
+    def fraga(tq_ks, tq_steg):
+        v = [n + tt + "[0]" + yx for n in F.YTA]
+        v.append("cloud_base_altitude" + tt + "[0]" + yx)
+        v.append("cloud_area_fraction_ml" + tt + f"[{ks450}:{F.NIV - 1}]" + yx)
+        v.append("geopotential_pl" + tt + f"[0:{F.NTRYCK - 1}]" + yx)
+        v.append("icing_index" + tt + f"[0:{F.NIS - 1}]" + yx)
+        v += [n + t3 + f"[{ks450}:{F.VIND_DK}:{F.NIV - 1}]" + yx for n in ("x_wind_ml", "y_wind_ml")]
+        v += [n + t3 + f"[0:{F.NTRYCK - 1}]" + yx for n in ("x_wind_pl", "y_wind_pl")]
+        if tq_ks is not None:
+            tid = tt if tq_steg == 1 else f"[{a}:{tq_steg}:{b}]"
+            v += [n + tid + f"[{tq_ks}:{F.NIV - 1}]" + yx for n in ("air_temperature_ml", "specific_humidity_ml")]
+        return F.BAS + F.FIL(dtg) + ".ascii?" + F.enc(",".join(v))
+    VAR = [("V0 som i dag (moln/vind FL450)", None, 1), ("V1 + T,q FL450 varje timme", ks450, 1),
+           ("V2 + T,q FL200 varje timme", ks200, 1), ("V3 + T,q FL450 var 3:e timme", ks450, 3)]
+    skriv(f"Körning {dtg}, nivåer från k={ks450} (FL450) resp. k={ks200} (FL200) till {F.NIV - 1}, timmar +{a}..+{b}.")
+    skriv("| Variant | Svar | Tid | kB |"); skriv("|---|---|---|---|")
+    tider = {}
+    for i in (0, 1, 2, 3, 0, 1):   # V0 och V1 tva ganger (servern varierar)
+        namn, ks, stg = VAR[i]
+        st, txt, sek, by = hamta(fraga(ks, stg), tidsgrans=240)
+        skriv(f"| {namn} | {st} | {sek:.1f} s | {by/1024:.0f} |")
+        if st == 200: tider.setdefault(i, []).append(sek)
+    if 0 in tider:
+        v0 = statistics.mean(tider[0])
+        skriv()
+        skriv(f"Förhämtningen i dag ca 41 min (11 orter, FL450). Uppskattning om varje bit blir lika mycket långsammare:")
+        for i in (1, 2, 3):
+            if i in tider:
+                k = statistics.mean(tider[i]) / v0
+                skriv(f"- {VAR[i][0]}: {k:.2f} x V0 -> ca {41 * k:.0f} min")
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
+    delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
     p = next((x for x in F.PUNKTER if x[1] == punkt), F.PUNKTER[5])
     namn, icao, lat, lon = p
     iy, ix = F.ruta(lat, lon)
     skriv(f"# Test mot thredds {datetime.now(timezone.utc):%Y-%m-%d %H:%MZ}")
-    skriv(f"Punkt: {namn} {icao} ({lat}, {lon}) -> ruta iy={iy} ix={ix}")
+    skriv(f"Punkt: {namn} {icao} ({lat}, {lon}) -> ruta iy={iy} ix={ix}. Delar: {delar}")
     skriv()
+    if "F" in delar:
+        matTQ(iy, ix)
+    if not set(delar) & set("BCDE"):
+        return spara(0)
 
     # ---- A. Senaste ensemblekorning ----
     skriv("## A. Senaste kompletta ensemblekörning")
@@ -137,81 +199,85 @@ def main():
     skriv(f"Vald: **{dtg}**"); skriv()
 
     # ---- B. .das -> medlemsattribut ----
-    skriv("## B. ensemble_member-attribut (.das)")
-    st, das, sek, by = hamta(BAS + ENS_FIL(dtg) + ".das", tidsgrans=120)
-    skriv(f"Svar {st}, {by/1024:.0f} kB, {sek:.1f} s")
-    if st == 200:
-        with open("das_ensemble.txt", "w", encoding="utf-8") as f: f.write(das)
-        m = re.search(r"\n\s*ensemble_member \{(.*?)\n\s*\}", das, re.S)
-        skriv("```"); skriv(m.group(1).strip() if m else "(inget block ensemble_member hittat)"); skriv("```")
-        # globala rader som kan saga nagot om lagged-medlemmarna
-        glob = [r.strip() for r in das.split("\n") if re.search(r"lag|member|control|ensemble", r, re.I) and "ensemble_member {" not in r]
-        if glob:
-            skriv("Andra rader som nämner lag/member/control/ensemble (högst 25):"); skriv("```"); skriv("\n".join(glob[:25])); skriv("```")
-    # Ar det en variabel med varden? Hamta den (liten).
-    st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?ensemble_member", tidsgrans=60)
-    skriv(f"ensemble_member som värden: svar {st}, {sek:.1f} s")
-    if st == 200:
-        rader = [r for r in txt.split("\n") if r.strip() and not r.startswith("Dataset")][-3:]
-        skriv("```"); skriv("\n".join(rader)[:600]); skriv("```")
-    skriv()
+    if "B" in delar:
+        skriv("## B. ensemble_member-attribut (.das)")
+        st, das, sek, by = hamta(BAS + ENS_FIL(dtg) + ".das", tidsgrans=120)
+        skriv(f"Svar {st}, {by/1024:.0f} kB, {sek:.1f} s")
+        if st == 200:
+            with open("das_ensemble.txt", "w", encoding="utf-8") as f: f.write(das)
+            m = re.search(r"\n\s*ensemble_member \{(.*?)\n\s*\}", das, re.S)
+            skriv("```"); skriv(m.group(1).strip() if m else "(inget block ensemble_member hittat)"); skriv("```")
+            # globala rader som kan saga nagot om lagged-medlemmarna
+            glob = [r.strip() for r in das.split("\n") if re.search(r"lag|member|control|ensemble", r, re.I) and "ensemble_member {" not in r]
+            if glob:
+                skriv("Andra rader som nämner lag/member/control/ensemble (högst 25):"); skriv("```"); skriv("\n".join(glob[:25])); skriv("```")
+        # Ar det en variabel med varden? Hamta den (liten).
+        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?ensemble_member", tidsgrans=60)
+        skriv(f"ensemble_member som värden: svar {st}, {sek:.1f} s")
+        if st == 200:
+            rader = [r for r in txt.split("\n") if r.strip() and not r.startswith("Dataset")][-3:]
+            skriv("```"); skriv("\n".join(rader)[:600]); skriv("```")
+        skriv()
 
     # ---- C. Meteogram ----
-    skriv("## C. Meteogram (30 medlemmar × 62 h, samma fråga som sidan)")
-    skriv("| Parameter | Svar | Tid | kB | Värden | Saknas | +0 min/median/max | +24 min/median/max |")
-    skriv("|---|---|---|---|---|---|---|---|")
-    for pnamn, var, konv, enh in PARAM:
-        fraga = F.enc(f"{var}[0:1:{TIDER-1}][0][0:{MEDL-1}][{iy}][{ix}]")
-        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + fraga)
-        v = tolka_grid(txt, var) if st == 200 else []
-        sakn = sum(1 for x in v if not ok_varde(x))
-        def tre(t):
-            w = sorted(konv(x) for x in v[t*MEDL:(t+1)*MEDL] if ok_varde(x))
-            return f"{w[0]:.1f} / {statistics.median(w):.1f} / {w[-1]:.1f} {enh}" if w else "-"
-        okt = len(v) >= TIDER * MEDL
-        skriv(f"| {pnamn} | {st} | {sek:.1f} s | {by/1024:.0f} | {len(v)}{'' if okt else ' ⚠'} | {sakn} | {tre(0) if okt else '-'} | {tre(24) if okt else '-'} |")
-    skriv()
+    if "C" in delar:
+        skriv("## C. Meteogram (30 medlemmar × 62 h, samma fråga som sidan)")
+        skriv("| Parameter | Svar | Tid | kB | Värden | Saknas | +0 min/median/max | +24 min/median/max |")
+        skriv("|---|---|---|---|---|---|---|---|")
+        for pnamn, var, konv, enh in PARAM:
+            fraga = F.enc(f"{var}[0:1:{TIDER-1}][0][0:{MEDL-1}][{iy}][{ix}]")
+            st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + fraga)
+            v = tolka_grid(txt, var) if st == 200 else []
+            sakn = sum(1 for x in v if not ok_varde(x))
+            def tre(t):
+                w = sorted(konv(x) for x in v[t*MEDL:(t+1)*MEDL] if ok_varde(x))
+                return f"{w[0]:.1f} / {statistics.median(w):.1f} / {w[-1]:.1f} {enh}" if w else "-"
+            okt = len(v) >= TIDER * MEDL
+            skriv(f"| {pnamn} | {st} | {sek:.1f} s | {by/1024:.0f} | {len(v)}{'' if okt else ' ⚠'} | {sakn} | {tre(0) if okt else '-'} | {tre(24) if okt else '-'} |")
+        skriv()
 
     # ---- D. Sannolikhetsomrade, binart ----
-    skriv(f"## D. Sannolikhetsområde: byvind +0..+{OMR_TIMMAR-1} h, {OMR_KM}×{OMR_KM} km, 2,5 km, binärt")
-    halv = OMR_KM * 1000 // 2500 // 2
-    y0, y1, x0, x1 = iy - halv, iy + halv, ix - halv, ix + halv
-    ny, nx = y1 - y0 + 1, x1 - x0 + 1
-    fraga = F.enc(f"wind_speed_of_gust[0:1:{OMR_TIMMAR-1}][0][0:{MEDL-1}][{y0}:1:{y1}][{x0}:1:{x1}]")
-    n = OMR_TIMMAR * MEDL * ny * nx
-    st, buf, sek, by = hamta(BAS + ENS_FIL(dtg) + ".dods?" + fraga, tidsgrans=300, binart=True)
-    v = las_dods(buf, n) if st == 200 else None
-    skriv(f"Svar {st}, {by/1048576:.1f} MB, {sek:.1f} s, {ny}×{nx} rutor, väntat {n:,} värden -> {'OK' if v else 'KUNDE INTE LÄSAS'}".replace(",", " "))
-    if v:
-        cy, cx = iy - y0, ix - x0
-        skriv(f"I punkten ({namn}), per timme - det sidan ska visa för Sannolikhet ≥{TROSK_KT} kt / Medel / Högsta / Medlem 0:")
-        skriv("| Tid | ≥32 kt | Medel kt | Högsta kt | Medlem 0 kt |"); skriv("|---|---|---|---|---|")
-        for t in range(OMR_TIMMAR):
-            w = [v[((t * MEDL + m) * ny + cy) * nx + cx] * KT for m in range(MEDL)]
-            w = [x for x in w if math.isfinite(x) and x < 1e6]
-            if not w: skriv(f"| +{t} | - | - | - | - |"); continue
-            over = sum(1 for x in w if x >= TROSK_KT)
-            skriv(f"| +{t} | {over}/{len(w)} ({100*over/len(w):.0f} %) | {statistics.mean(w):.1f} | {max(w):.1f} | {w[0]:.1f} |")
-        # hela omradet: hur manga rutor nar 30 % / 70 % nagon gang i perioden (underlag for isolinjerna)
-        n30 = n70 = 0
-        for y in range(ny):
-            for x in range(nx):
-                over = 0
-                for m in range(MEDL):
-                    if any(v[((t * MEDL + m) * ny + y) * nx + x] * KT >= TROSK_KT for t in range(OMR_TIMMAR)): over += 1
-                n30 += over >= 0.3 * MEDL; n70 += over >= 0.7 * MEDL
-        skriv(f"Hela området, byvind ≥{TROSK_KT} kt någon gång +0..+{OMR_TIMMAR-1}: {n30} rutor ≥30 %, {n70} rutor ≥70 % av {ny*nx} (isolinjerna ska omsluta dessa).")
-    skriv()
+    if "D" in delar:
+        skriv(f"## D. Sannolikhetsområde: byvind +0..+{OMR_TIMMAR-1} h, {OMR_KM}×{OMR_KM} km, 2,5 km, binärt")
+        halv = OMR_KM * 1000 // 2500 // 2
+        y0, y1, x0, x1 = iy - halv, iy + halv, ix - halv, ix + halv
+        ny, nx = y1 - y0 + 1, x1 - x0 + 1
+        fraga = F.enc(f"wind_speed_of_gust[0:1:{OMR_TIMMAR-1}][0][0:{MEDL-1}][{y0}:1:{y1}][{x0}:1:{x1}]")
+        n = OMR_TIMMAR * MEDL * ny * nx
+        st, buf, sek, by = hamta(BAS + ENS_FIL(dtg) + ".dods?" + fraga, tidsgrans=300, binart=True)
+        v = las_dods(buf, n) if st == 200 else None
+        skriv(f"Svar {st}, {by/1048576:.1f} MB, {sek:.1f} s, {ny}×{nx} rutor, väntat {n:,} värden -> {'OK' if v else 'KUNDE INTE LÄSAS'}".replace(",", " "))
+        if v:
+            cy, cx = iy - y0, ix - x0
+            skriv(f"I punkten ({namn}), per timme - det sidan ska visa för Sannolikhet ≥{TROSK_KT} kt / Medel / Högsta / Medlem 0:")
+            skriv("| Tid | ≥32 kt | Medel kt | Högsta kt | Medlem 0 kt |"); skriv("|---|---|---|---|---|")
+            for t in range(OMR_TIMMAR):
+                w = [v[((t * MEDL + m) * ny + cy) * nx + cx] * KT for m in range(MEDL)]
+                w = [x for x in w if math.isfinite(x) and x < 1e6]
+                if not w: skriv(f"| +{t} | - | - | - | - |"); continue
+                over = sum(1 for x in w if x >= TROSK_KT)
+                skriv(f"| +{t} | {over}/{len(w)} ({100*over/len(w):.0f} %) | {statistics.mean(w):.1f} | {max(w):.1f} | {w[0]:.1f} |")
+            # hela omradet: hur manga rutor nar 30 % / 70 % nagon gang i perioden (underlag for isolinjerna)
+            n30 = n70 = 0
+            for y in range(ny):
+                for x in range(nx):
+                    over = 0
+                    for m in range(MEDL):
+                        if any(v[((t * MEDL + m) * ny + y) * nx + x] * KT >= TROSK_KT for t in range(OMR_TIMMAR)): over += 1
+                    n30 += over >= 0.3 * MEDL; n70 += over >= 0.7 * MEDL
+            skriv(f"Hela området, byvind ≥{TROSK_KT} kt någon gång +0..+{OMR_TIMMAR-1}: {n30} rutor ≥30 %, {n70} rutor ≥70 % av {ny*nx} (isolinjerna ska omsluta dessa).")
+        skriv()
 
     # ---- E. Mellanservern mot direkt ----
-    skriv("## E. Mellanservern (Cloudflare) jämfört med direkt")
-    skriv("| Väg | Fil | Svar | Tid | Början av svaret |"); skriv("|---|---|---|---|---|")
-    for vag, bas, urs in (("direkt", BAS, None), ("mellanserver", MELLAN, SIDA)):
-        for fil in (PROV_FIL, ENS_FIL(dtg) + ".ascii?time"):
-            st, txt, sek, by = hamta(bas + fil, ursprung=urs, tidsgrans=60)
-            borjan = " ".join(txt.split())[:120].replace("|", "/")
-            skriv(f"| {vag} | {fil.split('.ascii')[0].split('.nc')[0]} | {st} | {sek:.1f} s | {borjan if st != 200 else '(OK)'} |")
-    skriv()
+    if "E" in delar:
+        skriv("## E. Mellanservern (Cloudflare) jämfört med direkt")
+        skriv("| Väg | Fil | Svar | Tid | Början av svaret |"); skriv("|---|---|---|---|---|")
+        for vag, bas, urs in (("direkt", BAS, None), ("mellanserver", MELLAN, SIDA)):
+            for fil in (PROV_FIL, ENS_FIL(dtg) + ".ascii?time"):
+                st, txt, sek, by = hamta(bas + fil, ursprung=urs, tidsgrans=60)
+                borjan = " ".join(txt.split())[:120].replace("|", "/")
+                skriv(f"| {vag} | {fil.split('.ascii')[0].split('.nc')[0]} | {st} | {sek:.1f} s | {borjan if st != 200 else '(OK)'} |")
+        skriv()
     skriv("Isolinjerna ritas i webbläsaren och testas inte här. Data: MET Norway, CC BY 4.0.")
     return spara(0)
 

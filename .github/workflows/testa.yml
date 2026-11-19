@@ -14,6 +14,10 @@ on:
         description: "Flygplats (ICAO) bland de förvalda, t.ex. ESCM, ESDF, ESIB"
         default: "ESCM"
         required: false
+      delar:
+        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), ABCDEF = allt"
+        default: "ABCDE"
+        required: false
 
 permissions:
   contents: read
@@ -25,7 +29,7 @@ concurrency:
 jobs:
   testa:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Hämta koden
         uses: actions/checkout@v4
@@ -33,6 +37,7 @@ jobs:
       - name: Testa mot thredds
         env:
           MT_PUNKT: ${{ inputs.punkt }}
+          MT_DELAR: ${{ inputs.delar }}
         run: python3 verktyg/testa_thredds.py
 
       - name: Spara resultatet
