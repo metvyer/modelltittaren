@@ -28,6 +28,9 @@ samma anrop som sidan gor - utan webblasare:
      giltighetstid: identiska serier = samma medlem (lagged). Visar ocksa katalogen
      (vilka filtyper som finns), globala attribut och variabler med bara medlemsdimension.
 
+  H. (NYTT 19/11 kvall) Saknade varden per medlem: for byvind, nederbord, sikt och
+     molnbas i punkten (alla timmar) och i ett 50 x 50 km-omrade vid +6 h.
+
 Vilka delar som kors valjs med MT_DELAR (t.ex. "ABCDE" = standard, "F", "ABCDEF").
 
 Isolinjerna ritas i webblasaren och kan inte testas har - bara datat under dem.
@@ -248,6 +251,24 @@ def medlemmar(iy, ix):
     skriv()
 
 
+def saknade(iy, ix):
+    """H: saknade varden per medlem i senaste ensemblefilen."""
+    skriv("## H. Saknade värden per medlem (senaste körningen)")
+    dtg = senaste_ens()
+    if not dtg: skriv(); return
+    skriv(f"Körning {dtg}. Antal saknade värden per medlem (bara medlemmar som saknar något visas):")
+    for pnamn, var, konv, enh in PARAM:
+        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + F.enc(f"{var}[0:1:{TIDER-1}][0][0:{MEDL-1}][{iy}][{ix}]"))
+        v = tolka_grid(txt, var) if st == 200 else []
+        pm = [sum(1 for t in range(TIDER) if not ok_varde(v[t * MEDL + m])) for m in range(MEDL)] if len(v) >= TIDER * MEDL else None
+        st2, txt2, sek2, by2 = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + F.enc(f"{var}[6][0][0:{MEDL-1}][{iy-10}:{iy+9}][{ix-10}:{ix+9}]"))
+        w = tolka_grid(txt2, var) if st2 == 200 else []
+        om = [sum(1 for i in range(400) if not ok_varde(w[m * 400 + i])) for m in range(MEDL)] if len(w) >= 400 * MEDL else None
+        def txtm(a, n): return ", ".join(f"m{m}: {c}/{n}" for m, c in enumerate(a) if c) or "inga" if a else "kunde inte läsas"
+        skriv(f"- **{pnamn}** punkt ({TIDER} h): {txtm(pm, TIDER)} | område +6 (400 rutor): {txtm(om, 400)}")
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -261,6 +282,8 @@ def main():
         matTQ(iy, ix)
     if "G" in delar:
         medlemmar(iy, ix)
+    if "H" in delar:
+        saknade(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
