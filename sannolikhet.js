@@ -7,7 +7,11 @@
 //  korningarna, hogst 2 GB / 20 % av webblasarens utrymme (minst anvant tas bort forst).
 // ===================================================================
 const ENS_FIL = dtg => "meps_lagged_6_h_subset_2_5km_" + dtg + ".ncml";
-const ENS_MEDL = 30, ENS_TIDER = 62, ENS_BIT = 13;   // hogst 13 timmar per anrop (t.ex. +0 till +12) = 390 kartfalt
+const ENS_MEDL = 30, ENS_TIDER = 62, ENS_BIT = 13;
+// NYTT 19/11 kvall (testkorning G): medlem 15-29 i en ensemblefil = medlem 0-14 i filen 3 h tidigare (samma
+// ordning, samma varden vid samma giltighetstid). Bara 0-14 ar nya. Finns forra korningens omrade sparat
+// hamtas darfor bara 0-14 (+ de medlemmar dar forra filen saknade data) och resten kopieras, forskjutet 3 h.
+const ENS_NYA = 15, ENS_LAGG_H = 3;   // hogst 13 timmar per anrop (t.ex. +0 till +12) = 390 kartfalt
 const ENS_GRANS_MB = 150;                            // hard grans per hamtning (18/11: ingen "Hamta anda" langre)
 const MAX_KM_25 = 400;                               // 2,5 km bara for omraden upp till 400 x 400 km
 const AUTO_MAX_MB = 100;                             // automatisk hamtning vid stegning bara under detta
@@ -102,7 +106,10 @@ let visaOmr = lasa("mt:visaOmr") !== "nej";   // ramar runt hamtade omraden
 let visaIso = lasa("mt:visaIso") === "ja";      // isolinjer (NYTT 19/11), av som standard
 // Isolinjer: sannolikhet 30/70 %; vardelage: fasta nivaer per parameter + troskeln. Olika utseende per niva.
 const ISO_PROB = [{ v: 0.3, namn: "30 %", streck: "6 3", bredd: 1.9 }, { v: 0.7, namn: "70 %", streck: "", bredd: 2.6 }];
-const ISO_VARDE = { by: [{ v: 32, streck: "6 3", bredd: 1.9 }, { v: 45, streck: "", bredd: 2.6 }] };
+// 19/11 kvall (Jakob): fasta isolinjer aven for sikt (3/2/1 km) och molnbas (1200/400 ft). Grovre linje = varre.
+const ISO_VARDE = { by: [{ v: 32, streck: "6 3", bredd: 1.9 }, { v: 45, streck: "", bredd: 2.6 }],
+  sikt: [{ v: 3000, streck: "6 3", bredd: 1.5 }, { v: 2000, streck: "3 2", bredd: 2 }, { v: 1000, streck: "", bredd: 2.6 }],
+  bas: [{ v: 1200, streck: "6 3", bredd: 1.9 }, { v: 400, streck: "", bredd: 2.6 }] };
 const ISO_FARG = "#111827", ISO_TROSK = { streck: "1.5 3", bredd: 2.2 };
 // Marching squares: linjesegment dar falt (ny x nx, rad 0 = sodra) passerar niva. Kartkoordinater via o.
 function isoSegment(f, o, niva) {
@@ -319,31 +326,43 @@ async function probHamta(auto) {
     if (o.s === 1 && Math.max(o.nx, o.ny) * 2.5 > MAX_KM_25 + 2.5) { status("2,5 km går bara för områden upp till " + MAX_KM_25 + " × " + MAX_KM_25 + " km. Välj 5 km eller ett mindre område.", "fel"); P.fragar = true; return; }
     if (mb > ENS_GRANS_MB) { status("För stort uttag: ca " + Math.round(mb) + " MB (gräns " + ENS_GRANS_MB + " MB per hämtning). Välj glesare upplösning, mindre område, kortare period eller var 3:e timme.", "fel"); P.fragar = true; return; }
     if (auto && mb > AUTO_MAX_MB) { status("Stort uttag (ca " + Math.round(mb) + " MB) hämtas inte automatiskt – tryck Hämta fält.", ""); P.fragar = true; return; }
-    // grupper om hogst ENS_BIT sammanhangande timmar
-    // grupper med jamnt steg (1, 3 eller 6 h), hogst ENS_BIT timmar per anrop
+    // NYTT 19/11 kvall: finns samma omrade i korningen 3 h tidigare (timme t+3) kopieras medlem 15-29 darifran.
+    // gamla[t] = forra korningens data [medlem][y][x] for timme t+3, mMax[t] = hogsta medlem som maste hamtas.
+    const dtgF = dtgText(new Date(dtgDatum(o.dtg).getTime() - ENS_LAGG_H * 3600e3)), oF = { ...o, dtg: dtgF };
+    const gamla = new Map(), mMax = new Map();
+    for (const t of sakn) {
+      const g = t + ENS_LAGG_H <= ENS_TIDER - 1 ? await timData(oF, t + ENS_LAGG_H) : null;
+      if (!g) { mMax.set(t, ENS_MEDL - 1); continue; }
+      // medlemmar som saknar data helt i forra filen (t.ex. medlem 0 for sikt/molnbas) hamtas i den nya
+      const ms = SAKN[PPARAM[o.v].bitar], n0 = o.ny * o.nx; let mx = ENS_NYA - 1;
+      for (let m = 0; m < ENS_NYA; m++) { let tom = true; for (let i = 0; i < n0; i++) if (g[m * n0 + i] !== ms) { tom = false; break; } if (tom) mx = Math.max(mx, ENS_NYA + m); }
+      gamla.set(t, g); mMax.set(t, mx);
+    }
+    // grupper med jamnt steg (1, 3 eller 6 h), hogst ENS_BIT timmar per anrop, samma antal medlemmar i hela gruppen
     const grupper = [];
     for (const t of sakn) {
       const g = grupper[grupper.length - 1];
-      if (g) { const d = t - g[1], st = g[2] || d;
+      if (g && g[3] === mMax.get(t)) { const d = t - g[1], st = g[2] || d;
         if (d === st && (d <= 6 || sakn.length === 2) && (g[1] - g[0]) / st + 2 <= ENS_BIT) { g[2] = st; g[1] = t; continue; } }
-      grupper.push([t, t, 0]);   // [forsta, sista, steg]
+      grupper.push([t, t, 0, mMax.get(t)]);   // [forsta, sista, steg, hogsta medlem att hamta]
     }
+    let ateranvant = 0;
     let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === o.y0 && x.y1 === o.y1 && x.x0 === o.x0 && x.x1 === o.x1);
     if (!e && grupper.length) { e = { dtg: o.dtg, v: o.v, s: o.s, y0: o.y0, y1: o.y1, x0: o.x0, x1: o.x1, tider: [] }; P.index.push(e); }
     const pa = PPARAM[o.v], n = o.ny * o.nx;
     for (let gi = 0; gi < grupper.length; gi++) {
-      const [g0, g1] = grupper[gi];
-      visaPForlopp(gi, grupper.length, g0, g1, (g1 - g0) / (grupper[gi][2] || 1) + 1);
+      const [g0, g1, , gm] = grupper[gi], nm = gm + 1;   // nm = antal medlemmar som hamtas (0..gm)
+      visaPForlopp(gi, grupper.length, g0, g1, (g1 - g0) / (grupper[gi][2] || 1) + 1, nm);
       const st = grupper[gi][2] || 1, nt = (g1 - g0) / st + 1;
       // thredds svarar inte med mer an ca 50 MB text per anrop -> dela omradet i rad-band vid behov.
       // Varje band kostar servern lika mycket som hela omradet, sa banden halls sa fa som mojligt.
-      const radPerBand = Math.max(1, Math.floor(ENS_MAX_MB_ANROP[ensFormat] * 1048576 / (nt * ENS_MEDL * o.nx * ENS_BYTE[ensFormat])));
+      const radPerBand = Math.max(1, Math.floor(ENS_MAX_MB_ANROP[ensFormat] * 1048576 / (nt * nm * o.nx * ENS_BYTE[ensFormat])));
       const ut = []; for (let k = 0; k < nt; k++) ut.push(nyKod(pa, ENS_MEDL * n));
       for (let r0 = 0; r0 < o.ny; r0 += radPerBand) {
         const r1 = Math.min(o.ny - 1, r0 + radPerBand - 1), nb = r1 - r0 + 1;
         if (o.ny > radPerBand) $("pForloppText").textContent = "Anrop " + (gi + 1) + " av " + grupper.length + ", band " + (r0 / radPerBand + 1) + " av " + Math.ceil(o.ny / radPerBand) + ": +" + g0 + " till +" + g1 + " h";
-        const fraga = enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][0:" + (ENS_MEDL - 1) + "][" + (o.y0 + r0 * o.s) + ":" + o.s + ":" + (o.y0 + r1 * o.s) + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
-        const behov = nt * ENS_MEDL * nb * o.nx, t1 = performance.now();
+        const fraga = enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][0:" + gm + "][" + (o.y0 + r0 * o.s) + ":" + o.s + ":" + (o.y0 + r1 * o.s) + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
+        const behov = nt * nm * nb * o.nx, t1 = performance.now();
         let v = null;
         if (ensFormat === "bin") {
           // Binart forst. Fungerar det inte gar sidan over till text for resten av besoket.
@@ -358,10 +377,16 @@ async function probHamta(auto) {
           if (!v || v.length < behov) throw new Error("Oväntat svar från servern (för få värden).");
         }
         tider.push(((performance.now() - t1) / 1000).toFixed(0));
-        for (let k = 0; k < nt; k++) for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < nb; y++) {
-          const fr = ((k * ENS_MEDL + m) * nb + y) * o.nx, till = (m * o.ny + r0 + y) * o.nx;
+        for (let k = 0; k < nt; k++) for (let m = 0; m < nm; m++) for (let y = 0; y < nb; y++) {
+          const fr = ((k * nm + m) * nb + y) * o.nx, till = (m * o.ny + r0 + y) * o.nx;
           for (let x = 0; x < o.nx; x++) koda(pa, ut[k], till + x, v[fr + x]);
         }
+      }
+      // medlemmar som inte hamtades: kopiera fran forra korningen (medlem m i nya = m-15 i gamla, 3 h senare giltighetstid)
+      if (nm < ENS_MEDL) for (let k = 0; k < nt; k++) {
+        const g = gamla.get(g0 + k * st); if (!g) continue;
+        for (let m = nm; m < ENS_MEDL; m++) ut[k].set(g.subarray((m - ENS_NYA) * n, (m - ENS_NYA + 1) * n), m * n);
+        ateranvant++;
       }
       for (let k = 0; k < nt; k++) {
         const t = g0 + k * st, arr = ut[k];
@@ -373,7 +398,8 @@ async function probHamta(auto) {
       await probVisa();
     }
     const tot = ((performance.now() - t0) / 1000).toFixed(0);
-    status(tider.length ? "Klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + (kb / 1024).toFixed(1) + " MB " + (ensFormat === "bin" ? "binärt" : "text") + "." : "Klart: allt fanns redan sparat (" + tot + " s).");
+    status(tider.length ? "Klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + (kb / 1024).toFixed(1) + " MB " + (ensFormat === "bin" ? "binärt" : "text") + "." +
+      (ateranvant ? " För " + ateranvant + " av " + sakn.length + " timmar togs medlem 15–29 från körningen " + dtgF + " (redan sparad) – bara de nya medlemmarna hämtades." : "") : "Klart: allt fanns redan sparat (" + tot + " s).");
   } catch (err) {
     status(stoppad || err.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas." : err.message, stoppad ? "" : "fel");
     if (!stoppad) P.fragar = true;   // felmeddelandet ska synas tills nagot andras
@@ -398,10 +424,11 @@ function lasDods(buf, behov) {
   for (let i = 0, q = p + 8; i < n; i++, q += 4) { const v = dv.getFloat32(q, false); ut[i] = Math.abs(v) > 9e35 ? NaN : v; }
   return ut;
 }
-function visaPForlopp(i, n, g0, g1, antal) {
+function visaPForlopp(i, n, g0, g1, antal, nm) {
+  nm = nm || ENS_MEDL;
   $("pForlopp").hidden = false; const st = $("pStapel"); st.textContent = "";
   for (let k = 0; k < n; k++) { const d = document.createElement("div"); if (k < i) d.className = "klar"; else if (k === i) d.className = "aktiv"; st.append(d); }
-  $("pForloppText").textContent = "Anrop " + (i + 1) + " av " + n + ": +" + g0 + " till +" + g1 + " h (" + antal * ENS_MEDL + " kartfält)";
+  $("pForloppText").textContent = "Anrop " + (i + 1) + " av " + n + ": +" + g0 + " till +" + g1 + " h (" + antal * nm + " kartfält" + (nm < ENS_MEDL ? ", " + nm + " av " + ENS_MEDL + " medlemmar – resten från förra körningen" : "") + ")";
 }
 
 // ---------- Berakna och visa ----------
@@ -438,9 +465,15 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk, lista) {
         if (pa.agg === "max" ? w > agg[i] : w < agg[i]) agg[i] = w; }
     }
   }
+  // NYTT 19/11 kvall: medlem helt utan data i omradet och perioden (t.ex. medlem 0 for sikt och molnbas -
+  // met.no levererar dem forst i nasta fil) raknas inte. Kravet att minst 80 % av de ovriga har data gor att
+  // en molnfri period (molnbas saknas for nastan alla) inte tolkas som "data saknas".
+  const harData = []; for (let m = 0; m < ENS_MEDL; m++) { let h = false; for (let p = 0; p < n; p++) if (isFinite(agg[m * n + p])) { h = true; break; } harData.push(h); }
+  const antHar = harData.filter(Boolean).length, utan = antHar >= 0.8 * (ENS_MEDL - 1) ? harData.map((h, m) => h ? -1 : m).filter(m => m >= 0) : [];
+  const nAnv = ENS_MEDL - utan.length, ute = new Set(utan);
   const prob = new Float32Array(n), ok = w => pa.villkor === "≥" ? w >= trosk : w < trosk;
-  for (let p = 0; p < n; p++) { let c = 0; for (let m = 0; m < ENS_MEDL; m++) { const w = agg[m * n + p]; if (isFinite(w) && ok(w)) c++; } prob[p] = c / ENS_MEDL; }
-  return { o, agg, prob };
+  for (let p = 0; p < n; p++) { let c = 0; for (let m = 0; m < ENS_MEDL; m++) { if (ute.has(m)) continue; const w = agg[m * n + p]; if (isFinite(w) && ok(w)) c++; } prob[p] = c / nAnv; }
+  return { o, agg, prob, utan, nAnv };
 }
 // Visar ALLA sparade omraden for vald parameter och korning som har hela perioden.
 // Grovt rutnat ritas forst, finare ovanpa. Ramen visar vad som hamtas vid nasta Hamta fält.
@@ -529,15 +562,21 @@ async function probVisa() {
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa, visa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
   if (!vis.length) { if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
+  const utan = [...new Set(vis.flatMap(r => r.utan || []))].sort((x, y) => x - y);
+  const utanText = utan.length ? " " + (utan.length === 1 ? "Medlem " + utan[0] + " saknar" : "Medlemmarna " + utan.join(", ") + " saknar") + " " + pa.namn.split(",")[0].toLowerCase() + " i datat och räknas inte (" + (ENS_MEDL - utan.length) + " medlemmar)." : "";
+  if (/^m\d+$/.test(visa) && utan.includes(+visa.slice(1))) {
+    $("pSam").textContent = "Medlem " + visa.slice(1) + " saknar " + pa.namn.split(",")[0].toLowerCase() + " i datat för den här körningen – kartan blir tom. (met.no levererar sikt och molnbas för den nyaste medlemmen 0 först i nästa körning, där den heter medlem 15.)";
+    return;
+  }
   if (visa !== "sannolikhet") {
     const aggT = { max: "högsta", min: "lägsta", summa: "summa" }[pa.agg];
     $("pSam").textContent = visaNamn(visa) + ": " + pa.namn.split(",")[0].toLowerCase() + ", " + aggT + " i perioden " + tidText(a) + " – " + tidText(b) +
       (pa.agg !== "summa" && dt > 1 && b > a ? " (var " + dt + ":e timme)" : "") + ". " + (pa.villkor === "<" ? "Lägsta" : "Högsta") + " värde i bilden: " +
-      (vext === null ? "–" : (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(vext) : vext.toFixed(1)).toLocaleString("sv-SE") + " " + pa.enhet) + "." + (aktuell ? "" : " Ramen är inte hämtad med vald upplösning – tryck Hämta fält.");
+      (vext === null ? "–" : (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(vext) : vext.toFixed(1)).toLocaleString("sv-SE") + " " + pa.enhet) + "." + (aktuell ? "" : " Ramen är inte hämtad med vald upplösning – tryck Hämta fält.") + utanText;
     return;
   }
   $("pSam").textContent = pa.namn + " " + pa.villkor + " " + trosk.toLocaleString("sv-SE") + " " + pa.enhet + (pa.agg === "summa" ? "" : " någon gång") + " " + tidText(a) + " – " + tidText(b) + (pa.agg !== "summa" && dt > 1 && b > a ? " (var " + dt + ":e timme)" : "") +
-    ". Högsta sannolikhet: " + Math.round(pmax * 100) + " %." + (aktuell ? "" : " Ramen (ditt valda område) är inte hämtad med vald upplösning – tryck Hämta fält.");
+    ". Högsta sannolikhet: " + Math.round(pmax * 100) + " %." + (aktuell ? "" : " Ramen (ditt valda område) är inte hämtad med vald upplösning – tryck Hämta fält.") + utanText;
 }
 
 const c_iso = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "#f3f4f6" : ISO_FARG);
@@ -583,7 +622,7 @@ function probTips(e) {
     const rund = v => V.pa.enhet === "m" || V.pa.enhet === "ft" ? Math.round(v / 10) * 10 : v.toFixed(1);
     const aggNamn = { max: "högsta", min: "lägsta", summa: "summa" }[V.pa.agg];
     const vRad = V.visa !== "sannolikhet" && r.val ? visaNamn(V.visa) + ": " + (isFinite(r.val[i]) ? rund(r.val[i]) + " " + V.pa.enhet : "inget värde") + "\n" : "";
-    visaKTips(vRad + "Sannolikhet " + Math.round(r.prob[i] * 100) + " % (" + Math.round(r.prob[i] * ENS_MEDL) + " av " + ENS_MEDL + ")\n" +
+    visaKTips(vRad + "Sannolikhet " + Math.round(r.prob[i] * 100) + " % (" + Math.round(r.prob[i] * (r.nAnv || ENS_MEDL)) + " av " + (r.nAnv || ENS_MEDL) + ")\n" +
       V.pa.namn.split(",")[0] + ", " + aggNamn + " i perioden per medlem:\nmin " + rund(Math.min(...med)) + " · median " + rund(median(med)) + " · max " + rund(Math.max(...med)) + " " + V.pa.enhet +
       (med.length < ENS_MEDL ? "\n(" + (ENS_MEDL - med.length) + " medlemmar utan värde)" : "") + plats, e.clientX + 14, e.clientY + 14);
     return;
@@ -783,6 +822,7 @@ function sattParam(behallTrosk) {
 }
 function probOmradeAndrat() { P.fragar = false; ritaOmrade(); probVisa().then(() => { if (!P.varden && !P.upptagen) status("Tryck Hämta fält för att hämta området.", ""); }); }
 function bytLage(nytt) {
+  if (nytt !== lage && typeof visaTestskylt === "function") visaTestskylt();   // testskylt vid flikbyte (19/11 kvall)
   lage = nytt; document.body.classList.toggle("p", nytt === "p");
   $("flikTH").setAttribute("aria-selected", String(nytt === "th")); $("flikP").setAttribute("aria-selected", String(nytt === "p"));
   $("vyTH").hidden = nytt === "p"; $("vyP").hidden = nytt !== "p";
@@ -797,9 +837,12 @@ function bytLage(nytt) {
   // Visa: sannolikhet / medel / hogsta / lagsta / enskild medlem
   const vs = $("pVisa");
   for (const k of ["sannolikhet", "medel", "max", "min"]) vs.add(new Option(VISA_NAMN[k], k));
-  const og = document.createElement("optgroup"); og.label = "Enskild medlem";
-  for (let m = 0; m < ENS_MEDL; m++) og.appendChild(new Option("Medlem " + m, "m" + m));
-  vs.appendChild(og);
+  // NYTT 19/11 kvall: 0-14 ar nya i korningen, 15-29 ar samma som 0-14 i korningen 3 h tidigare
+  const og = document.createElement("optgroup"); og.label = "Nya medlemmar (senaste 3 h)";
+  for (let m = 0; m < ENS_NYA; m++) og.appendChild(new Option("Medlem " + m + (m === 0 ? " (nyaste)" : ""), "m" + m));
+  const og2 = document.createElement("optgroup"); og2.label = "Från förra körningen (3 h äldre)";
+  for (let m = ENS_NYA; m < ENS_MEDL; m++) og2.appendChild(new Option("Medlem " + m + " (= " + (m - ENS_NYA) + " i förra)", "m" + m));
+  vs.append(og, og2);
   vs.value = lasa("mt:pVisa") || "sannolikhet"; if (!vs.value) vs.value = "sannolikhet";
   // 19/11 em: troskeln ar alltid installbar - i vardelaget styr den troskel-isolinjen (och meteogrammet)
   const troskAv = () => { $("pTrosk").disabled = false; };

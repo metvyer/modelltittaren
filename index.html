@@ -141,6 +141,13 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 #pMeteoRuta { margin-top: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .meteohuvud { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 13px; }
 .meteoskroll { overflow-x: auto; }
+.testrad { background: #b91c1c; color: #fff; font-size: 12px; font-weight: 700; text-align: center; padding: 3px 6px; letter-spacing: .03em; }
+.testskylt { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+.testskylt[hidden] { display: none; }
+.testruta { background: var(--panel, #fff); color: var(--fg, #111); border: 3px solid #b91c1c; border-radius: 10px; max-width: 460px; padding: 16px 18px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.testruta h2 { margin: 0 0 8px; color: #b91c1c; font-size: 18px; }
+.testruta p { font-size: 14px; line-height: 1.45; margin: 6px 0; }
+.testruta button { margin-top: 8px; }
 .meteonb { font-size: 12px; margin: 2px 0 6px; }
 .meteonb select { font-size: 12px; }
 .meteohandtag { cursor: ew-resize; touch-action: none; }
@@ -153,7 +160,18 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 </style>
 </head>
 <body>
+<div class="testrad" role="note">TESTSIDA – under utveckling, inte för operativt bruk</div>
 <h1>Modelltittaren <small id="underrubrik">Tid-höjd · AROME 2,5 km (MEPS medlem 0)</small></h1>
+<!-- NYTT 19/11 kvall: testskylt som visas vid start och vid varje flikbyte -->
+<div id="testskylt" class="testskylt" hidden role="dialog" aria-modal="true" aria-labelledby="testskyltRubrik">
+  <div class="testruta">
+    <h2 id="testskyltRubrik">Testsida – inte för operativt bruk</h2>
+    <p>Modelltittaren är under utveckling och testas fortfarande. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
+    <p><b>Använd inte sidan som underlag för operativa beslut eller prognoser.</b> Använd ordinarie verktyg och produkter.</p>
+    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov.</p>
+    <button id="testskyltOk">Jag förstår</button>
+  </div>
+</div>
 <div class="flikar" role="tablist" aria-label="Vy">
   <button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button>
 </div>
@@ -338,6 +356,9 @@ const dtgText = d => d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCD
 const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(9, 11)));
 const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
 let avbryt = null, stoppad = false, vindLage = false;
+// Testskylten: visas vid start och vid varje flikbyte (bytLage i sannolikhet.js anropar visaTestskylt)
+function visaTestskylt() { const t = $("testskylt"); if (!t) return; t.hidden = false; const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
+document.addEventListener("DOMContentLoaded", () => { const b = $("testskyltOk"); if (b) b.addEventListener("click", () => { $("testskylt").hidden = true; }); visaTestskylt(); });
 let visaNiv = lasa("mt:visaNiv") === "ja";
 let visaIsoT = lasa("mt:visaIsoT") !== "nej";   // NYTT 19/11 em: 0/-10/-20 °C-linjer (pa som standard)
 // Isotermerna: farg, bredd. Glesare tidssteg (var 3:e timme efter +23) ritas blekare.
@@ -1621,6 +1642,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261119-1750"></script>
+<script src="sannolikhet.js?v=20261119-1900"></script>
 </body>
 </html>
