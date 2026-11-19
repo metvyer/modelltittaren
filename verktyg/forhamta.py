@@ -12,6 +12,9 @@ timmar och vinden - och sparas som en fil per punkt:
 Texterna ar thredds egna ascii-svar, sa sidan laser dem med samma kod som nar
 den hamtar sjalv (laggIn). Bara senaste korningen sparas.
 
+Varv 2 (argument "tq", NYTT 19/11 em): lagger till temperatur + fukt pa modellnivaer
+i samma filer (bitar med etikett "T..."), se TQ_DELAR.
+
 Data fran MET Norway (thredds.met.no), CC BY 4.0. Bara standardbiblioteket.
 Ett anrop i taget, mjuk vantan vid 429/5xx, identifierande User-Agent.
 """
@@ -35,6 +38,11 @@ PUNKTER = [
 # Molnen och vinden pa modellnivaer hamtas upp till TOPP_FL (det tunga). Tryckytor och
 # isbildning hamtas hela vagen (litet). Valjer man hogre topp pa sidan hamtar den sjalv resten.
 TOPP_FL = 450   # 18/11: tillbaka till FL450 (FL200 sparade lite tid)
+# NYTT 19/11 em - VARV 2: temperatur + fukt pa ALLA modellnivaer upp till TOPP_FL (full upplosning i hojdled,
+# Jakobs val). Timvis +3..+23 (de forsta timmarna har passerat nar korningen ar klar), var 3:e timme +24..+45.
+# Matt 19/11: T+q kostar ca 4 s per timme och ort -> varv 2 ca 20 min for 11 orter.
+TQ_DELAR = [(3, 23, 1), (24, 45, 3)]   # (fran, till, steg)
+TQ_VAR = ("air_temperature_ml", "specific_humidity_ml")
 FOT = 3.28084
 
 # MEPS-rutnatet (Lambert konform, samma som LCC i index.html)
@@ -185,8 +193,84 @@ def punkt(dtg, nt, iy, ix):
     return {"static": stat, "bitar": bitar}
 
 
+
+def tq_punkt(dtg, nt, stat, iy, ix):
+    """Varv 2: T + q pa modellnivaer for en punkt. Lista med bitar [a, b, etikett, text] eller None.
+    Etikett "T<k1>-64" (+ ".x3" om var 3:e timme) - sidan laser den i laggIn."""
+    yx = f"[{iy}][{ix}]"
+    ks = lagsta_niva(stat)
+    bitar = []
+    for a, b, st in TQ_DELAR:
+        b = min(b, nt - 1)
+        if a > b:
+            continue
+        tt = f"[{a}:{b}]" if st == 1 else f"[{a}:{st}:{b}]"
+        v = [n + tt + f"[{ks}:{NIV - 1}]" + yx for n in TQ_VAR]
+        etikett = f"T{ks}-{NIV - 1}" + ("" if st == 1 else f".x{st}")
+        code, txt = hamta(BAS + FIL(dtg) + ".ascii?" + enc(",".join(v)), tidsgrans=300)
+        if code != 200:
+            print(f"  T+q +{a}..+{b}: svar {code}", flush=True)
+            return None
+        bitar.append([a, b, etikett, txt])
+    return bitar
+
+
+def varv_tq(ut):
+    """Varv 2: lagger till T + q i de redan forhamtade orterna for senaste korningen (index.json: "tq": true)."""
+    thdir = os.path.join(ut, "th")
+    idxfil = os.path.join(thdir, "index.json")
+    if not os.path.exists(idxfil):
+        print("Varv 2: inget forhamtat - inget gors."); return 0
+    with open(idxfil, encoding="utf-8") as f:
+        idx = json.load(f)
+    if not idx.get("klar") or idx.get("tq"):
+        print(f"Varv 2: {idx.get('dtg')} {'har redan T+q' if idx.get('tq') else 'ar inte klar'} - inget gors."); return 0
+    dtg, nt = idx["dtg"], idx["nt"]
+    print(f"Varv 2 (T + fukt): {dtg}, {len(idx['punkter'])} punkter", flush=True)
+    t0, ok = time.time(), 0
+    for nyckel, fil in idx["punkter"].items():
+        iy, ix = map(int, nyckel.split(":"))
+        path = os.path.join(thdir, dtg, fil)
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+        if any(str(b[2]).startswith("T") for b in d["bitar"]):
+            ok += 1; continue
+        t1 = time.time()
+        tq = tq_punkt(dtg, nt, d["static"], iy, ix)
+        if not tq:
+            print(f"{nyckel}: T+q misslyckades", flush=True); continue
+        d["bitar"] += tq
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
+        ok += 1
+        print(f"{nyckel}: T+q {time.time() - t1:.0f} s", flush=True)
+    if ok == 0:
+        print("Varv 2: ingen punkt fick T+q."); return 0
+    idx["tq"] = ok == len(idx["punkter"])          # alla klara -> inte igen; annars forsoker nasta korning av skriptet
+    idx["tqTider"] = [list(x) for x in TQ_DELAR]
+    with open(idxfil, "w", encoding="utf-8") as f:
+        json.dump(idx, f, ensure_ascii=False, indent=1)
+    print(f"Varv 2 klart: {ok} punkter pa {time.time() - t0:.0f} s, {STAT['anrop']} anrop, {STAT['byte'] / 1e6:.1f} MB")
+    sfil = os.path.join(ut, "statistik.json")
+    logg = []
+    try:
+        with open(sfil, encoding="utf-8") as f:
+            logg = json.load(f)
+    except Exception:
+        pass
+    logg.insert(0, {"tid": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "dtg": dtg, "punkter": ok, "varv": "T+q",
+                    "anrop": STAT["anrop"], "byte": STAT["byte"], "sek": round(time.time() - t0)})
+    with open(sfil, "w", encoding="utf-8") as f:
+        json.dump(logg[:STAT_MAX], f, ensure_ascii=False, indent=0)
+    with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as f:
+        f.write("andrat=ja\n")
+    return 0
+
+
 def main():
     ut = sys.argv[1] if len(sys.argv) > 1 else "forhamtat"
+    if len(sys.argv) > 2 and sys.argv[2] == "tq":   # varv 2 (NYTT 19/11 em)
+        return varv_tq(ut)
     thdir = os.path.join(ut, "th")
     os.makedirs(thdir, exist_ok=True)
     idxfil = os.path.join(thdir, "index.json")
@@ -230,7 +314,7 @@ def main():
         if os.path.isdir(p) and namn != dtg:
             shutil.rmtree(p, ignore_errors=True)
     idx = {"dtg": dtg, "nt": nt, "klar": True, "topp": TOPP_FL, "skapad": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
-           "punkter": punkter}
+           "punkter": punkter, "tq": False}
     with open(idxfil, "w", encoding="utf-8") as f:
         json.dump(idx, f, ensure_ascii=False, indent=1)
     print(f"Klart: {len(punkter)} punkter pa {time.time() - t0:.0f} s, {STAT['anrop']} anrop, {STAT['byte'] / 1e6:.1f} MB")

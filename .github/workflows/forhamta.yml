@@ -5,6 +5,9 @@
 # (verktyg/forhamta.py). Datat sparas pa grenen "data" (skrivs over varje gang -
 # ingen historik som vaxer). Nar korningen ar klar startar "Publicera"
 # (publicera.yml), som lagger ut sidan med datat.
+# NYTT 19/11 em: tva varv. Varv 1 = moln/vind som forut -> sparas och publiceras
+# direkt (Publicera startas har). Varv 2 = temperatur + fukt pa modellnivaer
+# (ca 20 min) -> sparas igen; Publicera startar da av sig sjalv nar jobbet ar klart.
 name: Förhämtning
 
 on:
@@ -14,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # for att starta Publicera efter varv 1
 
 concurrency:
   group: forhamtning
@@ -22,7 +26,7 @@ concurrency:
 jobs:
   forhamta:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Hämta koden
         uses: actions/checkout@v4
@@ -37,11 +41,11 @@ jobs:
           fi
           ls -R forhamtat | head -20
 
-      - name: Förhämta ny körning
+      - name: Förhämta ny körning (varv 1, moln och vind)
         id: hamta
         run: python3 verktyg/forhamta.py forhamtat
 
-      - name: Spara datat på grenen data
+      - name: Spara datat på grenen data (varv 1)
         if: steps.hamta.outputs.andrat == 'ja'
         run: |
           cd forhamtat
@@ -49,5 +53,26 @@ jobs:
           git checkout -q -b data
           git add -A
           git -c user.name="modelltittaren-bot" -c user.email="actions@users.noreply.github.com" commit -q -m "Förhämtat data $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
+          rm -rf .git
+
+      - name: Publicera molnen direkt
+        if: steps.hamta.outputs.andrat == 'ja'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run publicera.yml -R "${{ github.repository }}" --ref main || echo "Kunde inte starta Publicera (publiceras efter varv 2)"
+
+      - name: Temperatur och fukt (varv 2)
+        id: tq
+        run: python3 verktyg/forhamta.py forhamtat tq
+
+      - name: Spara datat på grenen data (varv 2)
+        if: steps.tq.outputs.andrat == 'ja'
+        run: |
+          cd forhamtat
+          git init -q
+          git checkout -q -b data
+          git add -A
+          git -c user.name="modelltittaren-bot" -c user.email="actions@users.noreply.github.com" commit -q -m "Förhämtat data + T/q $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
           rm -rf .git
