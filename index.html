@@ -42,6 +42,9 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .skroll { flex: 1 1 auto; overflow-x: auto; min-width: 0; }
 .skewruta { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .skewruta[hidden] { display: none; }
+/* NYTT 19/11 kvall: pa breda skarmar foljer kartan med nar man rullar ner till skew-T (klicka ny plats bredvid sonderingen) */
+@media (min-width: 861px) { body:not(.p) .kartpanel { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow: auto; } }
+@media (min-width: 861px) { .smalskarm { display: none; } }
 .skewhuvud { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
 .skewhuvud #skewStang { margin-left: auto; }
 #skewSvg { width: 100%; max-width: 820px; height: auto; display: block; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
@@ -295,6 +298,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button class="sek liten" id="skewBak" title="Timmen före">◀</button>
     <b id="skewTitel">Skew-T</b>
     <button class="sek liten" id="skewFram" title="Timmen efter">▶</button>
+    <button class="sek liten smalskarm" id="skewKarta" title="Till kartan för att välja en ny plats (skew-T följer med, samma timme)">Karta ↑</button>
     <button class="sek liten" id="skewIn" title="Zooma in (eller mushjul / nyp med två fingrar)">+</button>
     <button class="sek liten" id="skewUt" title="Zooma ut">−</button>
     <button class="sek liten" id="skewHela" title="Hela diagrammet (eller dubbelklicka)">Hela</button>
@@ -302,7 +306,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button class="sek liten" id="skewStang" title="Stäng skew-T">✕</button>
   </div>
   <svg id="skewSvg" viewBox="0 0 640 540" preserveAspectRatio="xMidYMid meet"></svg>
-  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶.</div>
+  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶. Klickar du en ny plats på kartan följer skew-T med (samma timme).</div>
 </div>
 
 <div class="forklaring" id="fVind" hidden>
@@ -1246,12 +1250,12 @@ async function hamtaSkewTimme(t) {
   if (res.st !== 200) { $("skewInfo").textContent = "Kunde inte hämta (svar " + res.st + ")."; return false; }
   const et = e.join("."); await sparaBit(t, t, et, res.txt); laggIn(res.txt, t, t, et); $("skewInfo").textContent = ""; return true;
 }
-async function oppnaSkewT(t) {
+async function oppnaSkewT(t, rullaTill) {
   if (!M || !M.stat || !M.ytaOK[t]) return;
   const nyOppnad = $("skewRuta").hidden;
   if (SKZ.M !== M) { SKZ.M = M; SKZ.pB = 0; }   // ny punkt/korning -> utgangslaget
   skewT = Math.max(0, Math.min(M.nt - 1, t)); $("skewRuta").hidden = false; rita();
-  if (nyOppnad) setTimeout(() => $("skewRuta").scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+  if (nyOppnad || rullaTill) setTimeout(() => $("skewRuta").scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
   ritaSkewT();                                  // det som finns direkt
   const m = M, tt = skewT;
   if (skewBehov(tt).tq || skewBehov(tt).w) { try { await hamtaSkewTimme(tt); } catch (e) { $("skewInfo").textContent = "Kunde inte hämta timmen."; } if (M === m && skewT === tt) { ritaSkewT(); rita(); } }
@@ -1597,6 +1601,8 @@ async function hamtaAllt() {
     status(koad ? "Byter punkt …" : stoppad || e.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas. Tryck Hämta för att fortsätta." : e.message, stoppad ? "" : "fel");
   } finally {
     upptagen = false; forloppSlut(); ritaMarkorer();
+    // NYTT 19/11 kvall: ar skew-T oppen foljer den med till den nya punkten (samma timme)
+    if (skewT !== null && !koad && M && M.stat && !$("skewRuta").hidden) oppnaSkewT(skewT, innerWidth <= 860);
     $("hamta").disabled = false; $("stopp").disabled = true;
     if (koad) { koad = false; setTimeout(hamtaAllt, 0); }
   }
@@ -1840,6 +1846,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
     $("skewIn").addEventListener("click", () => SKZ.geo && skewZooma(1.5, ...mitt()));
     $("skewUt").addEventListener("click", () => SKZ.geo && skewZooma(1 / 1.5, ...mitt()));
     $("skewHela").addEventListener("click", skewNollstall);
+    $("skewKarta").addEventListener("click", () => document.querySelector(".kartpanel").scrollIntoView({ behavior: "smooth", block: "start" }));
     sv.addEventListener("dblclick", skewNollstall);
     sv.addEventListener("wheel", ev => { if (!SKZ.geo) return; ev.preventDefault(); const [mx, my] = vb(ev); skewZooma(ev.deltaY < 0 ? 1.25 : 0.8, mx, my); }, { passive: false });
     const pek = new Map(); let nyp = null;
