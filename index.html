@@ -211,7 +211,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <div class="falt"><label for="pTill">Till</label><div class="rad"><select id="pTill"></select><button class="sek liten" id="pEnTimme" title="Sätt Till = Från (en enda timme)">= Från</button></div></div>
     <div class="falt"><label>Flytta perioden</label><div class="rad"><button class="sek liten" id="pBak" title="Bakåt">◀</button><button class="sek liten" id="pFram" title="Framåt">▶</button></div></div>
     <div class="falt"><label>&nbsp;</label><label class="kryss"><input type="checkbox" id="pAuto" checked> Hämta automatiskt när jag stegar</label></div>
-    <div class="falt"><label for="pSteg">Steg</label><select id="pSteg"><option value="per">periodens längd</option><option value="1">1 h</option><option value="3">3 h</option><option value="6">6 h</option><option value="12">12 h</option></select></div>
+    <div class="falt"><label for="pSteg">Steg</label><select id="pSteg"><option value="1">1 h</option><option value="per">periodens längd</option><option value="3">3 h</option><option value="6">6 h</option><option value="12">12 h</option></select></div>
     <div class="falt"><label for="pDt">Timmar att använda</label><select id="pDt"><option value="1">varje timme</option><option value="3">var 3:e timme</option><option value="6">var 6:e timme</option></select></div>
     <div class="falt"><label for="pStorlek">Område</label><select id="pStorlek"><option value="75">75 km</option><option value="150" selected>150 km</option><option value="300">300 km</option><option value="600">600 km</option><option value="1000">1000 km</option></select></div>
     <div class="falt"><label for="pUppl">Upplösning</label><select id="pUppl"><option value="1">2,5 km</option><option value="2" selected>5 km</option><option value="4">10 km</option><option value="8">20 km</option></select></div>
@@ -1539,6 +1539,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261119-1740"></script>
+<script src="sannolikhet.js?v=20261119-1750"></script>
 </body>
 </html>

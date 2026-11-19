@@ -842,8 +842,9 @@ function bytLage(nytt) {
   $("pFran").addEventListener("change", () => { if (+$("pFran").value > +$("pTill").value) $("pTill").value = $("pFran").value; probVisa(); });
   $("pTill").addEventListener("change", () => { if (+$("pTill").value < +$("pFran").value) $("pFran").value = $("pTill").value; probVisa(); });
   $("pEnTimme").addEventListener("click", () => { $("pTill").value = $("pFran").value; probVisa(); autoHamta(); });   // en enda timme
-  $("pSteg").value = lasa("mt:pSteg") || "per"; $("pDt").value = lasa("mt:pDt") || "1";
-  $("pSteg").addEventListener("change", () => lagra("mt:pSteg", $("pSteg").value));
+  // 19/11 em (Jakob): standard 1 h per steg - da hamtas bara den nya timmen. Ny nyckel sa att gamla "per" inte ligger kvar.
+  $("pSteg").value = lasa("mt:pSteg2") || "1"; $("pDt").value = lasa("mt:pDt") || "1";
+  $("pSteg").addEventListener("change", () => lagra("mt:pSteg2", $("pSteg").value));
   $("pDt").addEventListener("change", () => { lagra("mt:pDt", $("pDt").value); probVisa(); });
   // Perioden flyttas med sin langd: +0 till +12 -> +12 till +24 (slutet blir nasta start).
   // En enda timme (Fran = Till) flyttas en timme i taget och forblir en enda timme.
