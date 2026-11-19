@@ -31,6 +31,9 @@ samma anrop som sidan gor - utan webblasare:
   H. (NYTT 19/11 kvall) Saknade varden per medlem: for byvind, nederbord, sikt och
      molnbas i punkten (alla timmar) och i ett 50 x 50 km-omrade vid +6 h.
 
+  I. (NYTT 19/11 kvall) Ar ensemblens medlem 0 samma korning som det-filen (meps_det_2_5km)?
+     Jamfor T2m och byvind i punkten for samma DTG, och visa att det-filen har sikt och molnbas.
+
 Vilka delar som kors valjs med MT_DELAR (t.ex. "ABCDE" = standard, "F", "ABCDEF").
 
 Isolinjerna ritas i webblasaren och kan inte testas har - bara datat under dem.
@@ -279,6 +282,31 @@ def saknade1(dtg, iy, ix):
         skriv(f"- **{pnamn}** punkt ({TIDER} h): {txtm(pm, TIDER)} | område +6 (400 rutor): {txtm(om, 400)}")
 
 
+def kontroll(iy, ix):
+    """I: medlem 0 i ensemblen mot det-filen."""
+    skriv("## I. Medlem 0 i ensemblen jämfört med det-filen (meps_det_2_5km)")
+    nu = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    d = nu - timedelta(hours=nu.hour % 3)
+    gjorda = 0
+    for i in range(6):
+        dtg = (d - timedelta(hours=3 * i)).strftime("%Y%m%dT%HZ")
+        st1, t1, *_ = hamta(BAS + ENS_FIL(dtg) + ".ascii?time", tidsgrans=60)
+        st2, t2, *_ = hamta(BAS + F.FIL(dtg) + ".ascii?time", tidsgrans=60)
+        if st1 != 200 or st2 != 200: continue
+        rad = []
+        for var in ("air_temperature_2m", "wind_speed_of_gust", "visibility_in_air", "cloud_base_altitude"):
+            se, te, *_ = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + F.enc(f"{var}[0:1:{TIDER-1}][0][0][{iy}][{ix}]"))
+            sd, td, *_ = hamta(BAS + F.FIL(dtg) + ".ascii?" + F.enc(f"{var}[0:1:{TIDER-1}][0][{iy}][{ix}]"))
+            ve = tolka_grid(te, var) if se == 200 else []; vd = tolka_grid(td, var) if sd == 200 else []
+            par = [(a, b) for a, b in zip(ve, vd) if ok_varde(a) and ok_varde(b)]
+            maxd = max((abs(a - b) for a, b in par), default=float("nan"))
+            rad.append(f"{var}: ens m0 {sum(ok_varde(x) for x in ve)}/{len(ve)} värden, det {sum(ok_varde(x) for x in vd)}/{len(vd)}, största skillnad {maxd:.4g} ({len(par)} jämförda)")
+        skriv(f"**{dtg}**"); [skriv("- " + r) for r in rad]
+        gjorda += 1
+        if gjorda == 2: break
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -294,6 +322,8 @@ def main():
         medlemmar(iy, ix)
     if "H" in delar:
         saknade(iy, ix)
+    if "I" in delar:
+        kontroll(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
