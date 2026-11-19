@@ -1202,8 +1202,12 @@ let skewT = null;   // vald timme
 // streckad Td, torradiabater (bruna), fuktadiabater (grona), blandningskvot (streckade, g/kg), 0 °C blå.
 // Plottens hojd/bredd = 0.88 -> 45° nar 1 °C i sidled = 1 °C i hojdled.
 const SK = { B: 640, H: 540, V: 16, HO: 78, TOPP: 8, BOTT: 52, TBREDD: 60 };
+// 19/11 kvall: skew-T har ALLTID samma hojdomfang som Jakobs forlaga - fran marken till SKEW_PTOPP (ca FL385),
+// oberoende av diagramtoppen i tid-hojd. Da blir lutningen (45°) och skalan densamma varje gang.
+const SKEW_PTOPP = 200;   // hPa
+function skewK1(t) { const ps = M.yta[0][t]; for (let k = 0; k < NIV; k++) if ((M.ap[k] + M.b[k] * ps) / 100 >= SKEW_PTOPP) return Math.max(0, k - 1); return 0; }
 function skewBehov(t) {
-  const { k1 } = behov(); let tq = false, w = false;
+  const k1 = skewK1(t); let tq = false, w = false;
   for (let k = k1; k < NIV; k++) if (!M.tqHar[t * NIV + k]) { tq = true; break; }
   for (let k = NIV - 1; k >= k1; k -= VIND_DK) if (!M.wHar[t * NIV + k]) { w = true; break; }
   return { k1, tq, w };
@@ -1233,9 +1237,9 @@ function ritaSkewT() {
   const t = skewT, css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
   const ps = M.yta[0][t], d = new Date(M.t0 + t * 3600e3);
   $("skewTitel").textContent = "Skew-T " + VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + ")";
-  const { k1 } = behov();
+  const k1 = skewK1(t);
   const pk = k => (M.ap[k] + M.b[k] * ps) / 100;
-  const pBott = Math.max(ps / 100 + 8, 1000), pTopp = Math.max(100, pk(k1) - 5);
+  const pBott = Math.max(ps / 100 + 8, 1000), pTopp = SKEW_PTOPP;
   const X0 = SK.V, X1 = SK.B - SK.HO, Y0 = SK.TOPP, Y1 = SK.H - SK.BOTT, Wd = X1 - X0, Hd = Y1 - Y0;
   // T-axelns hogra ande: 20 °C, eller hogre om 2 m-temperaturen ar varmare
   const t2 = M.yta[1][t] - 273.15, TMAX = Math.max(20, Math.ceil(((isFinite(t2) ? t2 : 0) + 6) / 10) * 10), TMIN = TMAX - SK.TBREDD, pxC = Wd / SK.TBREDD;
