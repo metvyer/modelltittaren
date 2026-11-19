@@ -23,6 +23,11 @@ samma anrop som sidan gor - utan webblasare:
      timme / + T,q till FL450 var 3:e timme). V0 och V1 kors tva ganger
      for att se spridningen. Ger en uppskattning av forhamtningens tid.
 
+  G. (NYTT 19/11 kvall) Vilka medlemmar ar vilka? Jamfor T2m for alla 30 medlemmar
+     mellan senaste ensemblefilen och de tva foregaende (3 och 6 h aldre) vid samma
+     giltighetstid: identiska serier = samma medlem (lagged). Visar ocksa katalogen
+     (vilka filtyper som finns), globala attribut och variabler med bara medlemsdimension.
+
 Vilka delar som kors valjs med MT_DELAR (t.ex. "ABCDE" = standard, "F", "ABCDEF").
 
 Isolinjerna ritas i webblasaren och kan inte testas har - bara datat under dem.
@@ -177,6 +182,72 @@ def matTQ(iy, ix):
     skriv()
 
 
+def medlemmar(iy, ix):
+    """G: kartlagg medlemmarna i lagged-filerna."""
+    skriv("## G. Vilka medlemmar är vilka (lagged)?")
+    # katalogen
+    st, kat, sek, by = hamta("https://thredds.met.no/thredds/catalog/mepslatest/catalog.xml", tidsgrans=60)
+    if st == 200:
+        namn = re.findall(r'name="(meps_[^"]+)"', kat)
+        typer = {}
+        for n in namn:
+            typ = re.sub(r"\d{8}T\d{2}Z", "<DTG>", n); typer.setdefault(typ, []).append(n)
+        skriv(f"Katalogen mepslatest: {len(namn)} filer, {len(typer)} typer:")
+        skriv("```"); [skriv(f"{len(v):3d} st  {k}   (senaste: {sorted(v)[-1]})") for k, v in sorted(typer.items())]; skriv("```")
+    else:
+        skriv(f"Katalogen: svar {st}")
+    # senaste subset + tva foregaende
+    nu = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    d = nu - timedelta(hours=nu.hour % 3)
+    kor = []
+    for i in range(8):
+        dtg = (d - timedelta(hours=3 * i)).strftime("%Y%m%dT%HZ")
+        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?time", tidsgrans=60)
+        m = re.search(r"\ntime\[(\d+)\]", txt) if st == 200 else None
+        if m and int(m.group(1)) >= TIDER: kor.append(dtg)
+        if len(kor) == 3: break
+    if len(kor) < 2:
+        skriv("För få kompletta körningar."); skriv(); return
+    skriv(f"Jämför {', '.join(kor)} i punkten iy={iy} ix={ix}")
+    # globala attribut + variabler utan rumsdimension
+    st, das, sek, by = hamta(BAS + ENS_FIL(kor[0]) + ".das", tidsgrans=120)
+    if st == 200:
+        m = re.search(r"NC_GLOBAL \{(.*?)\n    \}", das, re.S)
+        if m: skriv("Globala attribut:"); skriv("```"); skriv("\n".join(r.strip() for r in m.group(1).strip().split("\n"))[:3000]); skriv("```")
+    st, dds, sek, by = hamta(BAS + ENS_FIL(kor[0]) + ".dds", tidsgrans=60)
+    if st == 200:
+        sma = [r.strip() for r in dds.split("\n") if "ensemble_member" in r and "[x =" not in r and "[y =" not in r]
+        skriv("Variabler med medlemsdimension men utan x/y:"); skriv("```"); skriv("\n".join(sma[:30]) or "(inga)"); skriv("```")
+    # T2m-serier
+    serier = {}
+    for dtg in kor:
+        fr = F.enc(f"air_temperature_2m[0:1:{TIDER-1}][0][0:{MEDL-1}][{iy}][{ix}]")
+        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + fr)
+        v = tolka_grid(txt, "air_temperature_2m") if st == 200 else []
+        if len(v) >= TIDER * MEDL: serier[dtg] = v
+        skriv(f"- {dtg}: svar {st}, {len(v)} värden, {sek:.1f} s")
+    ny = kor[0]
+    if ny not in serier: skriv(); return
+    A = serier[ny]
+    for gam in kor[1:]:
+        if gam not in serier: continue
+        B = serier[gam]
+        dh = int((datetime.strptime(ny, "%Y%m%dT%HZ") - datetime.strptime(gam, "%Y%m%dT%HZ")).total_seconds() // 3600)
+        par, rader = {}, []
+        for m in range(MEDL):
+            bast, bfel = None, 1e9
+            for m2 in range(MEDL):
+                fel = [abs(A[t * MEDL + m] - B[(t + dh) * MEDL + m2]) for t in range(TIDER - dh)
+                       if ok_varde(A[t * MEDL + m]) and ok_varde(B[(t + dh) * MEDL + m2])]
+                if fel and max(fel) < bfel: bfel, bast = max(fel), m2
+            if bfel < 0.01: par[m] = bast
+            rader.append(f"{m}->{bast}({bfel:.3f})")
+        skriv(f"**{ny} mot {gam} ({dh} h äldre): {len(par)} av {MEDL} medlemmar identiska.**")
+        skriv("Ny medlem -> medlem i äldre filen (största skillnad K): " + ", ".join(rader))
+        skriv("Identiska: " + (", ".join(f"{a}={b}" for a, b in sorted(par.items())) or "inga"))
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -188,6 +259,8 @@ def main():
     skriv()
     if "F" in delar:
         matTQ(iy, ix)
+    if "G" in delar:
+        medlemmar(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 

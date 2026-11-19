@@ -15,7 +15,7 @@ on:
         default: "ESCM"
         required: false
       delar:
-        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), ABCDEF = allt"
+        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), G = vilka medlemmar (lagged)"
         default: "ABCDE"
         required: false
 
