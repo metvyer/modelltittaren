@@ -11,7 +11,8 @@ const ENS_MEDL = 30, ENS_TIDER = 62, ENS_BIT = 13;
 // NYTT 19/11 kvall (testkorning G): medlem 15-29 i en ensemblefil = medlem 0-14 i filen 3 h tidigare (samma
 // ordning, samma varden vid samma giltighetstid). Bara 0-14 ar nya. Finns forra korningens omrade sparat
 // hamtas darfor bara 0-14 (+ de medlemmar dar forra filen saknade data) och resten kopieras, forskjutet 3 h.
-const ENS_NYA = 15, ENS_LAGG_H = 3;   // hogst 13 timmar per anrop (t.ex. +0 till +12) = 390 kartfalt
+const ENS_NYA = 15, ENS_LAGG_H = 3;
+const DET_FIL = dtg => "meps_det_2_5km_" + dtg + ".ncml";   // medlem 0:s sikt/molnbas (saknas i ensemblefilen)   // hogst 13 timmar per anrop (t.ex. +0 till +12) = 390 kartfalt
 const ENS_GRANS_MB = 150;                            // hard grans per hamtning (18/11: ingen "Hamta anda" langre)
 const MAX_KM_25 = 400;                               // 2,5 km bara for omraden upp till 400 x 400 km
 const AUTO_MAX_MB = 100;                             // automatisk hamtning vid stegning bara under detta
@@ -346,7 +347,7 @@ async function probHamta(auto) {
         if (d === st && (d <= 6 || sakn.length === 2) && (g[1] - g[0]) / st + 2 <= ENS_BIT) { g[2] = st; g[1] = t; continue; } }
       grupper.push([t, t, 0, mMax.get(t)]);   // [forsta, sista, steg, hogsta medlem att hamta]
     }
-    let ateranvant = 0;
+    let ateranvant = 0, detM0 = false;
     let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === o.y0 && x.y1 === o.y1 && x.x0 === o.x0 && x.x1 === o.x1);
     if (!e && grupper.length) { e = { dtg: o.dtg, v: o.v, s: o.s, y0: o.y0, y1: o.y1, x0: o.x0, x1: o.x1, tider: [] }; P.index.push(e); }
     const pa = PPARAM[o.v], n = o.ny * o.nx;
@@ -382,6 +383,19 @@ async function probHamta(auto) {
           for (let x = 0; x < o.nx; x++) koda(pa, ut[k], till + x, v[fr + x]);
         }
       }
+      // NYTT 19/11 kvall: medlem 0 = det-filens korning (testkorning I: identiska varden). Ensemblefilen saknar
+      // sikt och molnbas for medlem 0 -> hamtas ur meps_det_2_5km_<DTG> (en medlem, litet anrop). Gar det inte
+      // (det-filen inte klar an) blir medlem 0 tom och raknas inte (som forut).
+      if (o.v === "sikt" || o.v === "bas") {
+        const ms = SAKN[pa.bitar]; let tom = true;
+        for (let k = 0; k < nt && tom; k++) for (let i = 0; i < n; i++) if (ut[k][i] !== ms) { tom = false; break; }
+        if (tom) try {
+          const fr = enc(pa.var + "[" + g0 + ":" + st + ":" + g1 + "][0][" + o.y0 + ":" + o.s + ":" + o.y1 + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]");
+          const res = await hamta(BAS + DET_FIL(o.dtg) + ".dods?" + fr, false, true);
+          const v = res.st === 200 && res.buf ? lasDods(res.buf, nt * n) : null;
+          if (v) { kb += res.buf.byteLength / 1024; detM0 = true; for (let k = 0; k < nt; k++) for (let i = 0; i < n; i++) koda(pa, ut[k], i, v[k * n + i]); }
+        } catch (x) { if (stoppad) throw x; }
+      }
       // medlemmar som inte hamtades: kopiera fran forra korningen (medlem m i nya = m-15 i gamla, 3 h senare giltighetstid)
       if (nm < ENS_MEDL) for (let k = 0; k < nt; k++) {
         const g = gamla.get(g0 + k * st); if (!g) continue;
@@ -399,7 +413,7 @@ async function probHamta(auto) {
     }
     const tot = ((performance.now() - t0) / 1000).toFixed(0);
     status(tider.length ? "Klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + (kb / 1024).toFixed(1) + " MB " + (ensFormat === "bin" ? "binärt" : "text") + "." +
-      (ateranvant ? " För " + ateranvant + " av " + sakn.length + " timmar togs medlem 15–29 från körningen " + dtgF + " (redan sparad) – bara de nya medlemmarna hämtades." : "") : "Klart: allt fanns redan sparat (" + tot + " s).");
+      (ateranvant ? " För " + ateranvant + " av " + sakn.length + " timmar togs medlem 15–29 från körningen " + dtgF + " (redan sparad) – bara de nya medlemmarna hämtades." : "") + (detM0 ? " Medlem 0:s " + pa.namn.split(",")[0].toLowerCase() + " togs ur det-filen (saknas i ensemblefilen)." : "") : "Klart: allt fanns redan sparat (" + tot + " s).");
   } catch (err) {
     status(stoppad || err.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas." : err.message, stoppad ? "" : "fel");
     if (!stoppad) P.fragar = true;   // felmeddelandet ska synas tills nagot andras
@@ -646,6 +660,12 @@ async function meteoHamta(dtg, v, iy, ix) {
   const raa = tolka(res.txt)[pa.var]; if (!raa || raa.length < ENS_TIDER * ENS_MEDL) throw new Error("Oväntat svar");
   const d = new Float32Array(ENS_TIDER * ENS_MEDL);   // [t][m], i visningsenhet
   for (let i = 0; i < d.length; i++) d[i] = isFinite(raa[i]) ? pa.konv(raa[i]) : NaN;
+  // NYTT 19/11 kvall: medlem 0 saknar sikt/molnbas i ensemblefilen -> ur det-filen (samma korning)
+  if ((v === "sikt" || v === "bas") && !Array.from({ length: ENS_TIDER }, (_, t) => d[t * ENS_MEDL]).some(isFinite)) try {
+    const r2 = await hamta(BAS + DET_FIL(dtg) + ".ascii?" + enc(pa.var + "[0:1:" + (ENS_TIDER - 1) + "][0][" + iy + "][" + ix + "]"));
+    const w = r2.st === 200 ? tolka(r2.txt)[pa.var] : null;
+    if (w && w.length >= ENS_TIDER) for (let t = 0; t < ENS_TIDER; t++) d[t * ENS_MEDL] = isFinite(w[t]) ? pa.konv(w[t]) : NaN;
+  } catch (x) {}
   meteoCache.set(k, d); return d;
 }
 function kvantil(s, q) { if (!s.length) return NaN; const p = (s.length - 1) * q, a = Math.floor(p), b = Math.ceil(p); return s[a] + (s[b] - s[a]) * (p - a); }

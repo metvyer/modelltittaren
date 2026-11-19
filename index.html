@@ -271,6 +271,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button id="lMoln" aria-pressed="true">Moln</button><button id="lVind" aria-pressed="false">Vind</button>
   </div>
   <button class="sek liten" id="lNiv" aria-pressed="false" title="Visa modellnivåernas höjd (MEPS har 65 nivåer, 64 = lägsta)">Modellnivåer</button>
+  <button class="sek liten" id="lHov" aria-pressed="true" title="Visa rutan med värden när du håller muspekaren (eller fingret) över diagrammet och tabellen">Hovring</button>
   <button class="sek liten" id="lIso" aria-pressed="true" title="0, −10 och −20 °C ur modellens temperatur på alla modellnivåer (förhämtade flygplatser: varje timme +3 till +23, var 3:e timme +24 till +45)">Isotermer</button>
   <button class="sek liten" id="lMetar" aria-pressed="false" title="Visa observerade molnskikt (METAR) och senaste TAF från närmaste flygplats">METAR/TAF</button>
   <button class="sek liten" id="lIs" aria-pressed="false" title="Nedisning från MEPS isindex. TEST: gränserna är obekräftade och underskattar jämfört med SMHI">Nedisning (test)</button>
@@ -360,6 +361,7 @@ let avbryt = null, stoppad = false, vindLage = false;
 function visaTestskylt() { const t = $("testskylt"); if (!t) return; t.hidden = false; const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
 document.addEventListener("DOMContentLoaded", () => { const b = $("testskyltOk"); if (b) b.addEventListener("click", () => { $("testskylt").hidden = true; }); visaTestskylt(); });
 let visaNiv = lasa("mt:visaNiv") === "ja";
+let visaHovring = lasa("mt:visaHovring") !== "nej";   // NYTT 19/11 kvall: hovringsrutan i tid-hojd (diagram + tabell) av/pa
 let visaIsoT = lasa("mt:visaIsoT") !== "nej";   // NYTT 19/11 em: 0/-10/-20 °C-linjer (pa som standard)
 // Isotermerna: farg, bredd. Glesare tidssteg (var 3:e timme efter +23) ritas blekare.
 const ISOTERM = [{ t: 0, farg: "#dc2626", bredd: 2, namn: "0°" }, { t: -10, farg: "#d97706", bredd: 1.6, namn: "−10°" }, { t: -20, farg: "#7c3aed", bredd: 1.4, namn: "−20°" }];
@@ -1299,6 +1301,7 @@ function tipsText(t, yPix, xPix) {
   return rad;
 }
 function visaTips(e) {
+  if (!visaHovring) { gomTips(); return; }   // NYTT 19/11 kvall: knappen Hovring av
   const tip = $("tips"); if (!M || !M.sk) { tip.hidden = true; return; }
   const r = $("svg").getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, t = Math.floor(x / COL);
   if (t < 0 || t >= M.nt || y < 0 || y > r.height) { tip.hidden = true; return; }
@@ -1624,6 +1627,8 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
   $("lNiv").setAttribute("aria-pressed", String(visaNiv));
   $("lIso").setAttribute("aria-pressed", String(visaIsoT));
+  $("lHov").setAttribute("aria-pressed", String(visaHovring));
+  $("lHov").addEventListener("click", e => { visaHovring = !visaHovring; lagra("mt:visaHovring", visaHovring ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaHovring)); if (!visaHovring) gomTips(); });
   $("vagVal").value = VAG_LAGE;
   $("vagVal").addEventListener("change", e => { VAG_LAGE = e.target.value; lagra("mt:vag", VAG_LAGE); VAG = null; vagLofte = null; visaVag(); });
   $("lIs").setAttribute("aria-pressed", String(visaIs)); $("fIs").hidden = !visaIs;
@@ -1642,6 +1647,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261119-1900"></script>
+<script src="sannolikhet.js?v=20261119-1915"></script>
 </body>
 </html>
