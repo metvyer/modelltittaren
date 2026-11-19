@@ -94,7 +94,16 @@ export class Kalla extends WorkerEntrypoint {
       const fil = url.pathname.replace(/^\/mepslatest\//, "");
       kalla = THREDDS + fil + url.search; tid = cachetid(fil, url.search);
     }
-    const svar = await fetch(kalla, { headers: UA });
+    let svar = await fetch(kalla, { headers: UA });
+    // NYTT 19/11: vid fel sparas borjan av felsvaret + vem som svarade (Server/Via) i statistiken,
+    // sa vi ser om 500-felen kommer fran thredds sjalv eller nagot mellanled. Felsvar ar sma.
+    let feltext = "";
+    if (svar.status !== 200) {
+      const txt = await svar.text().catch(() => "");
+      const vem = ["Server", "Via"].map(k => svar.headers.get(k) ? k + "=" + svar.headers.get(k) : "").filter(Boolean).join(" ");
+      feltext = (" || " + (vem ? vem + " | " : "") + txt.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()).slice(0, 250);
+      svar = new Response(txt, { status: svar.status, headers: svar.headers });
+    }
     const h = new Headers();
     for (const k of ["Content-Type", "Content-Length"]) { const v = svar.headers.get(k); if (v) h.set(k, v); }
     // Bara lyckade svar cachas; fel (404, 429, 500 …) ska frågas på nytt nästa gång
@@ -105,7 +114,7 @@ export class Kalla extends WorkerEntrypoint {
       transform(bit, k) { byte += bit.byteLength; k.enqueue(bit); },
       flush() { klar(); },
     });
-    this.ctx.waitUntil(fardig.then(() => loggaHamtning(this.env.DB, typAv(url), vadAv(url), svar.status, byte, Date.now() - start)));
+    this.ctx.waitUntil(fardig.then(() => loggaHamtning(this.env.DB, typAv(url), vadAv(url) + feltext, svar.status, byte, Date.now() - start)));
     if (!svar.body) klar();
     return new Response(svar.body ? svar.body.pipeThrough(raknare) : null, { status: svar.status, headers: h });
   }

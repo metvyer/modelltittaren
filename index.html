@@ -406,6 +406,7 @@ function status(t, klass) {
 // Provas en gang per besok: forst thredds direkt (kort tidsgrans), annars
 // mellanservern. Alla svar fran servern (aven 404) raknas som kontakt.
 let VAG = null, vagLofte = null;
+let direktNas = null;   // NYTT 19/11: null = inte provat, true/false = thredds nas/nas inte direkt (provas vid 5xx fran mellanservern)
 // Installning (sparas i webblasaren): auto = direkt forst, mellanservern om thredds inte svarar;
 // alltid = via mellanservern (delad cache), direkt bara om mellanservern inte svarar; av = alltid direkt.
 // Standard (18/11): alltid via mellanservern - delad cache, avlastar met.no; direkt om den inte svarar.
@@ -457,6 +458,16 @@ async function hamta(url, medRetry = true, binar = false) {
     if (st === 0 && url !== orig && VAG === "mellan") {
       VAG = "direkt"; vagLofte = Promise.resolve("direkt"); visaVag(); url = orig;
       status("Mellanservern svarar inte – fortsätter direkt mot thredds.met.no …"); f--; continue;
+    }
+    // NYTT 19/11: mellanservern svarar 5xx (morgnarna 18-19/11 svarade thredds GitHub men inte Cloudflare)
+    // -> kolla en gang per besok om thredds nas direkt harifran; i sa fall resten av besoket direkt.
+    if (st >= 500 && url !== orig && VAG === "mellan") {
+      if (direktNas === null) { status("Mellanservern svarade " + st + " – provar direkt mot thredds.met.no …"); direktNas = await svarar(BAS, PROV_DIREKT_S); }
+      if (direktNas) {
+        VAG = "direkt"; vagLofte = Promise.resolve("direkt"); url = orig;
+        const e = $("vagInfo"); if (e) e.textContent = " Mellanservern gav fel (" + st + ") – hämtar direkt från thredds.met.no resten av besöket.";
+        f--; continue;
+      }
     }
     if (st === 200) return { st, txt, buf };
     if (st === 404 || st === 400 || st === 403) return { st, txt };
