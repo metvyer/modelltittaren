@@ -253,20 +253,30 @@ def medlemmar(iy, ix):
 
 def saknade(iy, ix):
     """H: saknade varden per medlem i senaste ensemblefilen."""
-    skriv("## H. Saknade värden per medlem (senaste körningen)")
-    dtg = senaste_ens()
-    if not dtg: skriv(); return
+    skriv("## H. Saknade värden per medlem (senaste körningen + de tre föregående)")
+    dtg0 = senaste_ens()
+    if not dtg0: skriv(); return
+    d0 = datetime.strptime(dtg0, "%Y%m%dT%HZ")
+    for i in range(4):
+      dtg = (d0 - timedelta(hours=3 * i)).strftime("%Y%m%dT%HZ")
+      saknade1(dtg, iy, ix)
+    skriv()
+
+
+def saknade1(dtg, iy, ix):
     skriv(f"Körning {dtg}. Antal saknade värden per medlem (bara medlemmar som saknar något visas):")
-    for pnamn, var, konv, enh in PARAM:
+    for pnamn, var, konv, enh in PARAM[2:]:   # bara sikt och molnbas (byvind/nb saknar inget)
         st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + F.enc(f"{var}[0:1:{TIDER-1}][0][0:{MEDL-1}][{iy}][{ix}]"))
         v = tolka_grid(txt, var) if st == 200 else []
         pm = [sum(1 for t in range(TIDER) if not ok_varde(v[t * MEDL + m])) for m in range(MEDL)] if len(v) >= TIDER * MEDL else None
         st2, txt2, sek2, by2 = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + F.enc(f"{var}[6][0][0:{MEDL-1}][{iy-10}:{iy+9}][{ix-10}:{ix+9}]"))
         w = tolka_grid(txt2, var) if st2 == 200 else []
         om = [sum(1 for i in range(400) if not ok_varde(w[m * 400 + i])) for m in range(MEDL)] if len(w) >= 400 * MEDL else None
-        def txtm(a, n): return ", ".join(f"m{m}: {c}/{n}" for m, c in enumerate(a) if c) or "inga" if a else "kunde inte läsas"
+        def txtm(a, n):
+            if not a: return "kunde inte läsas"
+            hel = [f"m{m}" for m, c in enumerate(a) if c == n]; dels = sum(1 for c in a if 0 < c < n)
+            return ("helt tomma: " + (", ".join(hel) or "inga")) + (f"; {dels} medl. delvis" if dels else "")
         skriv(f"- **{pnamn}** punkt ({TIDER} h): {txtm(pm, TIDER)} | område +6 (400 rutor): {txtm(om, 400)}")
-    skriv()
 
 
 def main():
