@@ -174,6 +174,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
     <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
+    <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 27/45 kt och tröskeln (värdeläge)">Isolinjer</button>
     <span class="kartpos" id="kartPos"></span>
   </div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
@@ -1522,6 +1523,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261119-0710b"></script>
+<script src="sannolikhet.js?v=20261119-0720"></script>
 </body>
 </html>

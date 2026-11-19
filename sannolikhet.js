@@ -97,6 +97,32 @@ const DB = (() => {
 
 // ---------- Tillstand ----------
 let visaOmr = lasa("mt:visaOmr") !== "nej";   // ramar runt hamtade omraden
+let visaIso = lasa("mt:visaIso") === "ja";      // isolinjer (NYTT 19/11), av som standard
+// Isolinjer: sannolikhet 30/70 %; vardelage: fasta nivaer per parameter + troskeln. Olika utseende per niva.
+const ISO_PROB = [{ v: 0.3, namn: "30 %", streck: "6 3", bredd: 1.9 }, { v: 0.7, namn: "70 %", streck: "", bredd: 2.6 }];
+const ISO_VARDE = { by: [{ v: 27, streck: "6 3", bredd: 1.9 }, { v: 45, streck: "", bredd: 2.6 }] };
+const ISO_FARG = "#111827", ISO_TROSK = { streck: "1.5 3", bredd: 2.2 };
+// Marching squares: linjesegment dar falt (ny x nx, rad 0 = sodra) passerar niva. Kartkoordinater via o.
+function isoSegment(f, o, niva) {
+  let d = "";
+  const X = ix => o.x0 + ix * o.s, Y = iy => KY - 1 - (o.y0 + iy * o.s);
+  const ip = (a, b) => (niva - a) / (b - a);
+  for (let y = 0; y < o.ny - 1; y++) for (let x = 0; x < o.nx - 1; x++) {
+    const a = f[y * o.nx + x], b = f[y * o.nx + x + 1], c = f[(y + 1) * o.nx + x + 1], e = f[(y + 1) * o.nx + x];
+    if (!isFinite(a) || !isFinite(b) || !isFinite(c) || !isFinite(e)) continue;
+    const k = (a >= niva ? 1 : 0) | (b >= niva ? 2 : 0) | (c >= niva ? 4 : 0) | (e >= niva ? 8 : 0);
+    if (k === 0 || k === 15) continue;
+    // kantpunkter: s = sodra (a-b), o = ostra (b-c), n = norra (e-c), v = vastra (a-e)
+    const P_ = {
+      s: () => [X(x + ip(a, b)), Y(y)], o: () => [X(x + 1), Y(y + ip(b, c))],
+      n: () => [X(x + ip(e, c)), Y(y + 1)], v: () => [X(x), Y(y + ip(a, e))] };
+    const par = { 1: ["s", "v"], 2: ["s", "o"], 3: ["v", "o"], 4: ["o", "n"], 5: ["s", "o", "n", "v"], 6: ["s", "n"], 7: ["v", "n"],
+      8: ["v", "n"], 9: ["s", "n"], 10: ["s", "v", "o", "n"], 11: ["o", "n"], 12: ["v", "o"], 13: ["s", "o"], 14: ["s", "v"] }[k];
+    for (let i = 0; i < par.length; i += 2) { const p1 = P_[par[i]](), p2 = P_[par[i + 1]]();
+      d += "M" + p1[0].toFixed(2) + " " + p1[1].toFixed(2) + "L" + p2[0].toFixed(2) + " " + p2[1].toFixed(2); }
+  }
+  return d;
+}
 const P = { senast: null, ny: false, finns: new Set(), dtg: null, tid: [], omr: null, data: new Map(), index: [], upptagen: false, varden: null };
 // index: [{ dtg, v, s, y0, y1, x0, x1, tider: [t...] }] – vilka omraden och timmar som finns sparade
 
@@ -488,6 +514,16 @@ async function probVisa() {
     g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
       preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   }
+  // isolinjer ovanpa fargerna
+  if (visaIso) for (const r of vis) {
+    const nivaer = visa === "sannolikhet" ? ISO_PROB.map(n => ({ ...n, f: r.prob }))
+      : [...(ISO_VARDE[v] || []).map(n => ({ ...n, f: r.val })), ...(isFinite(trosk) ? [{ v: trosk, ...ISO_TROSK, f: r.val }] : [])];
+    for (const n of nivaer) {
+      // sikt/bas: lagre ar varre -> linjen ar densamma, nivan ar bara ett varde
+      const d = isoSegment(n.f, r.o, n.v); if (!d) continue;
+      g.appendChild(el("path", { d, fill: "none", stroke: c_iso(), "stroke-width": n.bredd, "stroke-dasharray": n.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+    }
+  }
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa, visa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
   if (!vis.length) { if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
@@ -502,8 +538,24 @@ async function probVisa() {
     ". Högsta sannolikhet: " + Math.round(pmax * 100) + " %." + (aktuell ? "" : " Ramen (ditt valda område) är inte hämtad med vald upplösning – tryck Hämta fält.");
 }
 
+const c_iso = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "#f3f4f6" : ISO_FARG);
+// liten linjebild for forklaringen
+function isoForkl(f, streck, bredd, text) {
+  const sp = document.createElement("span"), sv = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  sv.setAttribute("width", 26); sv.setAttribute("height", 10); sv.style.verticalAlign = "middle"; sv.style.marginRight = "4px";
+  const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  for (const [k, w] of Object.entries({ x1: 1, x2: 25, y1: 5, y2: 5, stroke: c_iso(), "stroke-width": bredd, "stroke-dasharray": streck })) l.setAttribute(k, w);
+  sv.append(l); sp.append(sv, text); f.append(sp);
+}
+function ritaIsoForkl(f) {
+  if (!visaIso) return;
+  const v = $("pParam").value, pa = PPARAM[v], tr = parseFloat($("pTrosk").value.replace(",", "."));
+  if (visaLage() === "sannolikhet") for (const n of ISO_PROB) isoForkl(f, n.streck, n.bredd, "isolinje " + n.namn);
+  else { for (const n of ISO_VARDE[v] || []) isoForkl(f, n.streck, n.bredd, n.v + " " + pa.enhet);
+    if (isFinite(tr)) isoForkl(f, ISO_TROSK.streck, ISO_TROSK.bredd, "tröskel " + tr.toLocaleString("sv-SE") + " " + pa.enhet); }
+}
 function ritaPForklaring() {
-  const f = $("pForkl"); f.textContent = "";
+  const f = $("pForkl"); f.textContent = ""; ritaIsoForkl(f);
   if (visaLage() !== "sannolikhet") {
     const v = $("pParam").value, pa = PPARAM[v], K = VKLASS[v], lv = pa.villkor === "<";
     const ft = w => w.toLocaleString("sv-SE");
@@ -756,6 +808,8 @@ function bytLage(nytt) {
   $("punkt").addEventListener("change", () => { if (lage === "p") probOmradeAndrat(); });
   $("pHamta").addEventListener("click", probHamta);
   $("visaOmr").setAttribute("aria-pressed", String(visaOmr));
+  $("visaIso").setAttribute("aria-pressed", String(visaIso));
+  $("visaIso").addEventListener("click", e => { visaIso = !visaIso; lagra("mt:visaIso", visaIso ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaIso)); probVisa(); });
   $("visaOmr").addEventListener("click", e => { visaOmr = !visaOmr; lagra("mt:visaOmr", visaOmr ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaOmr)); ritaOmrade(); });
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
   $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p"));
