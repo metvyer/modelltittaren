@@ -213,6 +213,11 @@ function ritaOmrade() {
   const o = berakna(); if (!o) return;
   const r = (e, stil) => g.appendChild(el("rect", { x: e.x0 - e.s / 2, y: KY - 1 - e.y1 - e.s / 2, width: e.x1 - e.x0 + e.s, height: e.y1 - e.y0 + e.s,
     fill: "none", "vector-effect": "non-scaling-stroke", style: stil }));
+  // NYTT 19/11 natt: snabba omraden (i mellanserverns cache) - gronstreckade
+  if (visaSnabb && P.dtg) { const sett = new Set();
+    for (const rr of regOmr(P.dtg, o.v, o.s)) { const k = [rr.y0, rr.y1, rr.x0, rr.x1].join(":"); if (sett.has(k)) continue; sett.add(k);
+      const t = el("rect", { x: rr.x0 - rr.s / 2, y: KY - 1 - rr.y1 - rr.s / 2, width: rr.x1 - rr.x0 + rr.s, height: rr.y1 - rr.y0 + rr.s, fill: "var(--mkhamt)", "fill-opacity": 0.13, stroke: "var(--mkhamt)", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke" });
+      const tt = el("title"); tt.textContent = "Snabbhämtat: finns i mellanserverns cache (" + PPARAM[o.v].namn.split(",")[0].toLowerCase() + ", " + (o.s * 2.5).toLocaleString("sv-SE") + " km)"; t.appendChild(tt); g.appendChild(t); } }
   // sparade omraden for samma parameter och korning (tunt, prickat)
   if (visaOmr) for (const e of P.index) if (P.dtg && e.dtg === P.dtg && e.v === o.v) r(e, "stroke:var(--dim);stroke-width:1;stroke-dasharray:2 3");
   r(o, "stroke:var(--acc);stroke-width:2;stroke-dasharray:6 4");
@@ -319,9 +324,111 @@ function periodTimmar() {
 //    Nederbord behover bara start och slut och hamtas timme for timme.
 //  * Medlemmarna hamtas i tva halvor: 0-14 och 15-29. Finns forra korningens data sparad (15-29 = 0-14 dar,
 //    3 h forskjutet) hoppas andra halvan over.
+
+// ===================================================================
+//  REGISTRET - "snabbt i mellanserverns cache" (NYTT 19/11 natt)
+//  Mellanservern bokfor varje lyckad hamtning fran thredds (D1 cachereg). Sidan laser listan och:
+//   * visar omradena som gronstreckade rutor pa kartan (knappen Snabba),
+//   * hamtar ALLA cachade omraden som overlappar ditt (exakt samma fraga -> svaret ur cachen, ingen thredds),
+//     syr ihop dem till ditt omrade om de tacker det, annars visas de och knappen "Hamta resten" tar
+//     hela ditt omrade fran thredds i ett anrop.
+//  Medlem 15-29 kan ocksa komma ur forra korningens cachade medlem 0-14 (3 h forskjutet).
+// ===================================================================
+let REG = { t: 0, nyckel: "", rader: [] }, visaSnabb = lasa("mt:visaSnabb") !== "nej", visaRest = false;
+async function hamtaRegister(tvinga) {
+  if (!P.dtg) return [];
+  const dtgF = dtgText(new Date(dtgDatum(P.dtg).getTime() - ENS_LAGG_H * 3600e3)), nyckel = P.dtg + "," + dtgF;
+  if (!tvinga && REG.nyckel === nyckel && Date.now() - REG.t < 60e3) return REG.rader;
+  try { const r = await fetch(REG_URL + "?dtg=" + nyckel, { cache: "no-store" }); if (r.ok) REG = { t: Date.now(), nyckel, rader: await r.json() }; } catch (e) {}
+  return REG.rader;
+}
+// cachade omraden for vald parameter/upplosning i korningen dtg (en rad per anrop)
+function regOmr(dtg, v, sGrid) { const va = PPARAM[v].var; return REG.rader.filter(r => r.typ === "omr" && r.dtg === dtg && r.var === va && r.s === sGrid && /\.dods$/.test(r.fil)); }
+const regDelar = new Map();   // fraga -> Promise<{rad, data: Map(t -> Float32Array [m][y][x] for m0..m1)}>
+function hamtaRegRad(r) {
+  const k = r.fil + r.fraga; if (regDelar.has(k)) return regDelar.get(k);
+  const pr = (async () => {
+    const nt = Math.floor((r.t1 - r.t0) / r.st) + 1, nm = r.m1 - r.m0 + 1, ny = (r.y1 - r.y0) / r.s + 1, nx = (r.x1 - r.x0) / r.s + 1, n = ny * nx;
+    const res = await hamta(BAS + r.fil + r.fraga, false, true);
+    const v = res.st === 200 && res.buf ? lasDods(res.buf, nt * nm * n) : null; if (!v) return null;
+    const data = new Map(); for (let k2 = 0; k2 < nt; k2++) data.set(r.t0 + k2 * r.st, v.subarray(k2 * nm * n, (k2 + 1) * nm * n));
+    return { rad: r, data, cache: res.cache, kb: res.buf.byteLength / 1024 };
+  })();
+  regDelar.set(k, pr); pr.then(x => { if (!x) regDelar.delete(k); });
+  return pr;
+}
+const overlappar = (a, b) => a.y0 <= b.y1 && b.y0 <= a.y1 && a.x0 <= b.x1 && b.x0 <= a.x1;
+// Snabbfasen: returnerar { antal, tackt (0-1), kb } - antal cachade bitar som lades in
+async function snabbFas(o, oH, sakn, pa) {
+  const ut = { antal: 0, tackt: 0, kb: 0, traff: 0 };
+  if (!visaSnabb || VAG !== "mellan" || !sakn.length) return ut;
+  await hamtaRegister(true);
+  const dtgF = dtgText(new Date(dtgDatum(o.dtg).getTime() - ENS_LAGG_H * 3600e3));
+  const nya = regOmr(o.dtg, o.v, o.s), gamla = regOmr(dtgF, o.v, o.s);
+  // en "bit" = ett rektangel+tidsblock i nya korningen (medlemshalvorna slas ihop)
+  const bitar = new Map();
+  for (const r of nya) { if (!overlappar(r, oH) || !sakn.some(t => t >= r.t0 && t <= r.t1 && (t - r.t0) % r.st === 0)) continue;
+    const k = [r.y0, r.y1, r.x0, r.x1, r.t0, r.t1, r.st].join(":"); if (!bitar.has(k)) bitar.set(k, []); bitar.get(k).push(r); }
+  for (const [, rader] of bitar) {
+    const b = rader[0], e0 = { dtg: o.dtg, v: o.v, s: o.s, y0: b.y0, y1: b.y1, x0: b.x0, x1: b.x1 };
+    const ny = (b.y1 - b.y0) / b.s + 1, nx = (b.x1 - b.x0) / b.s + 1, n = ny * nx;
+    if ((b.t1 - b.t0 + 1) * ENS_MEDL * n * ENS_BYTE[ensFormat] / 1048576 > ENS_GRANS_MB) continue;   // for stor bit
+    const tider = []; for (let t = b.t0; t <= b.t1; t += b.st) if (!P.index.some(x => innehaller(x, { ...e0, ny, nx }) && x.tider.includes(t))) tider.push(t);
+    if (!tider.length) continue;
+    const delar = (await Promise.all(rader.map(hamtaRegRad))).filter(Boolean);
+    // medlem m vid timme t: ur nya korningens rad, annars forra korningens medlem m-15 vid t+3 (samma rektangel)
+    const kodat = new Map(); let komplett = true;
+    for (const t of tider) {
+      const arr = nyKod(pa, ENS_MEDL * n); kodat.set(t, arr);
+      for (let m = 0; m < ENS_MEDL && komplett; m++) {
+        let kalla = null, mi = 0;
+        for (const d of delar) if (m >= d.rad.m0 && m <= d.rad.m1 && d.data.has(t)) { kalla = d.data.get(t); mi = m - d.rad.m0; break; }
+        if (!kalla && m >= ENS_NYA) {
+          const lokal = await timData({ ...e0, dtg: dtgF, ny, nx }, t + ENS_LAGG_H);
+          if (lokal) { arr.set(lokal.subarray((m - ENS_NYA) * n, (m - ENS_NYA + 1) * n), m * n); continue; }
+          const g = gamla.find(r => r.y0 === b.y0 && r.y1 === b.y1 && r.x0 === b.x0 && r.x1 === b.x1 && m - ENS_NYA >= r.m0 && m - ENS_NYA <= r.m1 && t + ENS_LAGG_H >= r.t0 && t + ENS_LAGG_H <= r.t1 && (t + ENS_LAGG_H - r.t0) % r.st === 0);
+          const gd = g ? await hamtaRegRad(g) : null;
+          if (gd && gd.data.has(t + ENS_LAGG_H)) { kalla = gd.data.get(t + ENS_LAGG_H); mi = m - ENS_NYA - g.m0; }
+        }
+        if (!kalla) { komplett = false; break; }
+        for (let i = 0; i < n; i++) koda(pa, arr, m * n + i, kalla[mi * n + i]);
+      }
+      if (!komplett) break;
+    }
+    if (!komplett) continue;
+    for (const d of delar) { ut.kb += d.kb; if (d.cache === "HIT") ut.traff++; }
+    let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === b.y0 && x.y1 === b.y1 && x.x0 === b.x0 && x.x1 === b.x1);
+    if (!e) { e = { ...e0, tider: [] }; P.index.push(e); }
+    for (const [t, arr] of kodat) { await DB.put(nyckelE(e, t), arr); minneSatt(nyckelE(e, t), arr); if (!e.tider.includes(t)) e.tider.push(t); }
+    e.anv = Date.now(); ut.antal++;
+  }
+  if (!ut.antal) return ut;
+  // sy ihop till ditt (snappade) omrade for de timmar dar bitarna tacker allt
+  const n = oH.ny * oH.nx; let fyllda = 0, mojliga = 0;
+  let eH = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === oH.y0 && x.y1 === oH.y1 && x.x0 === oH.x0 && x.x1 === oH.x1);
+  for (const t of sakn) {
+    const arr = nyKod(pa, ENS_MEDL * n), fylld = new Uint8Array(n);
+    for (const e of P.index) {
+      if (e.dtg !== o.dtg || e.v !== o.v || e.s !== o.s || !e.tider.includes(t) || !overlappar(e, oH) || e === eH) continue;
+      const eny = (e.y1 - e.y0) / e.s + 1, enx = (e.x1 - e.x0) / e.s + 1, d = await timData({ ...e, ny: eny, nx: enx }, t); if (!d) continue;
+      const ya = Math.max(e.y0, oH.y0), yb = Math.min(e.y1, oH.y1), xa = Math.max(e.x0, oH.x0), xb = Math.min(e.x1, oH.x1);
+      for (let y = ya; y <= yb; y += o.s) for (let x = xa; x <= xb; x += o.s) {
+        const iH = ((y - oH.y0) / o.s) * oH.nx + (x - oH.x0) / o.s, iE = ((y - e.y0) / e.s) * enx + (x - e.x0) / e.s;
+        if (fylld[iH]) continue; fylld[iH] = 1;
+        for (let m = 0; m < ENS_MEDL; m++) arr[m * n + iH] = d[m * eny * enx + iE];
+      }
+    }
+    let c = 0; for (let i = 0; i < n; i++) c += fylld[i]; fyllda += c; mojliga += n;
+    if (c === n) { if (!eH) { eH = { dtg: o.dtg, v: o.v, s: o.s, y0: oH.y0, y1: oH.y1, x0: oH.x0, x1: oH.x1, tider: [] }; P.index.push(eH); }
+      await DB.put(nyckelE(eH, t), arr); minneSatt(nyckelE(eH, t), arr); if (!eH.tider.includes(t)) eH.tider.push(t); }
+  }
+  ut.tackt = mojliga ? fyllda / mojliga : 0;
+  await DB.put("index", P.index);
+  return ut;
+}
 const ENS_SNAPP = 8, ENS_TBLOCK = 12;
-async function probHamta(auto) {
-  auto = auto === true;
+async function probHamta(auto, utanSnabb) {
+  auto = auto === true; utanSnabb = utanSnabb === true;
   if (P.upptagen) return;
   const o0 = berakna(); if (!o0) { status("Klicka på kartan eller ange lat/lon för områdets mitt.", "fel"); return; }
   P.fragar = false; P.upptagen = true; stoppad = false; $("pHamta").disabled = true; $("pStopp").disabled = false;
@@ -329,12 +436,25 @@ async function probHamta(auto) {
   try {
     if (!await aktivKorning()) throw new Error("Hittade ingen komplett ensemblekörning de senaste 18 timmarna. Senaste försöket: " + varforEj(""));
     const o = { ...o0, dtg: P.dtg }; ritaOmrade(); if (!auto) zoomaTillOmrade(o);
-    const pa = PPARAM[o.v], { lista } = periodTimmar(), sakn = saknadeTimmar(o, lista);
+    const pa = PPARAM[o.v], { lista } = periodTimmar(); let sakn = saknadeTimmar(o, lista);
     // snappat hamtomrade
     const snapp = (a, b, max) => { const g = ENS_SNAPP * o.s, maxA = Math.floor(max / o.s) * o.s;
       let lo = Math.floor(a / g) * g, hi = Math.ceil((b + o.s) / g) * g - o.s; if (hi > maxA) hi = maxA; return [lo, hi]; };
     const [hy0, hy1] = snapp(o.y0, o.y1, LCC.ny - 1), [hx0, hx1] = snapp(o.x0, o.x1, LCC.nx - 1);
     const oH = { ...o, y0: hy0, y1: hy1, x0: hx0, x1: hx1, ny: (hy1 - hy0) / o.s + 1, nx: (hx1 - hx0) / o.s + 1 }, n = oH.ny * oH.nx;
+    // snabbfasen: cachade omraden fran mellanservern (registret)
+    if (!utanSnabb && sakn.length) {
+      status("Kollar om området redan finns i mellanserverns cache …");
+      const sf = await snabbFas(o, oH, sakn, pa);
+      if (sf.antal) {
+        sakn = saknadeTimmar(o, lista); visaRest = sakn.length > 0; $("pRest").hidden = !visaRest;
+        kb += sf.kb; await probVisa(); ritaOmrade();
+        if (!sakn.length) { status("Klart: allt fanns i mellanserverns cache (" + sf.antal + " områden, " + (sf.kb / 1024).toFixed(1) + " MB, " + ((performance.now() - t0) / 1000).toFixed(0) + " s) – ingen hämtning från met.no."); return; }
+        status("Visar snabbhämtade områden ur mellanserverns cache (" + sf.antal + " st) – de täcker " + Math.round(sf.tackt * 100) + " % av ditt område. Flytta eller krympa ramen in i det gröna, eller tryck Hämta resten för hela ditt område från met.no.", "");
+        P.fragar = true; return;
+      }
+    }
+    visaRest = false; $("pRest").hidden = true;
     // tidsblock
     const dt = +$("pDt").value || 1, block = new Map();
     for (const t of sakn) {
@@ -437,6 +557,7 @@ async function probHamta(auto) {
     if (!stoppad) P.fragar = true;   // felmeddelandet ska synas tills nagot andras
   } finally {
     P.upptagen = false; P.autoVantar = false; $("pHamta").disabled = false; $("pStopp").disabled = true; $("pForlopp").hidden = true; ritaOmrade(); await probVisa();
+    setTimeout(async () => { await hamtaRegister(true); ritaOmrade(); }, 4000);   // det nyss hamtade blir gront
     if (P.autoIgen) { P.autoIgen = false; autoHamta(); }
   }
 }
@@ -867,6 +988,7 @@ function bytLage(nytt) {
   $("underrubrik").textContent = nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
   lagra("mt:lageVy", nytt); $("kTips").hidden = true;
   ritaMarkorer(); ritaOmrade(); probVisa();
+  if (nytt === "p") hamtaRegister().then(ritaOmrade);
 }
 (async function startaP() {
   const sel = $("pParam");
@@ -961,6 +1083,11 @@ function bytLage(nytt) {
   $("visaOmr").setAttribute("aria-pressed", String(visaOmr));
   $("visaIso").setAttribute("aria-pressed", String(visaIso));
   $("visaIso").addEventListener("click", e => { visaIso = !visaIso; lagra("mt:visaIso", visaIso ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaIso)); probVisa(); });
+  // NYTT 19/11 natt: snabba omraden (registret) + Hamta resten
+  $("visaSnabb").setAttribute("aria-pressed", String(visaSnabb));
+  $("visaSnabb").addEventListener("click", e => { visaSnabb = !visaSnabb; lagra("mt:visaSnabb", visaSnabb ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaSnabb)); if (visaSnabb) hamtaRegister(true).then(ritaOmrade); else ritaOmrade(); });
+  $("pRest").addEventListener("click", () => probHamta(false, true));
+  setInterval(() => { if (lage === "p" && visaSnabb && !document.hidden) hamtaRegister().then(ritaOmrade); }, 60e3);
   $("visaOmr").addEventListener("click", e => { visaOmr = !visaOmr; lagra("mt:visaOmr", visaOmr ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaOmr)); ritaOmrade(); });
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
   $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p"));

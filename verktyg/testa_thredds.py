@@ -36,6 +36,9 @@ samma anrop som sidan gor - utan webblasare:
 
   J. (NYTT 19/11 kvall) Tid for ett sannolikhetsomrade med alla 30 medlemmar mot bara 0-14.
 
+  K. (NYTT 19/11 natt) Registret: samma omradesfraga tva ganger via mellanservern (forsta = met.no,
+     andra = cachen?), sedan /register - star fragan dar?
+
 Vilka delar som kors valjs med MT_DELAR (t.ex. "ABCDE" = standard, "F", "ABCDEF").
 
 Isolinjerna ritas i webblasaren och kan inte testas har - bara datat under dem.
@@ -330,6 +333,27 @@ def tidMedlemmar(iy, ix):
     skriv()
 
 
+def register(iy, ix):
+    """K: registret i mellanservern."""
+    skriv("## K. Registret i mellanservern")
+    dtg = senaste_ens()
+    if not dtg: skriv(); return
+    fraga = F.enc(f"wind_speed_of_gust[0:1:12][0][0:14][{iy-8}:1:{iy+7}][{ix-8}:1:{ix+7}]")
+    for i in (1, 2):
+        st, buf, sek, by = hamta(MELLAN + ENS_FIL(dtg) + ".dods?" + fraga, ursprung=SIDA, tidsgrans=120, binart=True)
+        skriv(f"- anrop {i} via mellanservern: svar {st}, {sek:.1f} s, {by/1024:.0f} kB")
+        time.sleep(5)
+    st, txt, sek, by = hamta(MELLAN.replace("/mepslatest/", "/register") + "?dtg=" + dtg, ursprung=SIDA, tidsgrans=60)
+    try:
+        import json; rader = json.loads(txt)
+        egen = [r for r in rader if r.get("fraga") == "?" + fraga]
+        skriv(f"- /register: svar {st}, {len(rader)} rader för {dtg}; vår fråga finns: {'JA' if egen else 'NEJ'}")
+        if egen: skriv("```"); skriv(json.dumps(egen[0], ensure_ascii=False)); skriv("```")
+    except Exception as e:
+        skriv(f"- /register: svar {st}, kunde inte läsas ({e}): {txt[:200]}")
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -349,6 +373,8 @@ def main():
         kontroll(iy, ix)
     if "J" in delar:
         tidMedlemmar(iy, ix)
+    if "K" in delar:
+        register(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
