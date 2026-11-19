@@ -83,6 +83,28 @@ async function loggaHamtning(db, typ, vad, status, byte, ms) {
   } catch (e) {}
 }
 
+// ---- Register over det som ligger i cachen (NYTT 19/11 natt) ----
+// Varje lyckad hamtning fran thredds bokfors i D1-tabellen cachereg med exakt fraga och vad den innehaller
+// (omrade/timmar/medlemmar for ensemblen, punkt for tid-hojd). Sidan laser registret (/register) och kan
+// da stalla exakt samma fraga -> svaret kommer ur cachen. Raden "gar ut" nar cachetiden ar slut.
+// Cachen ligger per Cloudflare-datacenter och kan tommas tidigare - da blir det bara en vanlig hamtning.
+const OMR_RE = /^(\w+)\[(\d+):(\d+):(\d+)\]\[0\]\[(\d+):(\d+)\]\[(\d+):(\d+):(\d+)\]\[(\d+):(\d+):(\d+)\]$/;
+async function bokfor(db, fil, sok, byte, tid) {
+  if (!db || !sok) return;
+  const m0 = fil.match(/_(\d{8}T\d{2}Z)\.ncml/); if (!m0) return;
+  const dtg = m0[1], fraga = decodeURIComponent(sok.slice(1)), forsta = fraga.split(",")[0];
+  let rad = null;
+  const m = /meps_lagged/.test(fil) ? forsta.match(OMR_RE) : null;
+  if (m) rad = ["omr", m[1], +m[2], +m[4], +m[3], +m[5], +m[6], +m[7], +m[9], +m[10], +m[12], +m[8]];
+  else if (/meps_det/.test(fil)) { const p = fraga.match(/\[(\d+)\]\[(\d+)\](?:,|$)/); if (p) rad = ["punkt", null, null, null, null, null, null, +p[1], +p[1], +p[2], +p[2], null]; }
+  if (!rad) return;
+  try {
+    await db.prepare("INSERT OR REPLACE INTO cachereg (typ, var, t0, t1, st, m0, m1, y0, y1, x0, x1, s, dtg, fil, fraga, byte, skapad, utgar) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .bind(...rad, dtg, fil, sok, byte, new Date().toISOString(), Date.now() + tid * 1000).run();
+    if (Math.random() < 0.05) await db.prepare("DELETE FROM cachereg WHERE utgar < ?").bind(Date.now()).run();
+  } catch (e) {}
+}
+
 // ---- Delen med cache: hämtar från källan ----
 // Körs BARA när cachen saknar svaret -> varje körning här är en verklig hämtning från met.no/aviationweather.
 export class Kalla extends WorkerEntrypoint {
@@ -115,7 +137,10 @@ export class Kalla extends WorkerEntrypoint {
       transform(bit, k) { byte += bit.byteLength; k.enqueue(bit); },
       flush() { klar(); },
     });
-    this.ctx.waitUntil(fardig.then(() => loggaHamtning(this.env.DB, typAv(url), vadAv(url) + feltext, svar.status, byte, Date.now() - start)));
+    this.ctx.waitUntil(fardig.then(async () => {
+      await loggaHamtning(this.env.DB, typAv(url), vadAv(url) + feltext, svar.status, byte, Date.now() - start);
+      if (svar.status === 200 && url.pathname.startsWith("/mepslatest/") && url.search !== "?time") await bokfor(this.env.DB, url.pathname.replace(/^\/mepslatest\//, ""), url.search, byte, tid);
+    }));
     if (!svar.body) klar();
     return new Response(svar.body ? svar.body.pipeThrough(raknare) : null, { status: svar.status, headers: h });
   }
@@ -147,6 +172,14 @@ export default {
         ut.senaste = (await env.DB.prepare("SELECT tid, typ, vad, status, byte, ms FROM senaste ORDER BY id DESC LIMIT 200").all()).results;
       }
       return new Response(JSON.stringify(ut), { headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+    }
+
+    // Registret: /register?dtg=20261119T15Z[,20261119T12Z] -> det som just nu ligger i cachen for de korningarna
+    if (url.pathname === "/register") {
+      const dtgs = (url.searchParams.get("dtg") || "").split(",").filter(d => /^\d{8}T\d{2}Z$/.test(d)).slice(0, 4);
+      let rader = [];
+      if (env.DB && dtgs.length) rader = (await env.DB.prepare("SELECT typ, dtg, fil, fraga, var, t0, t1, st, m0, m1, y0, y1, x0, x1, s, byte FROM cachereg WHERE utgar > ? AND dtg IN (" + dtgs.map(() => "?").join(",") + ") ORDER BY id DESC LIMIT 3000").bind(Date.now(), ...dtgs).all()).results;
+      return new Response(JSON.stringify(rader), { headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
     }
 
     let vidare;
