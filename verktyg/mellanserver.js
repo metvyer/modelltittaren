@@ -3,6 +3,9 @@
 // Släpper bara igenom läsning (GET) av MEPS-filer i katalogen mepslatest och METAR, och bara från vår sida.
 // Ingen nyckel, inget lösenord. Data från MET Norway (CC BY 4.0) och NOAA aviationweather.gov.
 //
+// NYTT 19/11: statistik i D1-databasen "modelltittaren-statistik" (binding DB): varje anrop räknas per dag och typ,
+// och varje verklig hämtning från met.no/aviationweather (cachemiss) sparas med storlek. Visas via /statistik
+// (sidan statistik.html). Inga IP-adresser eller personuppgifter sparas - bara vad som hämtades, när och hur stort.
 // NYTT 18/11 kväll: /taf (senaste TAF). NYTT 18/11: delad cache (Cloudflare Workers Caching). Laddas upp automatiskt av Cloudflare
 // (Workers Builds, kopplat till detta repo, mapp verktyg) – klistra INTE in koden för hand längre,
 // då försvinner cache-inställningen. Inställningen finns i verktyg/wrangler.toml.
@@ -40,10 +43,50 @@ function cachetid(fil, fraga) {
   return Date.now() - bas < 3 * 3600e3 ? CACHE_NY_KORNING : CACHE_GAMMAL_KORNING;
 }
 
+// ---- Statistik ----
+const SPARA_SENASTE = 2000;   // så många detaljrader behålls (äldre raderas)
+// Typ av anrop: tidhojd (det-filen), sannolikhet (ensemblen), koll (finns körningen?), metar, taf
+function typAv(url) {
+  if (url.pathname === "/metar") return "metar";
+  if (url.pathname === "/taf") return "taf";
+  if (url.search === "?time") return "koll";
+  if (/meps_det/.test(url.pathname)) return "tidhojd";
+  if (/meps_lagged/.test(url.pathname)) return "sannolikhet";
+  return "ovrigt";
+}
+// Kort beskrivning: fil + variabelnamn (utan index), max 300 tecken
+function vadAv(url) {
+  if (url.pathname === "/metar" || url.pathname === "/taf") return url.searchParams.get("ids") || "";
+  const fil = url.pathname.replace(/^\/mepslatest\//, "").replace(/\.(ascii|dods)$/, "");
+  const vars = decodeURIComponent(url.search.slice(1)).replace(/\[[^\]]*\]/g, "").split(",").filter(Boolean);
+  return (fil + " " + [...new Set(vars)].join(",")).slice(0, 300);
+}
+const idag = () => new Date().toISOString().slice(0, 10);
+async function raknaAnrop(db, typ) {
+  if (!db) return;
+  try {
+    await db.prepare("INSERT INTO dag (datum, typ, anrop) VALUES (?, ?, 1) ON CONFLICT(datum, typ) DO UPDATE SET anrop = anrop + 1")
+      .bind(idag(), typ).run();
+  } catch (e) {}
+}
+async function loggaHamtning(db, typ, vad, status, byte, ms) {
+  if (!db) return;
+  try {
+    await db.batch([
+      db.prepare("INSERT INTO dag (datum, typ, metno, byte, fel) VALUES (?, ?, 1, ?, ?) ON CONFLICT(datum, typ) DO UPDATE SET metno = metno + 1, byte = byte + excluded.byte, fel = fel + excluded.fel")
+        .bind(idag(), typ, byte, status === 200 ? 0 : 1),
+      db.prepare("INSERT INTO senaste (tid, typ, vad, status, byte, ms) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(new Date().toISOString(), typ, vad, status, byte, ms),
+    ]);
+    if (Math.random() < 0.02) await db.prepare("DELETE FROM senaste WHERE id <= (SELECT MAX(id) FROM senaste) - ?").bind(SPARA_SENASTE).run();
+  } catch (e) {}
+}
+
 // ---- Delen med cache: hämtar från källan ----
+// Körs BARA när cachen saknar svaret -> varje körning här är en verklig hämtning från met.no/aviationweather.
 export class Kalla extends WorkerEntrypoint {
   async fetch(req) {
-    const url = new URL(req.url);
+    const url = new URL(req.url), start = Date.now();
     let kalla, tid;
     if (url.pathname === "/metar" || url.pathname === "/taf") {
       kalla = AWC + url.pathname.slice(1) + url.search; tid = url.pathname === "/taf" ? CACHE_TAF : CACHE_METAR;
@@ -56,7 +99,15 @@ export class Kalla extends WorkerEntrypoint {
     for (const k of ["Content-Type", "Content-Length"]) { const v = svar.headers.get(k); if (v) h.set(k, v); }
     // Bara lyckade svar cachas; fel (404, 429, 500 …) ska frågas på nytt nästa gång
     h.set("Cache-Control", svar.status === 200 ? "public, max-age=" + tid : "no-store");
-    return new Response(svar.body, { status: svar.status, headers: h });
+    // Räkna byten medan svaret strömmar igenom, logga när det är klart
+    let byte = 0, klar; const fardig = new Promise(r => (klar = r));
+    const raknare = new TransformStream({
+      transform(bit, k) { byte += bit.byteLength; k.enqueue(bit); },
+      flush() { klar(); },
+    });
+    this.ctx.waitUntil(fardig.then(() => loggaHamtning(this.env.DB, typAv(url), vadAv(url), svar.status, byte, Date.now() - start)));
+    if (!svar.body) klar();
+    return new Response(svar.body ? svar.body.pipeThrough(raknare) : null, { status: svar.status, headers: h });
   }
 }
 
@@ -78,6 +129,16 @@ export default {
 
     if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
 
+    // Statistik: senaste 31 dagarna per typ + senaste hämtningarna från källorna
+    if (url.pathname === "/statistik") {
+      const ut = { dagar: [], senaste: [] };
+      if (env.DB) {
+        ut.dagar = (await env.DB.prepare("SELECT * FROM dag WHERE datum >= date('now', '-31 day') ORDER BY datum DESC, typ").all()).results;
+        ut.senaste = (await env.DB.prepare("SELECT tid, typ, vad, status, byte, ms FROM senaste ORDER BY id DESC LIMIT 200").all()).results;
+      }
+      return new Response(JSON.stringify(ut), { headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+    }
+
     let vidare;
     if (url.pathname === "/taf") {
       // TAF: /taf?ids=ESSA (1-20 ICAO-koder), senaste TAF per flygplats
@@ -98,6 +159,8 @@ export default {
       vidare = url.origin + url.pathname + url.search;
     }
 
+    // Räkna anropet (oavsett om cachen eller källan svarar)
+    ctx.waitUntil(raknaAnrop(env.DB, typAv(new URL(vidare))));
     // Ren förfrågan utan webbläsarens huvuden -> alla kollegor delar samma cachade svar
     let svar;
     try { svar = await ctx.exports.Kalla.fetch(new Request(vidare)); }

@@ -20,3 +20,9 @@ type = "worker"
 
   [exports.Kalla.cache]
   enabled = true
+
+# Statistik (19/11): D1-databas med antal anrop och hämtningar från met.no per dag
+[[d1_databases]]
+binding = "DB"
+database_name = "modelltittaren-statistik"
+database_id = "7c2edb18-a928-492c-80fb-489aa41156b6"

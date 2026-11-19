@@ -57,14 +57,21 @@ def enc(s):
     return s.replace("[", "%5B").replace("]", "%5D")
 
 
+# Statistik (19/11): antal anrop till thredds och mangd data i denna korning av skriptet
+STAT = {"anrop": 0, "byte": 0}
+STAT_MAX = 200   # sa manga rader behalls i forhamtat/statistik.json
+
+
 def hamta(url, forsok=4, tidsgrans=180):
     """Text fran thredds. Returnerar (status, text). 0 = ingen kontakt."""
     for f in range(1, forsok + 1):
         st, txt = 0, ""
+        STAT["anrop"] += 1
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=tidsgrans) as r:
-                st, txt = r.status, r.read().decode("utf-8", "replace")
+                raw = r.read(); STAT["byte"] += len(raw)
+                st, txt = r.status, raw.decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
             st = e.code
         except Exception:
@@ -226,7 +233,19 @@ def main():
            "punkter": punkter}
     with open(idxfil, "w", encoding="utf-8") as f:
         json.dump(idx, f, ensure_ascii=False, indent=1)
-    print(f"Klart: {len(punkter)} punkter pa {time.time() - t0:.0f} s")
+    print(f"Klart: {len(punkter)} punkter pa {time.time() - t0:.0f} s, {STAT['anrop']} anrop, {STAT['byte'] / 1e6:.1f} MB")
+    # logg over forhamtningarna (visas pa statistik.html)
+    sfil = os.path.join(ut, "statistik.json")
+    logg = []
+    try:
+        with open(sfil, encoding="utf-8") as f:
+            logg = json.load(f)
+    except Exception:
+        pass
+    logg.insert(0, {"tid": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ"), "dtg": dtg, "punkter": len(punkter),
+                    "anrop": STAT["anrop"], "byte": STAT["byte"], "sek": round(time.time() - t0)})
+    with open(sfil, "w", encoding="utf-8") as f:
+        json.dump(logg[:STAT_MAX], f, ensure_ascii=False, indent=0)
     with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as f:
         f.write("andrat=ja\n")
     return 0
