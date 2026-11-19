@@ -40,6 +40,12 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .diagram { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .axel { flex: 0 0 auto; border-right: 1px solid var(--line); }
 .skroll { flex: 1 1 auto; overflow-x: auto; min-width: 0; }
+.skewruta { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.skewruta[hidden] { display: none; }
+.skewhuvud { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
+.skewhuvud #skewStang { margin-left: auto; }
+#skewSvg { width: 100%; max-width: 640px; height: auto; display: block; }
+.skewforkl { font-size: 11.5px; margin-top: 4px; }
 svg text { font-family: var(--font); }
 svg text:not([fill]) { fill: var(--fg); }   /* egen fill (rod T, magenta obs ...) ska inte skrivas over */
 .forklaring { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 2px; font-size: 12px; color: var(--dim); align-items: center; }
@@ -282,6 +288,18 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 <div class="diagram">
   <svg class="axel" id="axel" width="56" height="10"></svg>
   <div class="skroll" id="skroll"><svg id="svg" width="10" height="10"></svg></div>
+</div>
+<!-- NYTT 19/11 kvall: skew-T for vald timme (klick i tid-hojd) -->
+<div id="skewRuta" class="skewruta" hidden>
+  <div class="skewhuvud">
+    <button class="sek liten" id="skewBak" title="Timmen före">◀</button>
+    <b id="skewTitel">Skew-T</b>
+    <button class="sek liten" id="skewFram" title="Timmen efter">▶</button>
+    <span id="skewInfo" class="dim"></span>
+    <button class="sek liten" id="skewStang" title="Stäng skew-T">✕</button>
+  </div>
+  <svg id="skewSvg" viewBox="0 0 560 600" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="dim skewforkl">Röd = temperatur, grön streckad = daggpunkt, båda på modellnivåerna (MEPS medlem 0). Tunna lutande linjer = isotermer var 10:e grad (0, −10 och −20 °C i färg), tunna böjda = torradiabater. Vänster marginal: modellens molnmängd per nivå (FEW/SCT/BKN/OVC). Höger: vindflaggor (där vinden finns), FL och tryck. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶.</div>
 </div>
 
 <div class="forklaring" id="fVind" hidden>
@@ -1119,6 +1137,7 @@ function rita() {
   ritaMetar(svg, sk, zTopp);
   if (vindLage) ritaVind(svg, sk, zTopp, c);
   svg.appendChild(el("line", { x1: 0, y1: sk.botten, x2: B, y2: sk.botten, stroke: c("--dim"), "stroke-width": 1 }));
+  if (skewT !== null && skewT < nt) svg.appendChild(el("rect", { x: skewT * COL + 0.5, y: TOPP_RAD, width: COL - 1, height: sk.botten - TOPP_RAD, fill: "none", stroke: "#0f766e", "stroke-width": 2, "pointer-events": "none" }));   // vald skew-T-timme
 
   // tabellrader
   const yRad = i => sk.botten + 8 + EXTRA + i * RAD_H + 12;
@@ -1169,6 +1188,112 @@ function rita() {
   if (M.nyFinns) kt.insertAdjacentHTML("beforeend", ' <span class="nyfinns">– Ny körning ' + M.nyFinns + ' finns, tryck Hämta</span>');
   if (M.vald) { kt.insertAdjacentHTML("beforeend", ' <span class="vald">– vald körning</span>'); }
   else if (M.ny) { kt.insertAdjacentHTML("beforeend", ' <span class="ny">– NY KÖRNING</span>'); }
+}
+
+
+// ===================================================================
+//  SKEW-T (NYTT 19/11 kvall)  - en timme, alla modellnivaer upp till vald topp
+//  Data: T + q (+ vind) pa modellnivaerna. Forhamtade flygplatser har T+q +3..+23 varje timme och
+//  var 3:e timme till +45; annars hamtas timmen nar man klickar (litet anrop, sparas som en vanlig bit).
+// ===================================================================
+let skewT = null;   // vald timme
+const SK = { B: 560, H: 600, V: 46, HO: 92, TOPP: 14, BOTT: 36, TMIN: -40, TMAX: 40, SKEV: 1.0 };   // marginaler: vanster (moln), hoger (vind/FL)
+function skewBehov(t) {
+  const { k1 } = behov(); let tq = false, w = false;
+  for (let k = k1; k < NIV; k++) if (!M.tqHar[t * NIV + k]) { tq = true; break; }
+  for (let k = NIV - 1; k >= k1; k -= VIND_DK) if (!M.wHar[t * NIV + k]) { w = true; break; }
+  return { k1, tq, w };
+}
+async function hamtaSkewTimme(t) {
+  const { k1, tq, w } = skewBehov(t); if (!tq && !w) return true;
+  const yx = "[" + M.iy + "][" + M.ix + "]", tt = "[" + t + ":" + t + "]", v = [], e = [];
+  if (tq) { ["air_temperature_ml", "specific_humidity_ml"].forEach(n => v.push(n + tt + "[" + k1 + ":" + (NIV - 1) + "]" + yx)); e.push("T" + k1 + "-" + (NIV - 1)); }
+  if (w) { let ks = k1; const rest = (NIV - 1 - ks) % VIND_DK; if (rest) ks += rest;
+    ["x_wind_ml", "y_wind_ml"].forEach(n => v.push(n + "[" + t + ":" + VIND_DT + ":" + t + "][" + ks + ":" + VIND_DK + ":" + (NIV - 1) + "]" + yx)); e.push("u" + ks + "-" + (NIV - 1)); }
+  $("skewInfo").textContent = "Hämtar timmen …";
+  const res = await hamta(BAS + FIL(M.dtg) + ".ascii?" + enc(v.join(",")));
+  if (res.st !== 200) { $("skewInfo").textContent = "Kunde inte hämta (svar " + res.st + ")."; return false; }
+  const et = e.join("."); await sparaBit(t, t, et, res.txt); laggIn(res.txt, t, t, et); $("skewInfo").textContent = ""; return true;
+}
+async function oppnaSkewT(t) {
+  if (!M || !M.stat || !M.ytaOK[t]) return;
+  const nyOppnad = $("skewRuta").hidden;
+  skewT = Math.max(0, Math.min(M.nt - 1, t)); $("skewRuta").hidden = false; rita();
+  if (nyOppnad) setTimeout(() => $("skewRuta").scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+  ritaSkewT();                                  // det som finns direkt
+  const m = M, tt = skewT;
+  if (skewBehov(tt).tq || skewBehov(tt).w) { try { await hamtaSkewTimme(tt); } catch (e) { $("skewInfo").textContent = "Kunde inte hämta timmen."; } if (M === m && skewT === tt) { ritaSkewT(); rita(); } }
+}
+function ritaSkewT() {
+  const svg = $("skewSvg"); svg.textContent = ""; if (!M || skewT === null) return;
+  const t = skewT, css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
+  const ps = M.yta[0][t], d = new Date(M.t0 + t * 3600e3);
+  $("skewTitel").textContent = "Skew-T " + VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + ")";
+  const { k1, zTopp } = behov();
+  const pBott = Math.max(ps / 100 + 5, 1000), pTopp = Math.max(100, (M.ap[k1] + M.b[k1] * ps) / 100 - 5);
+  const X0 = SK.V, X1 = SK.B - SK.HO, Y0 = SK.TOPP, Y1 = SK.H - SK.BOTT, Wd = X1 - X0, Hd = Y1 - Y0;
+  const yP = p => Y0 + Hd * Math.log(pBott / p) / Math.log(pBott / pTopp) * -1 + Hd;    // p (hPa) -> y (stort p = nere)
+  const xT = (tc, p) => X0 + (tc - SK.TMIN) / (SK.TMAX - SK.TMIN) * Wd + (Y1 - yP(p)) * SK.SKEV;
+  const g = (n, a, tx) => svg.appendChild(el(n, a, tx));
+  const klipp = el("clipPath", { id: "skewKlipp" }); klipp.appendChild(el("rect", { x: X0, y: Y0, width: Wd, height: Hd })); const defs = el("defs", {}); defs.appendChild(klipp); svg.appendChild(defs);
+  const gK = el("g", { "clip-path": "url(#skewKlipp)" }); svg.appendChild(gK);
+  const k_ = (n, a, tx) => gK.appendChild(el(n, a, tx));
+  g("rect", { x: X0, y: Y0, width: Wd, height: Hd, fill: "none", stroke: c("--line") });
+  // tryckytor
+  for (const p of [1000, 925, 850, 700, 500, 400, 300, 250, 200, 150, 100]) { if (p > pBott || p < pTopp) continue;
+    const y = yP(p); g("line", { x1: X0, x2: X1, y1: y, y2: y, stroke: c("--grid"), "stroke-width": 0.8 });
+    g("text", { x: X1 + 4, y: y + 3.5, "font-size": 10, fill: c("--dim") }, p); }
+  // FL-skala (standardatmosfar) till hoger
+  for (const fl of [0, 10, 30, 50, 70, 100, 140, 180, 240, 300, 340, 390, 450]) {
+    const p = 1013.25 * (1 - fl * 100 / 145366.45) ** (1 / 0.190263); if (p > pBott || p < pTopp) continue;
+    const y = yP(p); g("line", { x1: X1, x2: X1 + 3, y1: y, y2: y, stroke: c("--dim") }); g("text", { x: SK.B - 4, y: y + 3.5, "font-size": 10, "text-anchor": "end", fill: c("--fg") }, "FL" + p3(fl)); }
+  // isotermer
+  for (let tc = -100; tc <= 40; tc += 10) { const iso = ISOTERM.find(i => i.t === tc);
+    k_("line", { x1: xT(tc, pBott), y1: yP(pBott), x2: xT(tc, pTopp), y2: yP(pTopp), stroke: iso ? iso.farg : c("--grid"), "stroke-width": iso ? 1.3 : 0.7, opacity: iso ? 0.8 : 1 });
+    if (tc >= SK.TMIN && tc <= SK.TMAX) g("text", { x: xT(tc, pBott), y: Y1 + 13, "font-size": 10, "text-anchor": "middle", fill: iso ? iso.farg : c("--dim") }, tc); }
+  g("text", { x: X1, y: Y1 + 27, "font-size": 10, "text-anchor": "end", fill: c("--dim") }, "°C");
+  // torradiabater (theta = T * (1000/p)^0.286)
+  for (let th = 250; th <= 450; th += 10) { let dd = ""; for (let p = pBott; p >= pTopp; p -= 10) { const tc = th * (p / 1000) ** 0.2857 - 273.15; dd += (dd ? "L" : "M") + xT(tc, p).toFixed(1) + " " + yP(p).toFixed(1); }
+    k_("path", { d: dd, fill: "none", stroke: "#b45309", "stroke-width": 0.5, opacity: 0.35 }); }
+  // modellens mark
+  const yM = yP(ps / 100); g("rect", { x: X0, y: yM, width: Wd, height: Math.max(0, Y1 - yM), fill: c("--hatch"), opacity: 0.25 });
+  // profilen
+  let dT = "", dD = "", har = 0; const pk = k => (M.ap[k] + M.b[k] * ps) / 100;
+  const tdK = k => { const q = M.qv[t * NIV + k], p = pk(k) * 100; if (!(q > 0)) return NaN; const e = q * p / (0.622 + 0.378 * q) / 100, l = Math.log(e / 6.112); return 243.12 * l / (17.62 - l); };
+  for (let k = NIV - 1; k >= k1; k--) { if (!M.tqHar[t * NIV + k]) continue; const p = pk(k), tc = M.ta[t * NIV + k] - 273.15, td = tdK(k); har++;
+    dT += (dT ? "L" : "M") + xT(tc, p).toFixed(1) + " " + yP(p).toFixed(1);
+    if (isFinite(td)) dD += (dD ? "L" : "M") + xT(td, p).toFixed(1) + " " + yP(p).toFixed(1); }
+  if (har) { k_("path", { d: dD, fill: "none", stroke: "#16a34a", "stroke-width": 2, "stroke-dasharray": "5 3" }); k_("path", { d: dT, fill: "none", stroke: "#dc2626", "stroke-width": 2.2 }); }
+  else g("text", { x: (X0 + X1) / 2, y: (Y0 + Y1) / 2, "font-size": 13, "text-anchor": "middle", fill: c("--dim") }, "Temperatur saknas för timmen – hämtar …");
+  // markvarden (2 m)
+  const t2 = M.yta[1][t] - 273.15, td2 = daggpunkt(M.yta[1][t], M.yta[2][t]);
+  if (isFinite(t2)) g("circle", { cx: xT(t2, ps / 100), cy: yM, r: 3, fill: "#dc2626" });
+  if (isFinite(td2)) g("circle", { cx: xT(td2, ps / 100), cy: yM, r: 3, fill: "#16a34a" });
+  // moln i vanstermarginalen
+  const farg = [null, c("--few"), c("--sct"), c("--bkn"), c("--ovc")];
+  for (let k = NIV - 1; k >= k1; k--) { const v = M.cl[t * NIV + k]; if (!M.clHar[t * NIV + k] || !isFinite(v)) continue;
+    const kat = v >= MOLN[3] ? 4 : v >= MOLN[2] ? 3 : v >= MOLN[1] ? 2 : v >= MOLN[0] ? 1 : 0; if (!kat) continue;
+    const pa = k === NIV - 1 ? ps / 100 : (pk(k) + pk(k + 1)) / 2, pb = k === k1 ? pk(k) : (pk(k) + pk(k - 1)) / 2;
+    g("rect", { x: 6, y: yP(pb), width: (SK.V - 12) * Math.min(1, v / 100), height: Math.max(0.5, yP(pa) - yP(pb)), fill: farg[kat], stroke: c("--line"), "stroke-width": 0.3 }); }
+  g("text", { x: 6, y: Y1 + 13, "font-size": 9.5, fill: c("--dim") }, "moln");
+  // vind (modellnivaer var 2:a, var 3:e timme eller hamtad timme)
+  const gV = el("g", {}); svg.appendChild(gV); let senY = -99;
+  for (const vp of vindPunkter(t)) { const zp = vp.z; let p = NaN;
+    const z = hojder(t, 0); if (!z) break;
+    for (let k = NIV - 1; k > 0; k--) if (zp >= (k === NIV - 1 ? 0 : z[k]) && zp <= z[k - 1]) { p = pk(k); break; }
+    if (!isFinite(p) || p < pTopp) continue; const y = yP(p); if (Math.abs(y - senY) < 16) continue; senY = y;
+    vindflagga(gV, X1 + 34, y, vp.dir, vp.kt, c("--fg")); }
+  // hovring: varde pa narmaste niva
+  svg.onpointermove = ev => {
+    const r = svg.getBoundingClientRect(), y = (ev.clientY - r.top) * SK.H / r.height; let bk = -1, bd = 1e9;
+    for (let k = NIV - 1; k >= k1; k--) { const dy = Math.abs(yP(pk(k)) - y); if (dy < bd) { bd = dy; bk = k; } }
+    if (bk < 0 || bd > 12) { $("skewInfo").textContent = ""; return; }
+    const p = pk(bk), fl = Math.max(0, Math.round((1 - (p / 1013.25) ** 0.190263) * 145366.45 / 100)), z = hojder(t, bk);
+    const tc = M.tqHar[t * NIV + bk] ? (M.ta[t * NIV + bk] - 273.15).toFixed(1) : "–", td = tdK(bk);
+    $("skewInfo").textContent = "Nivå " + bk + ": " + Math.round(p) + " hPa, FL" + p3(fl) + (z ? ", " + Math.round(z[bk] * FOT / 10) * 10 + " ft över mark" : "") + " · T " + tc + " · Td " + (isFinite(td) ? td.toFixed(1) : "–") + " °C" +
+      (M.clHar[t * NIV + bk] ? " · moln " + Math.round(M.cl[t * NIV + bk]) + " %" : "");
+  };
+  svg.onpointerleave = () => { $("skewInfo").textContent = ""; };
 }
 
 // ===================================================================
@@ -1644,6 +1769,11 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   if (lasa("mt:lage") === "vind") satLage(true);
   const d = $("svg");
   d.addEventListener("pointermove", visaTips); d.addEventListener("pointerdown", visaTips); d.addEventListener("pointerleave", gomTips);
+  // NYTT 19/11 kvall: klick (utan att dra) pa en timme -> skew-T for timmen
+  d.addEventListener("click", e => { if (!M || !M.stat) return; const r = d.getBoundingClientRect(), t = Math.floor((e.clientX - r.left) / COL); if (t >= 0 && t < M.nt) oppnaSkewT(t); });
+  $("skewBak").addEventListener("click", () => { if (skewT !== null) oppnaSkewT(skewT - 1); });
+  $("skewFram").addEventListener("click", () => { if (skewT !== null) oppnaSkewT(skewT + 1); });
+  $("skewStang").addEventListener("click", () => { skewT = null; $("skewRuta").hidden = true; rita(); });
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
