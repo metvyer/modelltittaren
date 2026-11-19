@@ -44,7 +44,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .skewruta[hidden] { display: none; }
 .skewhuvud { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
 .skewhuvud #skewStang { margin-left: auto; }
-#skewSvg { width: 100%; max-width: 820px; height: auto; display: block; }
+#skewSvg { width: 100%; max-width: 820px; height: auto; display: block; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 .skewforkl { font-size: 11.5px; margin-top: 4px; }
 svg text { font-family: var(--font); }
 svg text:not([fill]) { fill: var(--fg); }   /* egen fill (rod T, magenta obs ...) ska inte skrivas over */
@@ -295,11 +295,14 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button class="sek liten" id="skewBak" title="Timmen före">◀</button>
     <b id="skewTitel">Skew-T</b>
     <button class="sek liten" id="skewFram" title="Timmen efter">▶</button>
+    <button class="sek liten" id="skewIn" title="Zooma in (eller mushjul / nyp med två fingrar)">+</button>
+    <button class="sek liten" id="skewUt" title="Zooma ut">−</button>
+    <button class="sek liten" id="skewHela" title="Hela diagrammet (eller dubbelklicka)">Hela</button>
     <span id="skewInfo" class="dim"></span>
     <button class="sek liten" id="skewStang" title="Stäng skew-T">✕</button>
   </div>
   <svg id="skewSvg" viewBox="0 0 640 540" preserveAspectRatio="xMidYMid meet"></svg>
-  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶.</div>
+  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶.</div>
 </div>
 
 <div class="forklaring" id="fVind" hidden>
@@ -1204,7 +1207,27 @@ let skewT = null;   // vald timme
 const SK = { B: 640, H: 540, V: 16, HO: 78, TOPP: 8, BOTT: 52, TBREDD: 60 };
 // 19/11 kvall: skew-T har ALLTID samma hojdomfang som Jakobs forlaga - fran marken till SKEW_PTOPP (ca FL385),
 // oberoende av diagramtoppen i tid-hojd. Da blir lutningen (45°) och skalan densamma varje gang.
-const SKEW_PTOPP = 200;   // hPa
+const SKEW_PTOPP = 200, SKEW_PBOTT = 1058;   // hPa (FL-10 = 1050 hPa syns, for hogtryck)
+let SKZ = { z: 1, pB: 0, TL: 0, M: null, geo: null };   // zoomlage i skew-T (pB = 0 -> utgangslage)
+const SKZ_MAX = 8;
+// skarmpunkt (i viewBox-enheter) <-> (temperatur, tryck)
+function skewTillTP(mx, my) { const G = SKZ.geo, p = SKZ.pB * Math.exp(-(G.Y1 - my) / G.pxL), tc = SKZ.TL + (mx - G.X0 - (G.Y1 - my)) / G.pxC; return [tc, p]; }
+function skewZooma(f, mx, my) {
+  if (!SKZ.geo) return; const [tc, p] = skewTillTP(mx, my), G = SKZ.geo;
+  const z = Math.max(1, Math.min(SKZ_MAX, SKZ.z * f)); if (z === SKZ.z) return;
+  const pxL = G.pxL * z / SKZ.z, pxC = G.pxC * z / SKZ.z;
+  SKZ.z = z; SKZ.pB = p * Math.exp((G.Y1 - my) / pxL); SKZ.TL = tc - (mx - G.X0 - (G.Y1 - my)) / pxC;
+  skewBegransa(); ritaSkewT();
+}
+function skewPanorera(dx, dy) {
+  const G = SKZ.geo; if (!G) return;
+  SKZ.pB *= Math.exp(-dy / G.pxL); SKZ.TL -= (dx + dy) / G.pxC; skewBegransa(); ritaSkewT();
+}
+function skewBegransa() {   // inte under 1100 hPa eller over 100 hPa
+  if (SKZ.pB > 1100) SKZ.pB = 1100;
+  const span = (SKZ.span || Math.log(SKEW_PBOTT / SKEW_PTOPP)) / SKZ.z; if (SKZ.pB * Math.exp(-span) < 100) SKZ.pB = 100 * Math.exp(span);
+}
+function skewNollstall() { SKZ.pB = 0; ritaSkewT(); }
 function skewK1(t) { const ps = M.yta[0][t]; for (let k = 0; k < NIV; k++) if ((M.ap[k] + M.b[k] * ps) / 100 >= SKEW_PTOPP) return Math.max(0, k - 1); return 0; }
 function skewBehov(t) {
   const k1 = skewK1(t); let tq = false, w = false;
@@ -1226,6 +1249,7 @@ async function hamtaSkewTimme(t) {
 async function oppnaSkewT(t) {
   if (!M || !M.stat || !M.ytaOK[t]) return;
   const nyOppnad = $("skewRuta").hidden;
+  if (SKZ.M !== M) { SKZ.M = M; SKZ.pB = 0; }   // ny punkt/korning -> utgangslaget
   skewT = Math.max(0, Math.min(M.nt - 1, t)); $("skewRuta").hidden = false; rita();
   if (nyOppnad) setTimeout(() => $("skewRuta").scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
   ritaSkewT();                                  // det som finns direkt
@@ -1239,12 +1263,18 @@ function ritaSkewT() {
   $("skewTitel").textContent = "Skew-T " + VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + ")";
   const k1 = skewK1(t);
   const pk = k => (M.ap[k] + M.b[k] * ps) / 100;
-  const pBott = Math.max(ps / 100 + 8, 1000), pTopp = SKEW_PTOPP;
   const X0 = SK.V, X1 = SK.B - SK.HO, Y0 = SK.TOPP, Y1 = SK.H - SK.BOTT, Wd = X1 - X0, Hd = Y1 - Y0;
-  // T-axelns hogra ande: 20 °C, eller hogre om 2 m-temperaturen ar varmare
-  const t2 = M.yta[1][t] - 273.15, TMAX = Math.max(20, Math.ceil(((isFinite(t2) ? t2 : 0) + 6) / 10) * 10), TMIN = TMAX - SK.TBREDD, pxC = Wd / SK.TBREDD;
-  const yP = p => Y1 - Hd * Math.log(pBott / p) / Math.log(pBott / pTopp);
-  const xT = (tc, p) => X0 + (tc - TMIN) * pxC + (Y1 - yP(p));          // 45°
+  // Zoom (NYTT 19/11 kvall): SKZ = { z, pB, TL } = forstoring, tryck i nederkant, temperatur i nedre vanstra hornet.
+  // Utgangslage: FL-10 (1050 hPa, eller lagre om marktrycket ar hogre) till 200 hPa, 60 grader bred T-axel.
+  const t2 = M.yta[1][t] - 273.15;
+  if (!SKZ.pB) { const tmax = Math.max(20, Math.ceil(((isFinite(t2) ? t2 : 0) + 6) / 10) * 10);
+    SKZ.z = 1; SKZ.pB = Math.max(SKEW_PBOTT, ps / 100 + 8); SKZ.TL = tmax - SK.TBREDD; SKZ.span = 0; }
+  if (!SKZ.span) SKZ.span = Math.log(SKZ.pB / SKEW_PTOPP);   // hojdspannet vid z = 1 (marken/FL-10 till 200 hPa)
+  const L = SKZ.span / SKZ.z, pBott = SKZ.pB, pTopp = pBott * Math.exp(-L);
+  const pxL = Hd / L, pxC = Wd * SKZ.z / SK.TBREDD, TMIN = SKZ.TL, TMAX = TMIN + SK.TBREDD / SKZ.z;
+  const yP = p => Y1 - Math.log(pBott / p) * pxL;
+  const xT = (tc, p) => X0 + (tc - TMIN) * pxC + (Y1 - yP(p));          // 45° vid alla forstoringar
+  SKZ.geo = { X0, X1, Y0, Y1, pxL, pxC };
   const g = (n, a, tx) => svg.appendChild(el(n, a, tx));
   const defs = el("defs", {}), klipp = el("clipPath", { id: "skewKlipp" }); klipp.appendChild(el("rect", { x: X0, y: Y0, width: Wd, height: Hd })); defs.appendChild(klipp); svg.appendChild(defs);
   const gK = el("g", { "clip-path": "url(#skewKlipp)" }); svg.appendChild(gK);
@@ -1253,11 +1283,15 @@ function ritaSkewT() {
   const pLista = steg => { const u = []; for (let p = pBott; p >= pTopp - 0.1; p -= steg) u.push(p); u.push(pTopp); return u; };
   g("rect", { x: X0, y: Y0, width: Wd, height: Hd, fill: "none", stroke: c("--dim"), "stroke-width": 1 });
   // FL-linjer (vagrata, standardatmosfar) med text till vanster inne i plotten, tryck smatt i mitten
-  for (const fl of [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 125, 150, 175, 200, 225, 250, 275, 300, 350, 400, 450]) {
-    const p = 1013.25 * (1 - fl * 100 / 145366.45) ** (1 / 0.190263); if (p > pBott || p < pTopp) continue;
-    const y = yP(p); k_("line", { x1: X0, x2: X1, y1: y, y2: y, stroke: c("--grid"), "stroke-width": fl % 50 === 0 ? 0.9 : 0.5 });
-    g("text", { x: X0 + 34, y: y - 2, "font-size": 9, fill: c("--dim") }, "FL " + fl); }
-  for (const p of [1000, 850, 700, 500, 400, 300, 250, 200, 150]) { if (p > pBott || p < pTopp) continue;
+  { let senY = 1e9; const fls = [], pxFL = pxL * 0.0037, st = [5, 10, 20, 50].find(x => x * pxFL >= 14) || 50;
+    fls.push(-10); if (st <= 5) fls.push(-5); for (let fl = 0; fl <= 100; fl += st) fls.push(fl); for (let fl = 100 + Math.max(25, st); fl <= 450; fl += Math.max(25, st)) fls.push(fl);
+    for (const fl of fls) {
+      const p = 1013.25 * (1 - fl * 100 / 145366.45) ** (1 / 0.190263); if (p > pBott || p < pTopp) continue;
+      const y = yP(p); if (senY - y < 13) continue; senY = y;
+      k_("line", { x1: X0, x2: X1, y1: y, y2: y, stroke: c("--grid"), "stroke-width": fl % 50 === 0 ? 0.9 : 0.5 });
+      g("text", { x: X0 + 34, y: y - 2, "font-size": 9, fill: c("--dim") }, "FL " + fl); } }
+  for (const p of [1050, 1000, 950, 925, 900, 850, 800, 750, 700, 650, 600, 550, 500, 400, 300, 250, 200, 150]) { if (p > pBott || p < pTopp) continue;
+    if (SKZ.z < 2 && [1050, 950, 900, 800, 750, 650, 600, 550].includes(p)) continue;
     g("text", { x: X1 - 3, y: yP(p) - 2, "font-size": 8.5, "text-anchor": "end", fill: c("--dim") }, p + " hPa"); }
   // blandningskvot (g/kg), streckade, upp till 600 hPa
   for (const w of [0.2, 0.5, 1, 2, 3, 5, 7, 10, 15]) {
@@ -1268,13 +1302,14 @@ function ritaSkewT() {
   for (let th = 230; th <= 470; th += 10) linje(pLista(10).map(p => [th * (p / 1000) ** 0.2857 - 273.15, p]), { stroke: "#a16207", "stroke-width": 0.55, opacity: 0.45 });
   // fuktadiabater (grona) - pseudoadiabat, integrerad fran 1000 hPa
   const es = tc => 6.112 * Math.exp(17.67 * tc / (tc + 243.5));
-  for (let t0 = -20; t0 <= 32; t0 += 4) { let T = t0 + 273.15; const pts = [];
-    for (let p = 1000; p >= pTopp - 1; p -= 5) { pts.push([T - 273.15, p]);
+  for (let t0 = -20; t0 <= 36; t0 += 4) { let T = t0 + 273.15; const pts = [];
+    for (let p = 1050; p >= pTopp - 1; p -= 5) { pts.push([T - 273.15, p]);
       const rs = 0.622 * es(T - 273.15) / (p - es(T - 273.15)), dTdp = (287.05 * T + 2.501e6 * rs) / (1004 + 2.501e6 * 2.501e6 * rs * 0.622 / (287.05 * T * T)) / p; T -= dTdp * 5; }
     linje(pts.filter(([, p]) => p <= pBott), { stroke: "#15803d", "stroke-width": 0.6, opacity: 0.55 }); }
   // isotermer 45° (morkroda), 0 °C bla och tjockare, etikett dar linjen gar ut i vanster- eller nederkant
-  for (let tc = TMIN - 120; tc <= TMAX; tc += 5) {
-    const noll = tc === 0, tio = tc % 10 === 0;
+  const lSteg = [1, 2, 5, 10].find(st => st * pxC >= 60) || 10, iSteg = lSteg >= 10 ? 5 : lSteg;
+  for (let tc = Math.floor((TMIN - 130) / lSteg) * lSteg; tc <= TMAX + 0.001; tc = Math.round((tc + iSteg) * 10) / 10) {
+    const noll = Math.abs(tc) < 1e-6, tio = Math.abs(tc / lSteg - Math.round(tc / lSteg)) < 1e-6;
     k_("line", { x1: xT(tc, pBott), y1: yP(pBott), x2: xT(tc, pTopp), y2: yP(pTopp), stroke: noll ? "#1d4ed8" : "#7f1d1d", "stroke-width": noll ? 1.6 : tio ? 0.8 : 0.4, opacity: noll ? 1 : tio ? 0.7 : 0.4 });
     if (!tio) continue;
     if (tc >= TMIN) g("text", { x: xT(tc, pBott), y: Y1 + 15, "font-size": 12, "font-weight": 700, "text-anchor": "middle", fill: noll ? "#1d4ed8" : c("--fg") }, tc);
@@ -1799,6 +1834,27 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skewBak").addEventListener("click", () => { if (skewT !== null) oppnaSkewT(skewT - 1); });
   $("skewFram").addEventListener("click", () => { if (skewT !== null) oppnaSkewT(skewT + 1); });
   $("skewStang").addEventListener("click", () => { skewT = null; $("skewRuta").hidden = true; rita(); });
+  // zoom och panorering i skew-T (NYTT 19/11 kvall)
+  { const sv = $("skewSvg"), mitt = () => [(SKZ.geo.X0 + SKZ.geo.X1) / 2, (SKZ.geo.Y0 + SKZ.geo.Y1) / 2];
+    const vb = ev => { const r = sv.getBoundingClientRect(); return [(ev.clientX - r.left) * SK.B / r.width, (ev.clientY - r.top) * SK.H / r.height, SK.B / r.width]; };
+    $("skewIn").addEventListener("click", () => SKZ.geo && skewZooma(1.5, ...mitt()));
+    $("skewUt").addEventListener("click", () => SKZ.geo && skewZooma(1 / 1.5, ...mitt()));
+    $("skewHela").addEventListener("click", skewNollstall);
+    sv.addEventListener("dblclick", skewNollstall);
+    sv.addEventListener("wheel", ev => { if (!SKZ.geo) return; ev.preventDefault(); const [mx, my] = vb(ev); skewZooma(ev.deltaY < 0 ? 1.25 : 0.8, mx, my); }, { passive: false });
+    const pek = new Map(); let nyp = null;
+    sv.addEventListener("pointerdown", ev => { pek.set(ev.pointerId, [ev.clientX, ev.clientY]); try { sv.setPointerCapture(ev.pointerId); } catch (e) {}
+      if (pek.size === 2) { const [a, b] = [...pek.values()]; nyp = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
+    sv.addEventListener("pointermove", ev => {
+      if (!pek.has(ev.pointerId) || !SKZ.geo) return; const fore = pek.get(ev.pointerId); pek.set(ev.pointerId, [ev.clientX, ev.clientY]);
+      const r = sv.getBoundingClientRect(), k = SK.B / r.width;
+      if (pek.size === 2 && nyp) { const [a, b] = [...pek.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (d > 0 && Math.abs(d / nyp - 1) > 0.02) { skewZooma(d / nyp, ((a[0] + b[0]) / 2 - r.left) * k, ((a[1] + b[1]) / 2 - r.top) * k); nyp = d; } return; }
+      if (pek.size === 1 && SKZ.z > 1) skewPanorera((ev.clientX - fore[0]) * k, (ev.clientY - fore[1]) * k);
+    });
+    const slut = ev => { pek.delete(ev.pointerId); if (pek.size < 2) nyp = null; };
+    sv.addEventListener("pointerup", slut); sv.addEventListener("pointercancel", slut);
+  }
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
