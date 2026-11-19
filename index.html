@@ -891,6 +891,14 @@ async function laddaTaf(icao) {
   if (!visaMetar) { e.hidden = true; return; }
   e.textContent = taf === null ? "TAF " + icao + ": gick inte att hämta" : taf ? tafRader(taf) : "TAF " + icao + ": ingen giltig TAF";
 }
+// Namn pa en kand plats (forvald punkt eller flygplats inom 3 km), annars lat/lon (NYTT 19/11 kvall, skew-T-rubriken)
+function platsNamn(lat, lon) {
+  if (!isFinite(lat) || !isFinite(lon)) return "";
+  const lista = PUNKTER.map(p => [p[0] + " (" + p[1] + ")", p[2], p[3]]).concat(FLYG.map(f => [(f[1] ? f[1] + " " : "") + "(" + f[0] + ")", f[2], f[3]]));
+  let bast = null, bd = 1e9;
+  for (const [n, la, lo] of lista) { const dy = (la - lat) * 111.2, dx = (lo - lon) * 111.2 * Math.cos(lat * Math.PI / 180), d = Math.hypot(dx, dy); if (d < bd) { bd = d; bast = n; } }
+  return bd <= 3 ? bast : lat.toFixed(2) + "N " + lon.toFixed(2) + "E";
+}
 function narmasteICAO(lat, lon) {
   const lista = PUNKTER.map(p => [p[1], p[2], p[3]]).concat(FLYG.map(f => [f[0], f[2], f[3]]));
   let bast = null, bd = 1e9;
@@ -1264,7 +1272,7 @@ function ritaSkewT() {
   const svg = $("skewSvg"); svg.textContent = ""; if (!M || skewT === null) return;
   const t = skewT, css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
   const ps = M.yta[0][t], d = new Date(M.t0 + t * 3600e3);
-  $("skewTitel").textContent = "Skew-T " + VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + ")";
+  $("skewTitel").textContent = "Skew-T " + platsNamn(M.lat, M.lon) + " – " + VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + ")";
   const k1 = skewK1(t);
   const pk = k => (M.ap[k] + M.b[k] * ps) / 100;
   const X0 = SK.V, X1 = SK.B - SK.HO, Y0 = SK.TOPP, Y1 = SK.H - SK.BOTT, Wd = X1 - X0, Hd = Y1 - Y0;
