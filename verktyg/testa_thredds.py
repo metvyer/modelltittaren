@@ -34,6 +34,8 @@ samma anrop som sidan gor - utan webblasare:
   I. (NYTT 19/11 kvall) Ar ensemblens medlem 0 samma korning som det-filen (meps_det_2_5km)?
      Jamfor T2m och byvind i punkten for samma DTG, och visa att det-filen har sikt och molnbas.
 
+  J. (NYTT 19/11 kvall) Tid for ett sannolikhetsomrade med alla 30 medlemmar mot bara 0-14.
+
 Vilka delar som kors valjs med MT_DELAR (t.ex. "ABCDE" = standard, "F", "ABCDEF").
 
 Isolinjerna ritas i webblasaren och kan inte testas har - bara datat under dem.
@@ -307,6 +309,25 @@ def kontroll(iy, ix):
     skriv()
 
 
+def tidMedlemmar(iy, ix):
+    """J: tid for omrade (byvind, 150 x 150 km, 2,5 km, +0..+12) med 30 resp 15 medlemmar, binart."""
+    skriv("## J. Sannolikhetsområde: 30 medlemmar mot 15 (byvind, 150×150 km, 2,5 km, 13 h, binärt)")
+    dtg = senaste_ens()
+    if not dtg: skriv(); return
+    halv = OMR_KM * 1000 // 2500 // 2
+    skriv("| Medlemmar | Svar | Tid | MB |"); skriv("|---|---|---|---|")
+    res = {}
+    for mmax in (29, 14, 29, 14, 29, 14):
+        fr = F.enc(f"wind_speed_of_gust[0:1:{OMR_TIMMAR-1}][0][0:{mmax}][{iy-halv}:1:{iy+halv}][{ix-halv}:1:{ix+halv}]")
+        st, buf, sek, by = hamta(BAS + ENS_FIL(dtg) + ".dods?" + fr, tidsgrans=300, binart=True)
+        skriv(f"| 0–{mmax} | {st} | {sek:.1f} s | {by/1048576:.1f} |")
+        if st == 200: res.setdefault(mmax, []).append(sek)
+    if 29 in res and 14 in res:
+        a, b = statistics.median(res[29]), statistics.median(res[14])
+        skriv(f"Median: 30 medlemmar {a:.1f} s, 15 medlemmar {b:.1f} s -> {b/a:.0%} av tiden.")
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -324,6 +345,8 @@ def main():
         saknade(iy, ix)
     if "I" in delar:
         kontroll(iy, ix)
+    if "J" in delar:
+        tidMedlemmar(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
