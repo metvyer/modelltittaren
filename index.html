@@ -192,6 +192,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <div class="pkontroller">
     <div class="falt"><label for="pKorningVal">Körning</label><select id="pKorningVal"></select></div>
     <div class="falt"><label for="pParam">Parameter</label><select id="pParam"></select></div>
+    <div class="falt"><label for="pVisa">Visa</label><select id="pVisa" title="Sannolikhet över tröskeln, eller värdet självt: medel/högsta/lägsta av medlemmarna eller en enskild medlem"></select></div>
     <div class="falt"><label for="pTrosk" id="pTroskEtikett">Tröskel</label><div class="rad"><input id="pTrosk" class="koord" inputmode="decimal"><span id="pEnhet" class="enhet"></span></div></div>
     <div class="falt"><label>Snabbval</label><div class="chips" id="pChips"></div></div>
   </div>
@@ -1509,6 +1510,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261118-1200"></script>
+<script src="sannolikhet.js?v=20261119-0700"></script>
 </body>
 </html>

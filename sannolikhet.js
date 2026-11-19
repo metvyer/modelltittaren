@@ -44,6 +44,34 @@ function koda(pa, ut, i, raa) {
 }
 // Sannolikhetsklasser (%) och farger
 const PKLASS = [[5, "#fde68a"], [10, "#fbbf24"], [30, "#f97316"], [50, "#dc2626"], [70, "#9f1239"], [90, "#581c87"]];
+// NYTT 19/11: "Visa" = sannolikhet, eller sjalva vardet (medel / hogsta / lagsta av medlemmarna, eller en medlem).
+// Vardet ar per medlem samma som anvands for sannolikheten: hogsta (byvind), summa (nederbord) eller lagsta
+// (sikt, molnbas) i perioden. Fargklasser per parameter i visningsenheten; for sikt/bas ar LAGRE varre.
+const VKLASS = {
+  by:   [20, 25, 32, 35, 45, 50],
+  nb:   [0.5, 1, 5, 10, 20, 40],
+  sikt: [10000, 5000, 3000, 1500, 800, 300],
+  bas:  [1500, 1000, 500, 300, 200, 100],
+};
+const VFARG = ["#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
+const visaLage = () => ($("pVisa") && $("pVisa").value) || "sannolikhet";
+// Varde i punkten p for vald visning, eller NaN
+function visaVarde(agg, n, p, visa) {
+  if (/^m\d+$/.test(visa)) return agg[+visa.slice(1) * n + p];
+  let s = 0, c = 0, mx = -Infinity, mn = Infinity;
+  for (let m = 0; m < ENS_MEDL; m++) { const w = agg[m * n + p]; if (!isFinite(w)) continue; s += w; c++; if (w > mx) mx = w; if (w < mn) mn = w; }
+  if (!c) return NaN;
+  return visa === "medel" ? s / c : visa === "max" ? mx : mn;
+}
+// Fargindex 0-5 for ett varde, -1 = ingen farg
+function vardeKlass(v, w) {
+  const K = VKLASS[v], lagreVarre = PPARAM[v].villkor === "<"; let k = -1;
+  if (!isFinite(w)) return -1;
+  for (let i = 0; i < K.length; i++) if (lagreVarre ? w < K[i] : w >= K[i]) k = i;
+  return k;
+}
+const VISA_NAMN = { sannolikhet: "Sannolikhet", medel: "Medel av medlemmarna", max: "Högsta medlem", min: "Lägsta medlem" };
+const visaNamn = vs => VISA_NAMN[vs] || "Medlem " + vs.slice(1);
 
 // ---------- Databas (IndexedDB) med reserv i minnet ----------
 const DB = (() => {
@@ -435,12 +463,22 @@ async function probVisa() {
   // Varje omrade ritas som EN bild (en pixel per punkt) i stallet for tusentals rutor –
   // annars blir kartan seg att zooma och dra med stora omraden.
   const rgb = PKLASS.map(([gr, c]) => [gr, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
-  for (const { o, prob } of vis) {
+  const vrgb = VFARG.map(c => [0, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
+  const visa = visaLage(); let vext = null;   // varde-lage: extremvardet i bilden (for sammanfattningen)
+  for (const r of vis) {
+    const { o, prob } = r, n = o.ny * o.nx;
     const cv = document.createElement("canvas"); cv.width = o.nx; cv.height = o.ny;
     const cx = cv.getContext("2d"), img = cx.createImageData(o.nx, o.ny), px = img.data;
+    if (visa !== "sannolikhet") r.val = new Float32Array(n);
     for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
-      const p = prob[y * o.nx + x]; if (p > pmax) pmax = p; const pr = p * 100; if (pr < rgb[0][0]) continue;
-      let f = rgb[0]; for (const k of rgb) if (pr >= k[0]) f = k;
+      const p = prob[y * o.nx + x]; if (p > pmax) pmax = p;
+      let f;
+      if (visa === "sannolikhet") { const pr = p * 100; if (pr < rgb[0][0]) continue; f = rgb[0]; for (const k of rgb) if (pr >= k[0]) f = k; }
+      else {
+        const w = visaVarde(r.agg, n, y * o.nx + x, visa); r.val[y * o.nx + x] = w;
+        if (isFinite(w) && (vext === null || (pa.villkor === "<" ? w < vext : w > vext))) vext = w;
+        const k = vardeKlass(v, w); if (k < 0) continue; f = vrgb[k];
+      }
       const i = ((o.ny - 1 - y) * o.nx + x) * 4;   // bildens rad 0 = norra kanten
       px[i] = f[1]; px[i + 1] = f[2]; px[i + 2] = f[3]; px[i + 3] = 255;
     }
@@ -448,15 +486,30 @@ async function probVisa() {
     g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
       preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   }
-  P.varden = vis.length ? { vis: vis.slice().reverse(), pa } : null;   // finast forst for hovring
+  P.varden = vis.length ? { vis: vis.slice().reverse(), pa, visa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
   if (!vis.length) { if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
+  if (visa !== "sannolikhet") {
+    const aggT = { max: "högsta", min: "lägsta", summa: "summa" }[pa.agg];
+    $("pSam").textContent = visaNamn(visa) + ": " + pa.namn.split(",")[0].toLowerCase() + ", " + aggT + " i perioden " + tidText(a) + " – " + tidText(b) +
+      (pa.agg !== "summa" && dt > 1 && b > a ? " (var " + dt + ":e timme)" : "") + ". " + (pa.villkor === "<" ? "Lägsta" : "Högsta") + " värde i bilden: " +
+      (vext === null ? "–" : (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(vext) : vext.toFixed(1)).toLocaleString("sv-SE") + " " + pa.enhet) + "." + (aktuell ? "" : " Ramen är inte hämtad med vald upplösning – tryck Hämta fält.");
+    return;
+  }
   $("pSam").textContent = pa.namn + " " + pa.villkor + " " + trosk.toLocaleString("sv-SE") + " " + pa.enhet + (pa.agg === "summa" ? "" : " någon gång") + " " + tidText(a) + " – " + tidText(b) + (pa.agg !== "summa" && dt > 1 && b > a ? " (var " + dt + ":e timme)" : "") +
     ". Högsta sannolikhet: " + Math.round(pmax * 100) + " %." + (aktuell ? "" : " Ramen (ditt valda område) är inte hämtad med vald upplösning – tryck Hämta fält.");
 }
 
 function ritaPForklaring() {
   const f = $("pForkl"); f.textContent = "";
+  if (visaLage() !== "sannolikhet") {
+    const v = $("pParam").value, pa = PPARAM[v], K = VKLASS[v], lv = pa.villkor === "<";
+    const ft = w => w.toLocaleString("sv-SE");
+    K.forEach((g, i) => { const n = K[i + 1], sp = document.createElement("span"), r = document.createElement("i");
+      r.className = "pruta"; r.style.background = VFARG[i];
+      sp.append(r, lv ? (n !== undefined ? ft(n) + "–" + ft(g) : "< " + ft(g)) + " " + pa.enhet : (n !== undefined ? ft(g) + "–" + ft(n) : "≥ " + ft(g)) + " " + pa.enhet); f.append(sp); });
+    return;
+  }
   PKLASS.forEach(([g, c], i) => { const n = PKLASS[i + 1], sp = document.createElement("span"), r = document.createElement("i");
     r.className = "pruta"; r.style.background = c; sp.append(r, n ? g + "–" + n[0] + " %" : "≥ " + g + " %"); f.append(sp); });
 }
@@ -473,7 +526,8 @@ function probTips(e) {
     if (!med.length) { visaKTips("Ingen medlem har värde här (t.ex. inget moln)" + plats, e.clientX + 14, e.clientY + 14); return; }
     const rund = v => V.pa.enhet === "m" || V.pa.enhet === "ft" ? Math.round(v / 10) * 10 : v.toFixed(1);
     const aggNamn = { max: "högsta", min: "lägsta", summa: "summa" }[V.pa.agg];
-    visaKTips("Sannolikhet " + Math.round(r.prob[i] * 100) + " % (" + Math.round(r.prob[i] * ENS_MEDL) + " av " + ENS_MEDL + ")\n" +
+    const vRad = V.visa !== "sannolikhet" && r.val ? visaNamn(V.visa) + ": " + (isFinite(r.val[i]) ? rund(r.val[i]) + " " + V.pa.enhet : "inget värde") + "\n" : "";
+    visaKTips(vRad + "Sannolikhet " + Math.round(r.prob[i] * 100) + " % (" + Math.round(r.prob[i] * ENS_MEDL) + " av " + ENS_MEDL + ")\n" +
       V.pa.namn.split(",")[0] + ", " + aggNamn + " i perioden per medlem:\nmin " + rund(Math.min(...med)) + " · median " + rund(median(med)) + " · max " + rund(Math.max(...med)) + " " + V.pa.enhet +
       (med.length < ENS_MEDL ? "\n(" + (ENS_MEDL - med.length) + " medlemmar utan värde)" : "") + plats, e.clientX + 14, e.clientY + 14);
     return;
@@ -530,6 +584,16 @@ function bytLage(nytt) {
   const sel = $("pParam");
   for (const k in PPARAM) sel.add(new Option(PPARAM[k].namn, k));
   sel.value = lasa("mt:pParam") || "by"; if (!sel.value) sel.value = "by";
+  // Visa: sannolikhet / medel / hogsta / lagsta / enskild medlem
+  const vs = $("pVisa");
+  for (const k of ["sannolikhet", "medel", "max", "min"]) vs.add(new Option(VISA_NAMN[k], k));
+  const og = document.createElement("optgroup"); og.label = "Enskild medlem";
+  for (let m = 0; m < ENS_MEDL; m++) og.appendChild(new Option("Medlem " + m, "m" + m));
+  vs.appendChild(og);
+  vs.value = lasa("mt:pVisa") || "sannolikhet"; if (!vs.value) vs.value = "sannolikhet";
+  const troskAv = () => { $("pTrosk").disabled = vs.value !== "sannolikhet"; };
+  troskAv();
+  vs.addEventListener("change", () => { lagra("mt:pVisa", vs.value); troskAv(); probVisa(); });
   sattParam(); const st = lasa("mt:pTrosk:" + sel.value); if (st) { $("pTrosk").value = st; sattParam(true); }
   $("pStorlek").value = lasa("mt:pStorlek") || "150"; $("pUppl").value = lasa("mt:pUppl") || "2";
   P.senast = lasa("mt:ensSenast"); if (P.senast && Date.now() - dtgDatum(P.senast).getTime() > 864e5) P.senast = null;
