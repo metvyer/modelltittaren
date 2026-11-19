@@ -141,6 +141,10 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 #pMeteoRuta { margin-top: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .meteohuvud { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 13px; }
 .meteoskroll { overflow-x: auto; }
+.meteonb { font-size: 12px; margin: 2px 0 6px; }
+.meteonb select { font-size: 12px; }
+.meteohandtag { cursor: ew-resize; touch-action: none; }
+#pMeteoSvg { user-select: none; -webkit-user-select: none; }
 #pMeteoForkl { font-size: 11.5px; margin-top: 4px; }
 .taf { margin: 6px 2px 8px; padding: 6px 10px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #c000c0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; }
 .taf[hidden] { display: none; }
@@ -225,6 +229,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button class="sek liten" id="pMeteo" title="Hela körningen (+0 till +61 h) för vald parameter i den valda punkten">Meteogram här</button>
     <span id="pMeteoInfo" class="dim"></span>
     <div id="pMeteoRuta" hidden><div class="meteohuvud"><b id="pMeteoTitel"></b><button class="sek liten" id="pMeteoStang" title="Stäng meteogrammet">✕</button></div>
+      <div class="meteonb" id="pMeteoNbRad" hidden><label for="pMeteoNb">Nederbörd:</label> <select id="pMeteoNb"></select></div>
       <div class="meteoskroll"><svg id="pMeteoSvg"></svg></div>
       <div class="dim" id="pMeteoForkl"></div></div>
   </div>
@@ -1534,6 +1539,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261119-0715c"></script>
+<script src="sannolikhet.js?v=20261119-1410"></script>
 </body>
 </html>
