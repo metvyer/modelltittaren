@@ -317,8 +317,10 @@ def tidMedlemmar(iy, ix):
     halv = OMR_KM * 1000 // 2500 // 2
     skriv("| Medlemmar | Svar | Tid | MB |"); skriv("|---|---|---|---|")
     res = {}
-    for mmax in (29, 14, 29, 14, 29, 14):
-        fr = F.enc(f"wind_speed_of_gust[0:1:{OMR_TIMMAR-1}][0][0:{mmax}][{iy-halv}:1:{iy+halv}][{ix-halv}:1:{ix+halv}]")
+    # varje anrop i ett NYTT omrade (forskjutet 70 rutor) sa att thredds inte har nagot i sin cache
+    for i, mmax in enumerate((14, 29, 14, 29, 14, 29)):
+        dy = (i - 3) * 70
+        fr = F.enc(f"wind_speed_of_gust[0:1:{OMR_TIMMAR-1}][0][0:{mmax}][{iy-halv+dy}:1:{iy+halv+dy}][{ix-halv}:1:{ix+halv}]")
         st, buf, sek, by = hamta(BAS + ENS_FIL(dtg) + ".dods?" + fr, tidsgrans=300, binart=True)
         skriv(f"| 0–{mmax} | {st} | {sek:.1f} s | {by/1048576:.1f} |")
         if st == 200: res.setdefault(mmax, []).append(sek)
