@@ -49,6 +49,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .skewhuvud #skewStang { margin-left: auto; }
 #skewSvg { width: 100%; max-width: 820px; height: auto; display: block; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
 .skewforkl { font-size: 11.5px; margin-top: 4px; }
+.skewlyft { font-size: 12.5px; font-weight: 600; color: #c2410c; margin-top: 4px; }
 svg text { font-family: var(--font); }
 svg text:not([fill]) { fill: var(--fg); }   /* egen fill (rod T, magenta obs ...) ska inte skrivas over */
 .forklaring { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 10px 2px; font-size: 12px; color: var(--dim); align-items: center; }
@@ -302,11 +303,13 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button class="sek liten" id="skewIn" title="Zooma in (eller mushjul / nyp med två fingrar)">+</button>
     <button class="sek liten" id="skewUt" title="Zooma ut">−</button>
     <button class="sek liten" id="skewHela" title="Hela diagrammet (eller dubbelklicka)">Hela</button>
+    <button class="sek liten" id="skewLyft" aria-pressed="false" title="Lyftkurva från marken (2 m-värden), LCL, LFC, EL, CAPE och CIN – och nedisningsindex som röda staplar till höger">Lyft/CAPE</button>
     <span id="skewInfo" class="dim"></span>
     <button class="sek liten" id="skewStang" title="Stäng skew-T">✕</button>
   </div>
   <svg id="skewSvg" viewBox="0 0 640 540" preserveAspectRatio="xMidYMid meet"></svg>
-  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶. Klickar du en ny plats på kartan följer skew-T med (samma timme).</div>
+  <div id="skewLyftText" class="skewlyft" hidden></div>
+  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Lyft/CAPE: orange streckad = lyftkurva från marken, röd yta = CAPE, blå = CIN, röda staplar till höger = nedisningsindex (TRC eller mer). Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶. Klickar du en ny plats på kartan följer skew-T med (samma timme).</div>
 </div>
 
 <div class="forklaring" id="fVind" hidden>
@@ -1220,6 +1223,7 @@ const SK = { B: 640, H: 540, V: 16, HO: 78, TOPP: 8, BOTT: 52, TBREDD: 60 };
 // 19/11 kvall: skew-T har ALLTID samma hojdomfang som Jakobs forlaga - fran marken till SKEW_PTOPP (ca FL385),
 // oberoende av diagramtoppen i tid-hojd. Da blir lutningen (45°) och skalan densamma varje gang.
 const SKEW_PTOPP = 200, SKEW_PBOTT = 1058;   // hPa (FL-10 = 1050 hPa syns, for hogtryck)
+let visaLyft = lasa("mt:visaLyft") === "ja";   // NYTT 19/11 kvall: lyftkurva/CAPE/nedisning i skew-T (av som standard)
 let SKZ = { z: 1, pB: 0, TL: 0, M: null, geo: null };   // zoomlage i skew-T (pB = 0 -> utgangslage)
 const SKZ_MAX = 8;
 // skarmpunkt (i viewBox-enheter) <-> (temperatur, tryck)
@@ -1342,6 +1346,50 @@ function ritaSkewT() {
   const td2 = daggpunkt(M.yta[1][t], M.yta[2][t]);
   if (isFinite(t2)) g("circle", { cx: xT(t2, ps / 100), cy: yM, r: 3.2, fill: "#dc2626" });
   if (isFinite(td2)) g("circle", { cx: xT(td2, ps / 100), cy: yM, r: 3.2, fill: "#16a34a" });
+  // ---- Lyft/CAPE (knappen Lyft/CAPE, NYTT 19/11 kvall) ----
+  // Paket fran marken med 2 m-temperatur och -daggpunkt: torradiabatiskt till LCL (Bolton), sedan fuktadiabatiskt
+  // (pseudoadiabat). CAPE/CIN med virtuell temperatur over modellnivaerna: CAPE = Rd * sum((Tvp - Tve) * dln p).
+  // Rott = positiv yta ovanfor LFC, blatt = CIN under LFC. Nedisningsindex (>= TRC) som roda staplar till hoger.
+  let lyftText = "";
+  if (visaLyft && pT.length && isFinite(t2) && isFinite(td2)) {
+    const p0 = ps / 100, T0 = t2 + 273.15, D0 = td2 + 273.15;
+    const TL = 1 / (1 / (D0 - 56) + Math.log(T0 / D0) / 800) + 56, pL = p0 * (TL / T0) ** (1 / 0.2857);
+    const e0 = 6.112 * Math.exp(17.67 * td2 / (td2 + 243.5)), q0 = 0.622 * e0 / (p0 - 0.378 * e0);
+    // paketets T pa ett fint tryckgaller (1 hPa)
+    const parc = []; let T = T0;
+    for (let p = p0; p >= pTopp - 2; p -= 1) {
+      if (p >= pL) { T = T0 * (p / p0) ** 0.2857; parc.push([p, T, q0]); }
+      else { const tc = T - 273.15, rs = 0.622 * es(tc) / (p - es(tc)); parc.push([p, T, rs / (1 + rs)]);
+        const dT = (287.05 * T + 2.501e6 * rs) / (1004 + 2.501e6 * 2.501e6 * rs * 0.622 / (287.05 * T * T)) / p; T -= dT; }
+    }
+    const parcVid = p => { const i = Math.min(parc.length - 1, Math.max(0, Math.round(p0 - p))); return parc[i]; };
+    linje(parc.filter((_, i) => i % 3 === 0).map(([p, T]) => [T - 273.15, p]), { stroke: "#ea580c", "stroke-width": 1.8, "stroke-dasharray": "7 3" });
+    // CAPE/CIN over modellnivaerna
+    const lev = []; for (let k = NIV - 1; k >= k1; k--) if (M.tqHar[t * NIV + k]) { const p = pk(k); if (p > p0) continue;
+      const [, Tp, qp] = parcVid(p), Te = M.ta[t * NIV + k], qe = M.qv[t * NIV + k] || 0; lev.push({ p, Tp, Te, b: Tp * (1 + 0.61 * qp) - Te * (1 + 0.61 * qe) }); }
+    // LFC = forsta nivan ovanfor LCL dar paketet blir varmare; CIN raknas bara om LFC finns (annars meningslos)
+    let cape = 0, cin = 0, lfc = null, el_ = null;
+    for (let i = 0; i + 1 < lev.length && lfc === null; i++) if (lev[i + 1].p < pL && lev[i].b <= 0 && lev[i + 1].b > 0) lfc = lev[i + 1].p;
+    if (lfc === null && lev.length && lev[0].b > 0) lfc = Math.min(lev[0].p, pL);   // redan positivt vid marken
+    for (let i = 0; i + 1 < lev.length; i++) { const a = lev[i], b = lev[i + 1], dl = Math.log(a.p / b.p), m = (a.b + b.b) / 2 * 287.05 * dl;
+      let fyll = null;
+      if (lfc !== null && b.p <= lfc && m > 0) { cape += m; el_ = b.p; fyll = "#ef4444"; }
+      else if (lfc !== null && a.p > lfc && m < 0) { cin += m; fyll = "#3b82f6"; }
+      if (fyll) k_("path", { d: "M" + xT(a.Tp - 273.15, a.p) + " " + yP(a.p) + "L" + xT(b.Tp - 273.15, b.p) + " " + yP(b.p) + "L" + xT(b.Te - 273.15, b.p) + " " + yP(b.p) + "L" + xT(a.Te - 273.15, a.p) + " " + yP(a.p) + "Z", fill: fyll, opacity: 0.22, stroke: "none" });
+    }
+    const flAv = p => "FL" + p3(Math.max(0, Math.round((1 - (p / 1013.25) ** 0.190263) * 145366.45 / 100)));
+    const markera = (p, txt) => { if (p > pBott || p < pTopp) return; const y = yP(p); g("line", { x1: X1 - 60, x2: X1, y1: y, y2: y, stroke: "#ea580c", "stroke-width": 1.5 }); g("text", { x: X1 - 62, y: y + 3.5, "font-size": 10, "font-weight": 700, "text-anchor": "end", fill: "#c2410c" }, txt); };
+    markera(pL, "LCL " + flAv(pL)); if (lfc) markera(lfc, "LFC " + flAv(lfc)); if (el_ && cape > 1) markera(el_, "EL " + flAv(el_));
+    lyftText = "Lyft från marken: LCL " + flAv(pL) + " (" + Math.round(pL) + " hPa)" + (lfc ? ", LFC " + flAv(lfc) : ", ingen LFC") + (el_ && cape > 1 ? ", EL " + flAv(el_) : "") + (lfc !== null ? " · CAPE " + Math.round(cape) + " J/kg · CIN " + Math.round(cin) + " J/kg" : " · CAPE 0 J/kg (paketet blir aldrig varmare än omgivningen)");
+    // nedisningsindex (10 hojder over marken) som roda staplar vid hogerkanten
+    const zz = hojder(t, 0);
+    if (zz) for (let j = 0; j < NIS; j++) { if (!M.iceHar[t * NIS + j]) continue; const v = M.ice[t * NIS + j]; if (!(v >= IS[0])) continue;
+      const pAv = h => { for (let k = NIV - 1; k > 0; k--) if (h >= (k === NIV - 1 ? 0 : zz[k]) && h <= zz[k - 1]) return pk(k); return NaN; };
+      const h0 = j ? (M.h5[j - 1] + M.h5[j]) / 2 : M.h5[j] / 2, h1 = j + 1 < NIS ? (M.h5[j] + M.h5[j + 1]) / 2 : M.h5[j] + 375, pa = pAv(h0), pb = pAv(h1);
+      if (isFinite(pa) && isFinite(pb)) g("rect", { x: X1 - 7, y: yP(pb), width: 6, height: Math.max(1, yP(pa) - yP(pb)), fill: c("--red"), opacity: 0.35 + 0.15 * Math.min(4, v) });
+    }
+  }
+  $("skewLyftText").textContent = lyftText; $("skewLyftText").hidden = !lyftText;
   // moln (smal remsa till vanster)
   const farg = [null, c("--few"), c("--sct"), c("--bkn"), c("--ovc")];
   for (let k = NIV - 1; k >= k1; k--) { const v = M.cl[t * NIV + k]; if (!M.clHar[t * NIV + k] || !isFinite(v)) continue;
@@ -1854,6 +1902,8 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
     $("skewIn").addEventListener("click", () => SKZ.geo && skewZooma(1.5, ...mitt()));
     $("skewUt").addEventListener("click", () => SKZ.geo && skewZooma(1 / 1.5, ...mitt()));
     $("skewHela").addEventListener("click", skewNollstall);
+    $("skewLyft").setAttribute("aria-pressed", String(visaLyft));
+    $("skewLyft").addEventListener("click", e => { visaLyft = !visaLyft; lagra("mt:visaLyft", visaLyft ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaLyft)); ritaSkewT(); });
     $("skewKarta").addEventListener("click", () => document.querySelector(".kartpanel").scrollIntoView({ behavior: "smooth", block: "start" }));
     sv.addEventListener("dblclick", skewNollstall);
     sv.addEventListener("wheel", ev => { if (!SKZ.geo) return; ev.preventDefault(); const [mx, my] = vb(ev); skewZooma(ev.deltaY < 0 ? 1.25 : 0.8, mx, my); }, { passive: false });
