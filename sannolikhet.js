@@ -100,7 +100,7 @@ let visaOmr = lasa("mt:visaOmr") !== "nej";   // ramar runt hamtade omraden
 let visaIso = lasa("mt:visaIso") === "ja";      // isolinjer (NYTT 19/11), av som standard
 // Isolinjer: sannolikhet 30/70 %; vardelage: fasta nivaer per parameter + troskeln. Olika utseende per niva.
 const ISO_PROB = [{ v: 0.3, namn: "30 %", streck: "6 3", bredd: 1.9 }, { v: 0.7, namn: "70 %", streck: "", bredd: 2.6 }];
-const ISO_VARDE = { by: [{ v: 27, streck: "6 3", bredd: 1.9 }, { v: 45, streck: "", bredd: 2.6 }] };
+const ISO_VARDE = { by: [{ v: 32, streck: "6 3", bredd: 1.9 }, { v: 45, streck: "", bredd: 2.6 }] };
 const ISO_FARG = "#111827", ISO_TROSK = { streck: "1.5 3", bredd: 2.2 };
 // Marching squares: linjesegment dar falt (ny x nx, rad 0 = sodra) passerar niva. Kartkoordinater via o.
 function isoSegment(f, o, niva) {
