@@ -47,13 +47,15 @@ const PKLASS = [[5, "#fde68a"], [10, "#fbbf24"], [30, "#f97316"], [50, "#dc2626"
 // NYTT 19/11: "Visa" = sannolikhet, eller sjalva vardet (medel / hogsta / lagsta av medlemmarna, eller en medlem).
 // Vardet ar per medlem samma som anvands for sannolikheten: hogsta (byvind), summa (nederbord) eller lagsta
 // (sikt, molnbas) i perioden. Fargklasser per parameter i visningsenheten; for sikt/bas ar LAGRE varre.
+// 19/11 em: byvind och nederbord fick lagre klasser (blatt) - en dag med svag vind blev kartan annars tom i vardelaget.
 const VKLASS = {
-  by:   [20, 25, 32, 35, 45, 50],
-  nb:   [0.5, 1, 5, 10, 20, 40],
+  by:   [10, 15, 20, 25, 32, 35, 45, 50],
+  nb:   [0.1, 0.5, 1, 5, 10, 20, 40],
   sikt: [10000, 5000, 3000, 1500, 800, 300],
   bas:  [1500, 1000, 500, 300, 200, 100],
 };
-const VFARG = ["#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
+const VFARG_ALLA = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
+const vfarg = v => VFARG_ALLA.slice(VFARG_ALLA.length - VKLASS[v].length);   // farger for parameterns klasser (de morkaste sist)
 const visaLage = () => ($("pVisa") && $("pVisa").value) || "sannolikhet";
 // Varde i punkten p for vald visning, eller NaN
 function visaVarde(agg, n, p, visa) {
@@ -491,7 +493,7 @@ async function probVisa() {
   // Varje omrade ritas som EN bild (en pixel per punkt) i stallet for tusentals rutor –
   // annars blir kartan seg att zooma och dra med stora omraden.
   const rgb = PKLASS.map(([gr, c]) => [gr, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
-  const vrgb = VFARG.map(c => [0, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
+  const vrgb = vfarg($("pParam").value).map(c => [0, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   const visa = visaLage(); let vext = null;   // varde-lage: extremvardet i bilden (for sammanfattningen)
   for (const r of vis) {
     const { o, prob } = r, n = o.ny * o.nx;
@@ -560,7 +562,7 @@ function ritaPForklaring() {
     const v = $("pParam").value, pa = PPARAM[v], K = VKLASS[v], lv = pa.villkor === "<";
     const ft = w => w.toLocaleString("sv-SE");
     K.forEach((g, i) => { const n = K[i + 1], sp = document.createElement("span"), r = document.createElement("i");
-      r.className = "pruta"; r.style.background = VFARG[i];
+      r.className = "pruta"; r.style.background = vfarg(v)[i];
       sp.append(r, lv ? (n !== undefined ? ft(n) + "–" + ft(g) : "< " + ft(g)) + " " + pa.enhet : (n !== undefined ? ft(g) + "–" + ft(n) : "≥ " + ft(g)) + " " + pa.enhet); f.append(sp); });
     return;
   }
@@ -799,7 +801,8 @@ function bytLage(nytt) {
   for (let m = 0; m < ENS_MEDL; m++) og.appendChild(new Option("Medlem " + m, "m" + m));
   vs.appendChild(og);
   vs.value = lasa("mt:pVisa") || "sannolikhet"; if (!vs.value) vs.value = "sannolikhet";
-  const troskAv = () => { $("pTrosk").disabled = vs.value !== "sannolikhet"; };
+  // 19/11 em: troskeln ar alltid installbar - i vardelaget styr den troskel-isolinjen (och meteogrammet)
+  const troskAv = () => { $("pTrosk").disabled = false; };
   troskAv();
   vs.addEventListener("change", () => { lagra("mt:pVisa", vs.value); troskAv(); probVisa(); if (P.meteo) ritaMeteogram(); });
   $("pMeteo").addEventListener("click", visaMeteogram);
@@ -822,7 +825,8 @@ function bytLage(nytt) {
     else if (P.senast) bytKorning(P.senast);
     else { P.dtg = null; fyllTider(); }   // ingen kand senaste korning an - visa inte en gammal vald
     ritaOmrade(); await probVisa();
-    if (!P.varden && !P.upptagen) status("Tryck Hämta fält för att hämta i körningen " + (P.dtg || kv) + ".", "");
+    // 19/11 em: vald korning som inte ar hamtad -> hamtas direkt om automatisk hamtning ar pa
+    if (!P.varden && !P.upptagen) { status("Körningen " + (P.dtg || kv) + " är inte hämtad här än – tryck Hämta fält.", ""); autoHamta(); }
   });
   fyllTider();
   sel.addEventListener("change", () => { P.fragar = false; lagra("mt:pParam", sel.value); const st = lasa("mt:pTrosk:" + sel.value); $("pTrosk").value = st || PPARAM[sel.value].std; sattParam(true); ritaOmrade(); probVisa(); });
