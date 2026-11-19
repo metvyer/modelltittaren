@@ -450,6 +450,8 @@ function tidslinjeKlick(ev) {
 
 async function probVisa() {
   const g = $("kProb"); ritaPForklaring(); ritaTidslinje();
+  // meteogrammet foljer med: annan parameter/korning -> hamta om, annars rita om (period, troskel)
+  if (P.meteo) { if (P.meteo.v !== $("pParam").value || P.meteo.dtg !== P.dtg) visaMeteogram(); else ritaMeteogram(); }
   const rensa = () => { g.textContent = ""; P.varden = null; $("pSam").textContent = ""; };
   if (lage !== "p" || !P.dtg) { rensa(); return; }
   const v = $("pParam").value, pa = PPARAM[v], { a, b, fran, lista, dt } = periodTimmar(), trosk = parseFloat($("pTrosk").value.replace(",", "."));
@@ -535,6 +537,99 @@ function probTips(e) {
   $("kTips").hidden = true;
 }
 
+// ---------- Meteogram for en punkt (NYTT 19/11) ----------
+// Knappen "Meteogram har": hela korningen (+0..+61) for vald parameter i vald punkt, alla 30 medlemmar.
+// En liten fraga (30 x 62 varden) -> sparas i minnet och via mellanserverns cache. Ritar per timme en lada
+// (10-90 % av medlemmarna), median, streck min-max, medlem 0 som linje, troskeln och vald period skuggad.
+// Nederbord visas ackumulerad fran +0.
+const METEO_TAK = { by: null, nb: null, sikt: 10000, bas: 5000 };   // y-axelns tak (m / ft) for sikt och bas
+const meteoCache = new Map();
+async function meteoHamta(dtg, v, iy, ix) {
+  const k = [dtg, v, iy, ix].join(":"); if (meteoCache.has(k)) return meteoCache.get(k);
+  const pa = PPARAM[v];
+  const fraga = enc(pa.var + "[0:1:" + (ENS_TIDER - 1) + "][0][0:" + (ENS_MEDL - 1) + "][" + iy + "][" + ix + "]");
+  const res = await hamta(BAS + ENS_FIL(dtg) + ".ascii?" + fraga);
+  if (res.st !== 200) throw new Error("Servern svarade " + res.st);
+  const raa = tolka(res.txt)[pa.var]; if (!raa || raa.length < ENS_TIDER * ENS_MEDL) throw new Error("Oväntat svar");
+  const d = new Float32Array(ENS_TIDER * ENS_MEDL);   // [t][m], i visningsenhet
+  for (let i = 0; i < d.length; i++) d[i] = isFinite(raa[i]) ? pa.konv(raa[i]) : NaN;
+  meteoCache.set(k, d); return d;
+}
+function kvantil(s, q) { if (!s.length) return NaN; const p = (s.length - 1) * q, a = Math.floor(p), b = Math.ceil(p); return s[a] + (s[b] - s[a]) * (p - a); }
+async function visaMeteogram() {
+  const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
+  const r = isFinite(lat) && isFinite(lon) ? ruta(lat, lon) : null, info = $("pMeteoInfo");
+  if (!r) { info.textContent = "Välj en punkt inom MEPS-området först (klicka i kartan)."; return; }
+  if (!P.dtg) { info.textContent = "Ingen körning vald än."; return; }
+  const v = $("pParam").value, pa = PPARAM[v], dtg = P.dtg;
+  info.textContent = "Hämtar meteogram …"; $("pMeteo").disabled = true;
+  let d; const t0 = performance.now();
+  try { d = await meteoHamta(dtg, v, r.iy, r.ix); }
+  catch (e) { info.textContent = "Meteogrammet gick inte att hämta (" + e.message + ")."; $("pMeteo").disabled = false; return; }
+  $("pMeteo").disabled = false;
+  info.textContent = "Klart på " + ((performance.now() - t0) / 1000).toFixed(1) + " s.";
+  P.meteo = { dtg, v, iy: r.iy, ix: r.ix, d, lat, lon };
+  ritaMeteogram();
+}
+function ritaMeteogram() {
+  const M0 = P.meteo, ruta_ = $("pMeteoRuta"); if (!M0) { ruta_.hidden = true; return; }
+  const css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
+  const pa = PPARAM[M0.v], ack = pa.agg === "summa", nt = ENS_TIDER, nm = ENS_MEDL;
+  // per timme: sorterade medlemsvarden (nederbord: ackumulerat fran +0)
+  const serie = m => { const u = new Float32Array(nt); for (let t = 0; t < nt; t++) { const w = M0.d[t * nm + m]; u[t] = ack ? (isFinite(w) ? Math.max(0, w - (isFinite(M0.d[m]) ? M0.d[m] : 0)) : NaN) : w; } return u; };
+  const S = Array.from({ length: nm }, (_, m) => serie(m));
+  const tak = METEO_TAK[M0.v];
+  let ymax = 0; for (const u of S) for (const w of u) if (isFinite(w)) ymax = Math.max(ymax, tak ? Math.min(w, tak) : w);
+  const trosk = parseFloat($("pTrosk").value.replace(",", "."));
+  if (isFinite(trosk) && !ack) ymax = Math.max(ymax, trosk);
+  // jamna steg pa y-axeln (1, 2, 2,5 eller 5 x 10^n)
+  const steg = (() => { const r = (tak || Math.max(1, ymax * 1.05)) / 5, e = 10 ** Math.floor(Math.log10(r)); for (const f of [1, 2, 2.5, 5, 10]) if (f * e >= r) return f * e; })();
+  ymax = Math.ceil((tak || Math.max(1, ymax * 1.05)) / steg) * steg;
+  const nSteg = Math.round(ymax / steg);
+  const KOL = 14, VM = 46, H = 210, TOPP = 10, UNDER = 34, B = nt * KOL, W = VM + B + 8;
+  const y = w => TOPP + H - Math.min(w, ymax) / ymax * H;
+  const svg = $("pMeteoSvg"); svg.textContent = ""; svg.setAttribute("width", W); svg.setAttribute("height", TOPP + H + UNDER);
+  const g = (n, a, t) => svg.appendChild(el(n, a, t));
+  // vald period
+  let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
+  g("rect", { x: VM + a * KOL, y: TOPP, width: (b - a + 1) * KOL, height: H, fill: "#1f6feb", opacity: 0.08 });
+  // y-axel med 5 steg
+  for (let i = 0; i <= nSteg; i++) { const w = steg * i, yy = y(w);
+    g("line", { x1: VM, x2: VM + B, y1: yy, y2: yy, stroke: c("--line"), "stroke-width": 0.7 });
+    g("text", { x: VM - 4, y: yy + 3, "font-size": 9.5, "text-anchor": "end", fill: c("--dim") }, (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(w) : +w.toFixed(1)).toLocaleString("sv-SE")); }
+  g("text", { x: 4, y: TOPP + 8, "font-size": 9.5, fill: c("--dim") }, pa.enhet);
+  // tidsaxel: dygnsgranser och var 6:e timme
+  const bas = dtgDatum(M0.dtg).getTime();
+  for (let t = 0; t < nt; t++) { const dd = new Date(bas + t * 3600e3), h = dd.getUTCHours(), x = VM + t * KOL;
+    if (h === 0 && t > 0) g("line", { x1: x, x2: x, y1: TOPP, y2: TOPP + H + 4, stroke: c("--dim"), "stroke-width": 0.8 });
+    if (h % 6 === 0) g("text", { x: x + KOL / 2, y: TOPP + H + 13, "font-size": 9.5, "text-anchor": "middle", fill: c("--dim") }, p2(h));
+    if (h === 0 || t === 0) g("text", { x: x + 2, y: TOPP + H + 27, "font-size": 9.5, fill: c("--fg") }, VECKODAG[dd.getUTCDay()] + " " + dd.getUTCDate() + "/" + (dd.getUTCMonth() + 1)); }
+  // ladorna
+  const lada = "#7aa7e0", visa = visaLage(), vm = /^m\d+$/.test(visa) ? +visa.slice(1) : null;
+  for (let t = 0; t < nt; t++) {
+    const s = S.map(u => u[t]).filter(isFinite).sort((p, q) => p - q); if (!s.length) continue;
+    const x = VM + t * KOL + KOL / 2, q10 = kvantil(s, 0.1), q50 = kvantil(s, 0.5), q90 = kvantil(s, 0.9);
+    g("line", { x1: x, x2: x, y1: y(s[0]), y2: y(s[s.length - 1]), stroke: lada, "stroke-width": 1 });
+    g("rect", { x: x - KOL * 0.33, y: y(q90), width: KOL * 0.66, height: Math.max(1, y(q10) - y(q90)), fill: lada, opacity: 0.75 });
+    g("line", { x1: x - KOL * 0.38, x2: x + KOL * 0.38, y1: y(q50), y2: y(q50), stroke: "#1b3a6b", "stroke-width": 1.6 });
+    const ti = el("title"); ti.textContent = tidText(t) + "\nmin " + s[0].toFixed(1) + " · 10 % " + q10.toFixed(1) + " · median " + q50.toFixed(1) + " · 90 % " + q90.toFixed(1) + " · max " + s[s.length - 1].toFixed(1) + " " + pa.enhet +
+      (isFinite(trosk) && !ack ? "\n" + s.filter(w => pa.villkor === "≥" ? w >= trosk : w < trosk).length + " av " + s.length + " " + pa.villkor + " " + trosk + " " + pa.enhet : "");
+    const hit = el("rect", { x: VM + t * KOL, y: TOPP, width: KOL, height: H, fill: "transparent" }); hit.appendChild(ti); svg.appendChild(hit);
+  }
+  // linjer: medlem 0 (rod) och ev. vald medlem (svart)
+  const linje = (u, farg, bredd, streck) => { let dd = ""; for (let t = 0; t < nt; t++) if (isFinite(u[t])) dd += (dd ? "L" : "M") + (VM + t * KOL + KOL / 2) + " " + y(u[t]);
+    if (dd) g("path", { d: dd, fill: "none", stroke: farg, "stroke-width": bredd, "stroke-dasharray": streck || "" }); };
+  linje(S[0], "#d62828", 1.6);
+  if (vm !== null && vm !== 0) linje(S[vm], c("--fg"), 1.4, "4 2");
+  if (isFinite(trosk) && !ack) { g("line", { x1: VM, x2: VM + B, y1: y(trosk), y2: y(trosk), stroke: "#f97316", "stroke-width": 1.4, "stroke-dasharray": "6 3" });
+    g("text", { x: VM + B - 2, y: y(trosk) - 3, "font-size": 9.5, "text-anchor": "end", fill: "#c2410c" }, "tröskel " + trosk.toLocaleString("sv-SE") + " " + pa.enhet); }
+  $("pMeteoTitel").textContent = "Meteogram " + pa.namn.split(",")[0].toLowerCase() + (ack ? " (ackumulerad från +0)" : "") + " – " + M0.lat.toFixed(2) + "N " + M0.lon.toFixed(2) + "E, körning " + M0.dtg;
+  $("pMeteoForkl").textContent = "Låda = 10–90 % av medlemmarna, mörkt streck = median, tunt streck = min–max. Röd linje = medlem 0" +
+    (vm !== null && vm !== 0 ? ", svart streckad = medlem " + vm : "") + (isFinite(trosk) && !ack ? ", orange = tröskel" : "") + ". Blå skuggning = vald period. Håll musen över en timme för värden." +
+    (METEO_TAK[M0.v] ? " Skalan slutar vid " + METEO_TAK[M0.v].toLocaleString("sv-SE") + " " + pa.enhet + "." : "");
+  ruta_.hidden = false;
+}
+
 // Automatisk hamtning nar man stegar: vantar 0,5 s efter sista klicket, hamtar bara det som saknas.
 // Pagar redan en hamtning tas nasta steg nar den ar klar.
 let autoTimer = null;
@@ -593,7 +688,9 @@ function bytLage(nytt) {
   vs.value = lasa("mt:pVisa") || "sannolikhet"; if (!vs.value) vs.value = "sannolikhet";
   const troskAv = () => { $("pTrosk").disabled = vs.value !== "sannolikhet"; };
   troskAv();
-  vs.addEventListener("change", () => { lagra("mt:pVisa", vs.value); troskAv(); probVisa(); });
+  vs.addEventListener("change", () => { lagra("mt:pVisa", vs.value); troskAv(); probVisa(); if (P.meteo) ritaMeteogram(); });
+  $("pMeteo").addEventListener("click", visaMeteogram);
+  $("pMeteoStang").addEventListener("click", () => { P.meteo = null; $("pMeteoRuta").hidden = true; $("pMeteoInfo").textContent = ""; });
   sattParam(); const st = lasa("mt:pTrosk:" + sel.value); if (st) { $("pTrosk").value = st; sattParam(true); }
   $("pStorlek").value = lasa("mt:pStorlek") || "150"; $("pUppl").value = lasa("mt:pUppl") || "2";
   P.senast = lasa("mt:ensSenast"); if (P.senast && Date.now() - dtgDatum(P.senast).getTime() > 864e5) P.senast = null;
