@@ -36,7 +36,8 @@ const PPARAM = {
   hog:   { namn: "Höga moln", var: "high_type_cloud_area_fraction", enhet: "/8", konv: oktas, villkor: "≥", agg: "max", std: 5, snabb: [1, 3, 5, 7, 8], bitar: 8, steg: 0.1 },
   tot:   { namn: "Total molnmängd", var: "cloud_area_fraction", enhet: "/8", konv: oktas, villkor: "≥", agg: "max", std: 7, snabb: [1, 3, 5, 7, 8], bitar: 8, steg: 0.1 },
   dimma: { namn: "Dimma (modellens dimandel)", var: "fog_area_fraction", enhet: "%", konv: v => Math.min(100, (v > 1.5 ? v : v * 100)), villkor: "≥", agg: "max", std: 50, snabb: [10, 30, 50, 70, 90], bitar: 8, steg: 1 },
-  noll:  { namn: "0-gradersnivå", var: "altitude_of_0_degree_isotherm", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 2000, snabb: [5000, 3000, 2000, 1000, 500], bitar: 8,
+  // 20/11 (test M): 0-gradersnivan saknas (fyllnadsvarde) nar hela profilen ar under 0 °C -> raknas som 0 ft (marken)
+  noll:  { namn: "0-gradersnivå", var: "altitude_of_0_degree_isotherm", enhet: "ft", konv: v => v * FOT, saknasSom: 0, villkor: "<", agg: "min", std: 2000, snabb: [5000, 3000, 2000, 1000, 500], bitar: 8,
            tabell: trappSkala([[0, 1000, 50], [1100, 5000, 100], [5500, 15000, 500], [16000, 20000, 1000]]) },
   sno:   { namn: "Snöfall, summa i perioden (vatten)", var: "snowfall_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 2, snabb: [0.5, 1, 2, 5, 10], bitar: 16, steg: 0.1 },
   t2:    { namn: "Temperatur 2 m", var: "air_temperature_2m", enhet: "°C", konv: v => v - 273.15, villkor: "<", agg: "min", std: 0, snabb: [5, 2, 0, -5, -10, -20], bitar: 8,
@@ -50,8 +51,8 @@ function trappSkala(delar) { const ut = []; for (const [a, b, s] of delar) for (
 const SAKN = { 8: 255, 16: 65535 };
 const nyKod = (pa, n) => pa.bitar === 8 ? new Uint8Array(n).fill(255) : new Uint16Array(n).fill(65535);
 function koda(pa, ut, i, raa) {
-  if (!isFinite(raa)) return;   // fyllnadsvarde -> saknas (koden ar redan "saknas")
-  const v = pa.konv(raa);
+  if (!isFinite(raa) && pa.saknasSom === undefined) return;   // fyllnadsvarde -> saknas (koden ar redan "saknas")
+  const v = isFinite(raa) ? pa.konv(raa) : pa.saknasSom;
   if (pa.tabell) {   // narmast LAGRE varde i tabellen (binarsokning) – da blir "<" troskel exakt for trosklar som ligger i tabellen
     const T = pa.tabell; let lo = 0, hi = T.length - 1;
     if (v >= T[hi]) { ut[i] = hi; return; } if (v <= T[0]) { ut[i] = 0; return; }
@@ -922,7 +923,7 @@ async function meteoHamta(dtg, v, iy, ix) {
   if (res.st !== 200) throw new Error("Servern svarade " + res.st);
   const raa = tolka(res.txt)[pa.var]; if (!raa || raa.length < ENS_TIDER * ENS_MEDL) throw new Error("Oväntat svar");
   const d = new Float32Array(ENS_TIDER * ENS_MEDL);   // [t][m], i visningsenhet
-  for (let i = 0; i < d.length; i++) d[i] = isFinite(raa[i]) ? pa.konv(raa[i]) : NaN;
+  for (let i = 0; i < d.length; i++) d[i] = isFinite(raa[i]) ? pa.konv(raa[i]) : pa.saknasSom !== undefined ? pa.saknasSom : NaN;
   // NYTT 19/11 kvall: medlem 0 saknar sikt/molnbas i ensemblefilen -> ur det-filen (samma korning)
   if ((v === "sikt" || v === "bas") && !Array.from({ length: ENS_TIDER }, (_, t) => d[t * ENS_MEDL]).some(isFinite)) try {
     const r2 = await hamta(BAS + DET_FIL(dtg) + ".ascii?" + enc(pa.var + "[0:1:" + (ENS_TIDER - 1) + "][0][" + iy + "][" + ix + "]"));
