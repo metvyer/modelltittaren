@@ -90,11 +90,8 @@ const MEDL_URVAL = { alla: [...Array(30).keys()], nya: [...Array(15).keys()], ga
 const medlemmar = () => MEDL_URVAL[($("pMedl") && $("pMedl").value) || "alla"] || MEDL_URVAL.alla;
 const iUrval = m => { const u = ($("pMedl") && $("pMedl").value) || "alla"; return u === "alla" || (u === "nya" ? m < 15 : m >= 15); };
 // "medlem 7 i 12Z" - medlem m i den eftersläpande filen dtg: 0-14 = dtg, 15-29 = dtg - 3 h (medlem m-15)
-function medlemText(m, dtg) {
-  if (!dtg) return "medl. " + m;
-  const d = new Date(dtgDatum(dtg).getTime() - (m >= 15 ? 3 * 3600e3 : 0));
-  return p2(d.getUTCHours()) + "Z medl. " + (m >= 15 ? m - 15 : m);
-}
+// 20/11 sen kvall: utan klockslag (det forvaxlades med giltighetstiden) - bara medlem och vilken korning
+function medlemText(m, dtg) { return "medlem " + m + (m >= 15 ? " (förra körningen)" : " (senaste körningen)"); }
 // Varde i punkten p for vald visning, eller NaN
 function visaVarde(agg, n, p, visa) {
   if (/^m\d+$/.test(visa)) return agg[+visa.slice(1) * n + p];
@@ -1232,6 +1229,9 @@ async function favIn() {
 }
 function favUt() {
   if (!favSpar) return;
+  try { favUtInre(); } catch (e) { favSpar = null; }
+}
+function favUtInre() {
   $("pKorningVal").value = favSpar.pKorningVal; const kv = $("pKorningVal").value; bytKorning(kv === "senaste" ? P.senast : kv);
   for (const id of FAV_FALT) if (favSpar[id] !== undefined) $(id).value = favSpar[id];   // efter korningsbytet (som annars flyttar perioden)
   favSpar = null; sattParam(true);

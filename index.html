@@ -266,7 +266,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <div class="falt ejFav"><label for="pKorningVal">Körning</label><select id="pKorningVal"></select></div>
     <div class="falt ejFav"><label for="pParam">Parameter</label><select id="pParam"></select></div>
     <div class="falt"><label for="pMedl">Medlemmar</label><select id="pMedl" title="Vilka ensemblemedlemmar som räknas. 0–14 är den senaste körningen, 15–29 är samma medlemmar ur körningen 3 h tidigare. Skiljer sig nya och gamla mycket har modellen hoppat mellan körningarna. Med 15 medlemmar går sannolikheten i steg om ca 7 %."><option value="alla">Alla 30</option><option value="nya">15 nya (0–14)</option><option value="gamla">15 gamla (15–29, förra körningen)</option></select></div>
-    <div class="falt ejFav"><label for="pVisa">Visa</label><select id="pVisa" title="Sannolikhet över tröskeln, eller värdet självt: medel/högsta/lägsta av medlemmarna eller en enskild medlem"></select></div>
+    <div class="falt"><label for="pVisa">Visa</label><select id="pVisa" title="Sannolikhet över tröskeln, eller värdet självt: medel/högsta/lägsta av medlemmarna eller en enskild medlem"></select></div>
     <div class="falt"><label for="pTrosk" id="pTroskEtikett">Tröskel</label><div class="rad"><input id="pTrosk" class="koord" inputmode="decimal"><span id="pEnhet" class="enhet"></span></div></div>
     <div class="falt ejFav"><label>Snabbval</label><div class="chips" id="pChips"></div></div>
   </div>
@@ -2417,6 +2417,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-1915"></script>
+<script src="sannolikhet.js?v=20261120-2100"></script>
 </body>
 </html>
