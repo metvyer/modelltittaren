@@ -458,7 +458,8 @@ async function svIndex() {
 }
 async function svFil(dtg, v, t) {
   try { const r = await fetch("forhamtat/ens/" + dtg + "/" + v + "_" + t + ".bin.gz"); if (!r.ok) return null;
-    const ds = r.body.pipeThrough(new DecompressionStream("gzip")); return new Uint8Array(await new Response(ds).arrayBuffer()); } catch (e) { return null; }
+    const gz = await r.arrayBuffer(), ds = new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const d = new Uint8Array(await new Response(ds).arrayBuffer()); d.gzKb = gz.byteLength / 1024; return d; } catch (e) { return null; }
 }
 async function svFas(o, sakn) {
   const idx = await svIndex(); if (!idx || idx.dtg !== o.dtg || !idx.v.includes(o.v) || o.s % idx.s) return { antal: 0 };
@@ -472,7 +473,7 @@ async function svFas(o, sakn) {
   for (const t of tider) {
     status("Hämtar Sverigeöversikten från GitHub: +" + t + " h …");
     const d = await svFil(o.dtg, o.v, t); if (!d || d.length < ENS_MEDL * NY * NX) continue;
-    kb += d.length / 1024;
+    kb += d.gzKb || 0;
     let arr = d;
     if (k > 1) { arr = new Uint8Array(ENS_MEDL * ny * nx);
       for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) arr[(m * ny + y) * nx + x] = d[(m * NY + y * k) * NX + x * k]; }
