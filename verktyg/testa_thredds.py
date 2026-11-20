@@ -51,7 +51,7 @@ Resultatet skrivs i korningens sammanfattning (Summary) och som fil
 Ett anrop i taget, paus mellan anropen, samma User-Agent som forhamtningen.
 Data fran MET Norway (thredds.met.no), CC BY 4.0. Bara standardbiblioteket.
 """
-import math, os, re, statistics, struct, sys, time, urllib.error, urllib.request
+import math, os, re, statistics, struct, sys, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -381,6 +381,39 @@ def sverige():
     skriv()
 
 
+def nyaFalt(iy, ix):
+    """M (20/11): de nya ensembleparametrarna i sidan - finns de, enhet (min/max), saknas medlem 0?"""
+    skriv("## M. Nya ensemblefält (meteogramfråga per variabel, 30 medl. x 62 h)")
+    dtg = senaste_ens()
+    if not dtg: skriv("Ingen körning."); return
+    skriv("| variabel | svar | s | min | max | medl. 0 saknas | alla saknas |"); skriv("|---|---|---|---|---|---|---|")
+    for var in ["low_type_cloud_area_fraction", "medium_type_cloud_area_fraction", "high_type_cloud_area_fraction", "cloud_area_fraction",
+                "fog_area_fraction", "altitude_of_0_degree_isotherm", "snowfall_amount_acc", "air_temperature_2m", "x_wind_10m", "y_wind_10m"]:
+        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + urllib.parse.quote(f"{var}[0:1:{TIDER - 1}][0][0:29][{iy}][{ix}]", safe=""), tidsgrans=120)
+        v = tolka_grid(txt, var) if st == 200 else []
+        ok = [x for x in v if ok_varde(x)]
+        m0 = sum(1 for t in range(min(TIDER, len(v) // 30)) if not ok_varde(v[t * 30]))
+        skriv(f"| {var} | {st} | {sek:.1f} | {min(ok):.3g} | {max(ok):.3g} | {m0} | {len(v) - len(ok)} av {len(v)} |" if ok else f"| {var} | {st} | {sek:.1f} | – | – | – | {len(v)} värden |")
+    skriv()
+
+
+def skewTid(iy, ix):
+    """N (20/11): Bara skew-T - en 6 h-bit (som sidan) utan och med molnvatten + graupel, det-filen."""
+    skriv("## N. Bara skew-T: tid för en 6 h-bit (+12..+17)")
+    nu = datetime.now(timezone.utc); d = nu - timedelta(hours=nu.hour % 3 + 6)
+    dtg = d.strftime("%Y%m%dT%HZ"); yx = f"[{iy}][{ix}]"; tt = "[12:17]"
+    bas = [f"{n}{tt}[0]{yx}" for n in F.YTA] if hasattr(F, "YTA") else []
+    tq = [f"air_temperature_ml{tt}[24:64]{yx}", f"specific_humidity_ml{tt}[24:64]{yx}", f"x_wind_ml{tt}[24:2:64]{yx}", f"y_wind_ml{tt}[24:2:64]{yx}"]
+    wr = [f"mass_fraction_of_cloud_condensed_water_in_air_ml{tt}[36:64]{yx}", f"mass_fraction_of_graupel_in_air_ml{tt}[36:64]{yx}"]
+    for namn, v in [("T, q, vind", bas + tq), ("+ molnvatten + graupel", bas + tq + wr), ("bara molnvatten + graupel", wr)]:
+        st, txt, sek, by = hamta(BAS + "meps_det_2_5km_" + dtg + ".ncml.ascii?" + urllib.parse.quote(",".join(v), safe=""), tidsgrans=180)
+        skriv(f"- {dtg} {namn}: svar {st}, {sek:.1f} s, {by / 1024:.0f} kB")
+        if namn.startswith("bara") and st == 200:
+            w = [x for x in tolka_grid(txt, "mass_fraction_of_cloud_condensed_water_in_air_ml") if ok_varde(x)]
+            if w: skriv(f"  molnvatten max {max(w) * 1000:.3f} g/kg")
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -404,6 +437,10 @@ def main():
         register(iy, ix)
     if "L" in delar:
         sverige()
+    if "M" in delar:
+        nyaFalt(iy, ix)
+    if "N" in delar:
+        skewTid(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
