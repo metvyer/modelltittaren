@@ -39,6 +39,9 @@ samma anrop som sidan gor - utan webblasare:
   K. (NYTT 19/11 natt) Registret: samma omradesfraga tva ganger via mellanservern (forsta = met.no,
      andra = cachen?), sedan /register - star fragan dar?
 
+  L. (NYTT 20/11) Sverigeoversikt: byvind +0..+12, medlem 0-14, binart, for Sverige med omnejd 5 km,
+     hela MEPS 10 km och hela MEPS 5 km - tid, MB fran thredds, och gzip-storlek for 1 byte per varde.
+
 Vilka delar som kors valjs med MT_DELAR (t.ex. "ABCDE" = standard, "F", "ABCDEF").
 
 Isolinjerna ritas i webblasaren och kan inte testas har - bara datat under dem.
@@ -354,6 +357,30 @@ def register(iy, ix):
     skriv()
 
 
+def sverige():
+    """L: matning av Sverigeoversikten."""
+    import gzip
+    skriv("## L. Sverigeöversikt – mätning (byvind +0..+12, medlem 0–14, binärt)")
+    dtg = senaste_ens()
+    if not dtg: skriv(); return
+    fall = [("Sverige med omnejd, 5 km", 172, 806, 317, 659, 2), ("Hela MEPS, 10 km", 0, 1068, 0, 948, 4), ("Hela MEPS, 5 km", 0, 1068, 0, 948, 2)]
+    skriv("| Område | Punkter | Svar | Tid | MB från thredds | 1 byte/värde | gzip | gzip per timme (30 medl.) |"); skriv("|---|---|---|---|---|---|---|---|")
+    for namn, y0, y1, x0, x1, st in fall:
+        y1 = y0 + (y1 - y0) // st * st; x1 = x0 + (x1 - x0) // st * st
+        ny, nx = (y1 - y0) // st + 1, (x1 - x0) // st + 1
+        fr = F.enc(f"wind_speed_of_gust[0:1:12][0][0:14][{y0}:{st}:{y1}][{x0}:{st}:{x1}]")
+        stt, buf, sek, by = hamta(BAS + ENS_FIL(dtg) + ".dods?" + fr, tidsgrans=600, binart=True)
+        n = 13 * 15 * ny * nx
+        v = las_dods(buf, n) if stt == 200 else None
+        if v:
+            kod = bytes(min(254, max(0, int(round(x * KT)))) if math.isfinite(x) and x < 1e6 else 255 for x in v)
+            gz = len(gzip.compress(kod, 6))
+            skriv(f"| {namn} | {ny*nx:,} | {stt} | {sek:.0f} s | {by/1048576:.1f} | {len(kod)/1048576:.1f} MB | {gz/1048576:.2f} MB | {gz/1048576/13*2:.2f} MB |".replace(",", " "))
+        else:
+            skriv(f"| {namn} | {ny*nx:,} | {stt} | {sek:.0f} s | {by/1048576:.1f} | – | – | – |".replace(",", " "))
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -375,6 +402,8 @@ def main():
         tidMedlemmar(iy, ix)
     if "K" in delar:
         register(iy, ix)
+    if "L" in delar:
+        sverige()
     if not set(delar) & set("BCDE"):
         return spara(0)
 
