@@ -199,8 +199,11 @@ const innehaller = (e, o) => e.dtg === o.dtg && e.v === o.v && e.s === o.s && e.
 // Omradet lasas till ett fast rutnat (index delbara med steget), sa att ett mindre omrade
 // inuti ett hamtat alltid traffar samma punkter och kan visas utan ny hamtning.
 // NYTT 20/11: "Sverige" = den forhamtade Sverigerutan (GitHub, se forhamta.py SV) - samma rektangel for alla
-const SV_RUTA = { y0: 168, y1: 808, x0: 312, x1: 660 };
-function svRektangel(s) { return { y0: SV_RUTA.y0, y1: SV_RUTA.y0 + Math.floor((SV_RUTA.y1 - SV_RUTA.y0) / s) * s, x0: SV_RUTA.x0, x1: SV_RUTA.x0 + Math.floor((SV_RUTA.x1 - SV_RUTA.x0) / s) * s }; }
+// 20/11: utokad till hela Ostersjon (soderut till ca 54° N, Finska viken). Rutan tas fran GitHubs index.json
+// nar den finns (gamla korningar har den mindre rutan), annars SV_RUTA.
+const SV_RUTA = { y0: 112, y1: 808, x0: 312, x1: 744 };
+function svRektangel(s, B) { B = B || (SVIDX && SVIDX.y0 !== undefined ? SVIDX : SV_RUTA);
+  return { y0: B.y0, y1: B.y0 + Math.floor((B.y1 - B.y0) / s) * s, x0: B.x0, x1: B.x0 + Math.floor((B.x1 - B.x0) / s) * s }; }
 function berakna() {
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
   if ($("pStorlek").value === "sv") {
@@ -463,7 +466,7 @@ async function svFil(dtg, v, t) {
 }
 async function svFas(o, sakn) {
   const idx = await svIndex(); if (!idx || idx.dtg !== o.dtg || !idx.v.includes(o.v) || o.s % idx.s) return { antal: 0 };
-  const r = svRektangel(o.s);
+  const r = svRektangel(o.s, idx);
   if (o.y0 < r.y0 || o.y1 > r.y1 || o.x0 < r.x0 || o.x1 > r.x1) return { antal: 0 };
   const tider = sakn.filter(t => idx.tider.includes(t)); if (!tider.length) return { antal: 0 };
   const k = o.s / idx.s, NY = (idx.y1 - idx.y0) / idx.s + 1, NX = (idx.x1 - idx.x0) / idx.s + 1, ny = (r.y1 - r.y0) / o.s + 1, nx = (r.x1 - r.x0) / o.s + 1;
@@ -772,7 +775,10 @@ async function probVisa() {
     for (const n of nivaer) {
       // sikt/bas: lagre ar varre -> linjen ar densamma, nivan ar bara ett varde
       const d = isoSegment(n.f, r.o, n.v); if (!d) continue;
-      g.appendChild(el("path", { d, fill: "none", stroke: c_iso(), "stroke-width": n.bredd, "stroke-dasharray": n.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+      // NYTT 20/11: tydligare - ljus kant under linjen, sedan linjen, sedan vardet utskrivet pa linjen
+      g.appendChild(el("path", { d, fill: "none", stroke: c_isoKant(), "stroke-width": n.bredd + 2.6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.85 }));
+      g.appendChild(el("path", { d, fill: "none", stroke: c_iso(), "stroke-width": n.bredd + 0.4, "stroke-dasharray": n.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+      isoEtiketter(g, d, n.namn ? n.namn.replace(" %", "") : String(n.v).replace(".", ","));
     }
   }
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa, visa } : null;   // finast forst for hovring
@@ -796,6 +802,19 @@ async function probVisa() {
 }
 
 const c_iso = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "#f3f4f6" : ISO_FARG);
+const c_isoKant = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "#111827" : "#ffffff");
+// NYTT 20/11: vardet skrivet pa isolinjen, glest (minst en sjattedels kartbredd mellan etiketterna).
+// Textstorleken foljer kartans zoom (skalaIsoEtiketter anropas fran satVb i index.html).
+const isoFs = () => (typeof vb !== "undefined" ? vb.w : 949) / 45;
+function isoEtiketter(g, d, text) {
+  const seg = [...d.matchAll(/M([-\d.]+) ([-\d.]+)L([-\d.]+) ([-\d.]+)/g)].map(m => [(+m[1] + +m[3]) / 2, (+m[2] + +m[4]) / 2]);
+  const avst = (typeof vb !== "undefined" ? vb.w : 949) / 6, satta = [];
+  for (let i = 0; i < seg.length && satta.length < 40; i += 3) { const [x, y] = seg[i];
+    if (satta.some(([a, b]) => Math.hypot(a - x, b - y) < avst)) continue; satta.push([x, y]);
+    g.appendChild(el("text", { x, y, class: "isoEtikett", "font-size": isoFs(), "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central",
+      fill: c_iso(), stroke: c_isoKant(), "stroke-width": isoFs() / 4, "paint-order": "stroke" }, text)); }
+}
+function skalaIsoEtiketter() { const fs = isoFs(); document.querySelectorAll(".isoEtikett").forEach(t => { t.setAttribute("font-size", fs); t.setAttribute("stroke-width", fs / 4); }); }
 // liten linjebild for forklaringen
 function isoForkl(f, streck, bredd, text) {
   const sp = document.createElement("span"), sv = document.createElementNS("http://www.w3.org/2000/svg", "svg");

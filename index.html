@@ -1719,8 +1719,13 @@ async function hamtaAllt() {
     // Skew-T oppnas efter forsta biten (aktuell timme om den finns i dygnet) och fylls pa efter hand.
     if (baraSkew) {
       let start = -1; for (let t = 0; t < nt && start < 0; t++) if (skewBehov(t).nagot) start = t;
-      if (start >= 0) {
-        const a0 = Math.floor(start / SKEW_BIT) * SKEW_BIT, slut = Math.min(nt - 1, Math.floor(start / 24) * 24 + 23);
+      // NYTT 20/11: tittar man redan pa en timme i skew-T (t.ex. 09Z i morgon) och valjer ny punkt hamtas
+      // bara 6 h-biten med den timmen (fasta bitar 0-5, 6-11 ... sa att Cloudflare-cachen traffar). Hamta igen = resten av dygnet.
+      let a0, slut, baraBit = false;
+      if (skewT !== null && skewT < nt && !$("skewRuta").hidden) { const b0 = Math.floor(skewT / SKEW_BIT) * SKEW_BIT, b1 = Math.min(nt - 1, b0 + SKEW_BIT - 1);
+        if (skewBitUrl(b0, b1)) { a0 = b0; slut = b1; baraBit = true; } }
+      if (!baraBit && start >= 0) { a0 = Math.floor(start / SKEW_BIT) * SKEW_BIT; slut = Math.min(nt - 1, Math.floor(start / 24) * 24 + 23); }
+      if (baraBit || start >= 0) {
         F.skew = true; F.slut = slut; F.forv = forvantadBitTid();
         for (let a = a0; a <= slut; a += SKEW_BIT) {
           const b = Math.min(a + SKEW_BIT - 1, slut), bu = skewBitUrl(a, b); if (!bu) continue;
@@ -1735,7 +1740,7 @@ async function hamtaAllt() {
         }
       }
       const tot = ((performance.now() - t0) / 1000).toFixed(0); let kvarH = 0; for (let t = 0; t < nt; t++) if (skewBehov(t).nagot) kvarH++;
-      status(tider.length ? "Skew-T klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + kb.toFixed(0) + " kB." + (kvarH ? " Tryck Hämta för nästa dygn." : "") : "Skew-T: allt fanns redan i webbläsaren.");
+      status(tider.length ? "Skew-T klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + kb.toFixed(0) + " kB." + (kvarH ? (baraBit ? " Bara biten +" + a0 + " till +" + slut + " h (vald timme). Tryck Hämta för resten av dygnet." : " Tryck Hämta för nästa dygn.") : "") : "Skew-T: allt fanns redan i webbläsaren.");
       if (!tider.length && ($("skewRuta").hidden || skewT === null)) oppnaSkewT(Math.max(0, Math.min(nt - 1, Math.round((Date.now() - M.tid[0] * 1000) / 3600e3))), true);
       return;
     }
@@ -1800,7 +1805,7 @@ function hamtStatus(dtg, iy, ix) {
 function satVb(x, y, w) {
   w = Math.min(KX, Math.max(MIN_BREDD, w)); const h = w * KY / KX;
   vb = { x: Math.min(KX - w, Math.max(0, x)), y: Math.min(KY - h, Math.max(0, y)), w, h };
-  $("karta").setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h); ritaMarkorer();
+  $("karta").setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h); ritaMarkorer(); if (typeof skalaIsoEtiketter === "function") skalaIsoEtiketter();
 }
 function zooma(f, cx, cy) {
   if (cx === undefined) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
@@ -2054,6 +2059,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-0830"></script>
+<script src="sannolikhet.js?v=20261120-0900"></script>
 </body>
 </html>
