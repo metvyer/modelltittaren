@@ -40,6 +40,9 @@ const PPARAM = {
   noll:  { namn: "0-gradersnivå", var: "altitude_of_0_degree_isotherm", enhet: "ft", konv: v => v * FOT, saknasSom: 0, villkor: "<", agg: "min", std: 2000, snabb: [5000, 3000, 2000, 1000, 500], bitar: 8,
            tabell: trappSkala([[0, 1000, 50], [1100, 5000, 100], [5500, 15000, 500], [16000, 20000, 1000]]) },
   sno:   { namn: "Snöfall, summa i perioden (vatten)", var: "snowfall_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 2, snabb: [0.5, 1, 2, 5, 10], bitar: 16, steg: 0.1 },
+  // NYTT 20/11: medelvind 10 m (gitterriktad, m/s) - bara for riskpanelens sidvind, visas inte i parameterlistan
+  u10:   { namn: "Vind 10 m (x)", var: "x_wind_10m", enhet: "m/s", konv: v => v, villkor: "≥", agg: "max", std: 0, snabb: [], bitar: 8, steg: 1, dold: true },
+  v10:   { namn: "Vind 10 m (y)", var: "y_wind_10m", enhet: "m/s", konv: v => v, villkor: "≥", agg: "max", std: 0, snabb: [], bitar: 8, steg: 1, dold: true },
   t2:    { namn: "Temperatur 2 m", var: "air_temperature_2m", enhet: "°C", konv: v => v - 273.15, villkor: "<", agg: "min", std: 0, snabb: [5, 2, 0, -5, -10, -20], bitar: 8,
            tabell: trappSkala([[-50, 40, 1]]) }
 };
@@ -1118,7 +1121,7 @@ function bytLage(nytt) {
 }
 (async function startaP() {
   const sel = $("pParam");
-  for (const k in PPARAM) sel.add(new Option(PPARAM[k].namn, k));
+  for (const k in PPARAM) if (!PPARAM[k].dold) sel.add(new Option(PPARAM[k].namn, k));
   sel.value = lasa("mt:pParam") || "by"; if (!sel.value) sel.value = "by";
   // Visa: sannolikhet / medel / hogsta / lagsta / enskild medlem
   const vs = $("pVisa");

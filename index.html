@@ -126,6 +126,13 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 .psam:empty { display: none; }
 .pruta { display: inline-block; width: 16px; height: 11px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
 .lagerad { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; flex-wrap: wrap; }
+/* NYTT 20/11: riskpanelens installningar */
+.riskinst { border: 1px solid var(--grid); border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; font-size: 13px; }
+.riskinst .rrad { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 3px 0; }
+.riskinst input[type=number] { width: 4.6em; }
+.riskinst .banor { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--grid); }
+.riskinst .egenbana { display: inline-flex; gap: 4px; align-items: center; border: 1px solid var(--grid); border-radius: 6px; padding: 0 4px; }
+.riskinst .egenbana button { border: 0; background: none; cursor: pointer; padding: 0 2px; font-size: 14px; }
 .vaxel { display: inline-flex; border: 1px solid var(--acc); border-radius: 6px; overflow: hidden; }
 .vaxel button { border: 0; border-radius: 0; background: transparent; color: var(--acc); padding: 4px 16px; }
 .vaxel button[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
@@ -286,6 +293,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <button class="sek liten" id="lHov" aria-pressed="true" title="Visa rutan med värden när du håller muspekaren (eller fingret) över diagrammet och tabellen">Hovring</button>
   <button class="sek liten" id="lIso" aria-pressed="true" title="0, −10 och −20 °C ur modellens temperatur på alla modellnivåer (förhämtade flygplatser: varje timme +3 till +23, var 3:e timme +24 till +45)">Isotermer</button>
   <button class="sek liten" id="lMetar" aria-pressed="false" title="Visa observerade molnskikt (METAR) och senaste TAF från närmaste flygplats">METAR/TAF</button>
+  <button class="sek liten" id="lRisk" aria-pressed="false" title="Riskpanel under diagrammet: sannolikhet (andel av ensemblens 30 medlemmar) timme för timme för sidvind i byar per bana, byvind, dimma, låga moln, sikt, molnbas och minusgrader. Alla rader är släckta från start.">Risk</button>
   <button class="sek liten" id="lIs" aria-pressed="false" title="Nedisning från MEPS isindex. TEST: gränserna är obekräftade och underskattar jämfört med SMHI">Nedisning (test)</button>
   <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; tunt = FEW, tjockt = OVC, vit med streckad kant = VV (vertikal sikt)"></span>
   <span class="lagetips" id="lageTips"></span>
@@ -295,6 +303,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <svg class="axel" id="axel" width="56" height="10"></svg>
   <div class="skroll" id="skroll"><svg id="svg" width="10" height="10"></svg></div>
 </div>
+<div class="riskinst" id="riskInst" hidden></div>
 <!-- NYTT 19/11 kvall: skew-T for vald timme (klick i tid-hojd) -->
 <div id="skewRuta" class="skewruta" hidden>
   <div class="skewhuvud">
@@ -1101,7 +1110,7 @@ function tTdPaHojd(t, z) {
 function rita() {
   if (!M || !M.stat) return;
   const RADER = tabellRader(visaMetar && M.metar && M.metar.length > 0), R = Object.fromEntries(RADER.map((k, i) => [k, i]));
-  const sk = skala(), nt = M.nt, B = nt * COL, EXTRA = vindLage ? VIND_UNDER : 0, H = TOPP_RAD + PLOT_H + 8 + EXTRA + RADER.length * RAD_H + 6;
+  const sk = skala(), nt = M.nt, B = nt * COL, EXTRA = vindLage ? VIND_UNDER : 0, H = TOPP_RAD + PLOT_H + 8 + EXTRA + RADER.length * RAD_H + 6 + riskHojd();
   const svg = $("svg"), ax = $("axel"); svg.innerHTML = ""; ax.innerHTML = "";
   svg.setAttribute("width", B); svg.setAttribute("height", H); ax.setAttribute("height", H);
   const css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
@@ -1226,6 +1235,7 @@ function rita() {
       else v.forEach((a, k) => ut(rad, tt * COL + COL * (k + 0.5) / v.length, a.s.replace(">", "")));   // i tidsordning, jamnt fordelade; ">" skippas (plats)
     }
   }
+  ritaRisk(svg, ax, sk.botten + 8 + EXTRA + RADER.length * RAD_H + 6, nt, t0, c);
   // info
   const d0 = new Date(t0);
   $("iRuta").textContent = isFinite(M.glat) ? M.glat.toFixed(3) + "N " + M.glon.toFixed(3) + "E, " + avstand(M.lat, M.lon, M.glat, M.glon).toFixed(1) + " km från punkten, modellens markhöjd " + Math.round(M.terr) + " m (ruta y=" + M.iy + " x=" + M.ix + ")" : "–";
@@ -1233,6 +1243,174 @@ function rita() {
   if (M.nyFinns) kt.insertAdjacentHTML("beforeend", ' <span class="nyfinns">– Ny körning ' + M.nyFinns + ' finns, tryck Hämta</span>');
   if (M.vald) { kt.insertAdjacentHTML("beforeend", ' <span class="vald">– vald körning</span>'); }
   else if (M.ny) { kt.insertAdjacentHTML("beforeend", ' <span class="ny">– NY KÖRNING</span>'); }
+}
+
+// ===================================================================
+//  RISKPANEL (NYTT 20/11) - under tid-hojd, staplar = sannolikhet per timme (andel av ensemblens medlemmar)
+//  Data: meteogramfragor ur ensemblefilen for punkten (ett litet anrop per variabel, delas via Cloudflare).
+//  Sidvind i byar per medlem = byvind x |sin(vindriktning 10 m - banans sanna riktning)|, riktningen ur
+//  medelvinden 10 m (byvinden har ingen riktning). "Basta banan" = minsta sidvinden over punktens banor, dvs
+//  sannolikheten att INGEN bana klarar gransen.
+// ===================================================================
+const RISK_H = 30;
+const RISK_RADER = {   // nyckel: [namn, kort, villkor, standardgrans, enhet, variabler]
+  sv:    ["Sidvind i byar", "Sidvind", "≥", 20, "kt", ["by", "u10", "v10"]],
+  by:    ["Byvind", "Byvind", "≥", 25, "kt", ["by"]],
+  dimma: ["Dimma (modellens dimandel)", "Dimma", "≥", 50, "%", ["dimma"]],
+  lag:   ["Låga moln", "Låga moln", "≥", 5, "/8", ["lag"]],
+  sikt:  ["Sikt", "Sikt", "<", 1500, "m", ["sikt"]],
+  bas:   ["Molnbas", "Molnbas", "<", 500, "ft", ["bas"]],
+  t2:    ["Temperatur 2 m", "T 2 m", "<", 0, "°C", ["t2"]],
+};
+let RISK = (() => { try { return JSON.parse(lasa("mt:risk") || "null") || {}; } catch (e) { return {}; } })();
+RISK.pa = !!RISK.pa; RISK.rad = RISK.rad || {};
+for (const k in RISK_RADER) RISK.rad[k] = { pa: false, gr: RISK_RADER[k][3], ...(RISK.rad[k] || {}) };
+const sparaRisk = () => lagra("mt:risk", JSON.stringify(RISK));
+let RISKD = { nyckel: "", d: {}, ensDtg: null, fel: "" }, riskHamtar = false;
+
+// Banor for punkten: fasta flygplatsen (forvald eller narmaste inom 3 km) + egna banor sparade for punkten
+const egenBanNyckel = (lat, lon) => lat.toFixed(3) + "," + lon.toFixed(3);
+function egnaBanor() { try { return JSON.parse(lasa("mt:egnaBanor") || "{}"); } catch (e) { return {}; } }
+function punktBanor() {
+  if (!M) return { icao: null, banor: [] };
+  let icao = null, best = 3;
+  for (const p of PUNKTER) { const a = avstand(M.lat, M.lon, p[2], p[3]); if (a < best) { best = a; icao = p[1]; } }
+  if (!icao) for (const f of FLYG) { const a = avstand(M.lat, M.lon, f[2], f[3]); if (a < best) { best = a; icao = f[0]; } }
+  const banor = icao ? banorFor(icao, M.lat, M.lon).map(b => ({ namn: b.namn, sann: b.sann })) : [];
+  for (const b of egnaBanor()[egenBanNyckel(M.lat, M.lon)] || []) banor.push({ ...b, egen: true });
+  return { icao, banor };
+}
+// Synliga rader i ordning: [{k, namn, kort, villkor, gr, enhet, bana?}]
+function riskRaderNu() {
+  if (!RISK.pa || !M) return [];
+  const ut = [];
+  for (const k in RISK_RADER) {
+    const r = RISK.rad[k]; if (!r.pa) continue; const [namn, kort, villkor, , enhet] = RISK_RADER[k];
+    if (k === "sv") {
+      const { banor } = punktBanor();
+      if (!banor.length) { ut.push({ k, namn: namn + " – punkten saknar banor (lägg in nedan)", kort, villkor, gr: r.gr, enhet, tom: true }); continue; }
+      for (const b of banor) ut.push({ k, namn: namn + " bana " + b.namn, kort: b.namn, villkor, gr: r.gr, enhet, bana: [b] });
+      if (banor.length > 1) ut.push({ k, namn: namn + " – bästa banan (ingen bana klarar gränsen)", kort: "Bästa", villkor, gr: r.gr, enhet, bana: banor });
+    } else ut.push({ k, namn, kort, villkor, gr: r.gr, enhet });
+  }
+  return ut;
+}
+function riskHojd() { const n = riskRaderNu().length; return n ? n * RISK_H + 18 : 0; }
+// Hamta det som behovs (en variabel i taget, vantar medan tid-hojd hamtar)
+async function riskHamta() {
+  if (riskHamtar || !M) return; riskHamtar = true;
+  const st = $("riskStatus");
+  try {
+    while (upptagen) await new Promise(r => setTimeout(r, 1000));
+    const ens = P.dtg || await sokEnsKorning(); if (!ens) throw new Error("ingen ensemblekörning hittad");
+    const nyckel = ens + ":" + M.iy + ":" + M.ix;
+    if (RISKD.nyckel !== nyckel) RISKD = { nyckel, d: {}, ensDtg: ens, fel: "" };
+    const beh = new Set(); for (const r of riskRaderNu()) if (!r.tom) RISK_RADER[r.k][5].forEach(v => beh.add(v));
+    for (const v of beh) {
+      if (RISKD.d[v]) continue;
+      if (st) st.textContent = "Hämtar " + PPARAM[v].namn.toLowerCase() + " för punkten …";
+      RISKD.d[v] = await meteoHamta(ens, v, M.iy, M.ix);
+    }
+    if (st) st.textContent = "Ensemble " + ens + " (30 medlemmar).";
+  } catch (e) { RISKD.fel = e.message; RISKD.felP = M ? M.iy + ":" + M.ix : ""; if (st) st.textContent = "Kunde inte hämta: " + e.message; }
+  finally { riskHamtar = false; }
+  if (M && M.stat) rita();
+}
+const RISK_FARG = p => p < 0.1 ? "#cbd5e1" : p < 0.3 ? "#facc15" : p < 0.5 ? "#fb923c" : p < 0.7 ? "#ef4444" : "#991b1b";
+function ritaRisk(svg, ax, y0, nt, t0, c) {
+  const box = $("riskInst"), pk = M.lat + "," + M.lon;
+  if (box && RISK.pa && box.dataset.p !== pk) ritaRiskInst();     // ny punkt -> banorna i installningarna
+  if (RISKD.fel && RISKD.felP !== M.iy + ":" + M.ix) RISKD.fel = "";
+  const rader = riskRaderNu(); if (!rader.length) return;
+  const nyckel = (P.dtg || RISKD.ensDtg) + ":" + M.iy + ":" + M.ix;
+  const saknas = RISKD.nyckel !== nyckel || rader.some(r => !r.tom && RISK_RADER[r.k][5].some(v => !RISKD.d[v]));
+  if (saknas && !riskHamtar && !RISKD.fel) setTimeout(riskHamta, 0);
+  ax.appendChild(el("text", { x: 4, y: y0 + 12, "font-size": 9.5, "font-weight": 700, fill: c("--dim") }, "Risk %"));
+  svg.appendChild(el("text", { x: 4, y: y0 + 12, "font-size": 10, fill: c("--dim") }, saknas ? (RISKD.fel ? "Riskpanelen: " + RISKD.fel : "Riskpanelen hämtas …") :
+    "Sannolikhet = andel av ensemblens medlemmar (" + RISKD.ensDtg + "). Streckad linje = 50 %. Håll musen över en stapel."));
+  const offs = !saknas ? Math.round((dtgDatum(RISKD.ensDtg).getTime() - t0) / 3600e3) : 0;   // ensemblens +0 i tid-hojds timmar
+  const lon = isFinite(M.glon) ? M.glon : M.lon, th = LCC.n * (lon - 15) * LCC.rad, cs = Math.cos(th), sn = Math.sin(th);
+  rader.forEach((r, i) => {
+    const yT = y0 + 18 + i * RISK_H, yB = yT + RISK_H - 3, hMax = RISK_H - 6;
+    svg.appendChild(el("line", { x1: 0, y1: yB, x2: nt * COL, y2: yB, stroke: c("--grid"), "stroke-width": 0.6 }));
+    svg.appendChild(el("line", { x1: 0, y1: yB - hMax / 2, x2: nt * COL, y2: yB - hMax / 2, stroke: c("--grid"), "stroke-width": 0.5, "stroke-dasharray": "3 3" }));
+    const lab = el("text", { x: 4, y: yT + 11, "font-size": 9.5, fill: c("--fg") }, r.kort); const tt = el("title"); tt.textContent = r.namn + " " + r.villkor + " " + r.gr + " " + r.enhet; lab.appendChild(tt); ax.appendChild(lab);
+    ax.appendChild(el("text", { x: 4, y: yT + 23, "font-size": 9, fill: c("--dim") }, r.villkor + String(r.gr).replace(".", ",") + " " + r.enhet));
+    if (saknas || r.tom) return;
+    const D = RISKD.d, NM = ENS_MEDL;
+    for (let t = 0; t < nt; t++) {
+      const te = t - offs; if (te < 0 || te >= ENS_TIDER) continue;
+      let n = 0, j = 0;
+      for (let m = 0; m < NM; m++) {
+        let v;
+        if (r.k === "sv") {
+          const g = D.by[te * NM + m], u = D.u10[te * NM + m], w = D.v10[te * NM + m]; if (!isFinite(g) || !isFinite(u) || !isFinite(w)) continue;
+          const ue = u * cs + w * sn, ve = -u * sn + w * cs, dir = Math.atan2(-ue, -ve) * 180 / Math.PI;
+          v = Math.min(...r.bana.map(b => g * Math.abs(Math.sin((dir - b.sann) * Math.PI / 180))));
+        } else v = D[RISK_RADER[r.k][5][0]][te * NM + m];
+        if (!isFinite(v)) continue; n++;
+        if (r.villkor === "<" ? v < r.gr : v >= r.gr) j++;
+      }
+      if (n < 10) continue;
+      const p = j / n, h = Math.max(p > 0 ? 1.5 : 0, p * hMax);
+      const bar = el("rect", { x: t * COL + 3, y: yB - h, width: COL - 6, height: h, fill: RISK_FARG(p) });
+      const tb = el("title"); const d = new Date(t0 + t * 3600e3);
+      tb.textContent = r.namn + " " + r.villkor + " " + r.gr + " " + r.enhet + "\n" + VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z: " + Math.round(p * 100) + " % (" + j + " av " + n + " medlemmar)";
+      bar.appendChild(tb); svg.appendChild(bar);
+      if (p >= 0.1) svg.appendChild(el("text", { x: t * COL + COL / 2, y: yT + 8, "font-size": 8, "text-anchor": "middle", fill: c("--dim"), "pointer-events": "none" }, String(Math.round(p * 100))));
+    }
+  });
+}
+// Installningarna (rader, granser, banor) under diagrammet
+function ritaRiskInst() {
+  const box = $("riskInst"); if (!box) return; box.hidden = !RISK.pa; if (!RISK.pa) return;
+  box.textContent = ""; box.dataset.p = M ? M.lat + "," + M.lon : "";
+  const rubrik = document.createElement("div"); rubrik.innerHTML = "<b>Riskpanel</b> – tänd raderna du vill se och välj gränser. Sannolikhet = andel av ensemblens 30 medlemmar."; box.appendChild(rubrik);
+  for (const k in RISK_RADER) {
+    const [namn, , villkor, , enhet] = RISK_RADER[k], r = RISK.rad[k], rad = document.createElement("div"); rad.className = "rrad";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = r.pa; cb.id = "risk_" + k;
+    const lb = document.createElement("label"); lb.htmlFor = cb.id; lb.textContent = namn + " " + villkor;
+    const nr = document.createElement("input"); nr.type = "number"; nr.step = "any"; nr.value = r.gr;
+    const en = document.createElement("span"); en.textContent = enhet;
+    cb.addEventListener("change", () => { r.pa = cb.checked; sparaRisk(); RISKD.fel = ""; if (M && M.stat) rita(); });
+    nr.addEventListener("change", () => { const v = parseFloat(String(nr.value).replace(",", ".")); if (isFinite(v)) { r.gr = v; sparaRisk(); if (M && M.stat) rita(); } });
+    rad.append(cb, lb, nr, en); box.appendChild(rad);
+  }
+  // banor
+  const bd = document.createElement("div"); bd.className = "banor"; box.appendChild(bd);
+  if (!M) { bd.textContent = "Välj en punkt för att se dess banor."; }
+  else {
+    const { icao, banor } = punktBanor();
+    const t = document.createElement("div");
+    t.textContent = "Banor för punkten" + (icao ? " (" + icao + ")" : "") + ": " + (banor.filter(b => !b.egen).map(b => b.namn + " (" + String(Math.round(b.sann)).padStart(3, "0") + "° sann)").join(", ") || "inga i listan");
+    bd.appendChild(t);
+    const egna = egnaBanor(), kk = egenBanNyckel(M.lat, M.lon), lista = egna[kk] || [];
+    if (lista.length) { const e = document.createElement("div"); e.className = "rrad"; e.append("Egna banor: ");
+      lista.forEach((b, i) => { const s = document.createElement("span"); s.className = "egenbana"; s.textContent = b.namn + " (" + String(Math.round(b.sann)).padStart(3, "0") + "° sann)";
+        const x = document.createElement("button"); x.textContent = "×"; x.title = "Ta bort"; x.addEventListener("click", () => { lista.splice(i, 1); if (lista.length) egna[kk] = lista; else delete egna[kk]; lagra("mt:egnaBanor", JSON.stringify(egna)); ritaRiskInst(); if (M && M.stat) rita(); });
+        s.appendChild(x); e.appendChild(s); });
+      bd.appendChild(e); }
+    const ny = document.createElement("div"); ny.className = "rrad";
+    const typ = document.createElement("select"); [["nr", "Bannummer (magnetiskt), t.ex. 03 eller 03/21"], ["mag", "Riktning i grader, magnetisk"], ["sann", "Riktning i grader, sann"]].forEach(([v, n]) => typ.add(new Option(n, v)));
+    const inp = document.createElement("input"); inp.type = "text"; inp.size = 7; inp.placeholder = "03/21";
+    const knapp = document.createElement("button"); knapp.className = "sek liten"; knapp.textContent = "Lägg till bana";
+    const fel = document.createElement("span"); fel.className = "lagetips";
+    typ.addEventListener("change", () => { inp.placeholder = typ.value === "nr" ? "03/21" : "033"; });
+    knapp.addEventListener("click", () => {
+      const txt = inp.value.trim(), mis = missvisning(M.lat, M.lon); let namn, sann;
+      if (typ.value === "nr") { const m = txt.match(/^(\d{1,2})[LRC]?(?:\s*\/\s*(\d{1,2})[LRC]?)?$/i); if (!m || +m[1] < 1 || +m[1] > 36) { fel.textContent = "Skriv bannummer 01–36, t.ex. 03 eller 03/21."; return; }
+        const a = +m[1], b = ((a + 17) % 36) + 1; namn = String(a).padStart(2, "0") + "/" + String(b).padStart(2, "0"); sann = (a * 10 + mis + 360) % 360; }
+      else { const g = parseFloat(txt.replace(",", ".")); if (!isFinite(g) || g < 0 || g > 360) { fel.textContent = "Skriv en riktning 0–360°."; return; }
+        sann = typ.value === "sann" ? g % 360 : (g + mis + 360) % 360; namn = String(Math.round(g)).padStart(3, "0") + "°" + (typ.value === "sann" ? "S" : "M"); }
+      const egna2 = egnaBanor(); (egna2[kk] = egna2[kk] || []).push({ namn, sann: Math.round(sann * 10) / 10 }); lagra("mt:egnaBanor", JSON.stringify(egna2));
+      inp.value = ""; fel.textContent = ""; ritaRiskInst(); if (M && M.stat) rita();
+    });
+    ny.append("Lägg till egen bana för punkten: ", typ, inp, knapp, fel); bd.appendChild(ny);
+    const not = document.createElement("div"); not.className = "lagetips";
+    not.textContent = "Magnetiskt räknas om till sant med ungefärlig missvisning här (" + missvisning(M.lat, M.lon).toFixed(0) + "° ost, ±2°). Modellens vind är sann.";
+    bd.appendChild(not);
+  }
+  const st = document.createElement("div"); st.className = "lagetips"; st.id = "riskStatus"; box.appendChild(st);
 }
 
 
@@ -2028,6 +2206,9 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
   $("lNiv").setAttribute("aria-pressed", String(visaNiv));
   $("lIso").setAttribute("aria-pressed", String(visaIsoT));
+  // NYTT 20/11: riskpanel
+  $("lRisk").setAttribute("aria-pressed", String(RISK.pa)); ritaRiskInst();
+  $("lRisk").addEventListener("click", e => { RISK.pa = !RISK.pa; sparaRisk(); e.currentTarget.setAttribute("aria-pressed", String(RISK.pa)); RISKD.fel = ""; ritaRiskInst(); if (M && M.stat) rita(); });
   $("lHov").setAttribute("aria-pressed", String(visaHovring));
   $("lHov").addEventListener("click", e => { visaHovring = !visaHovring; lagra("mt:visaHovring", visaHovring ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaHovring)); if (!visaHovring) gomTips(); });
   $("vagVal").value = VAG_LAGE;
@@ -2087,6 +2268,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-1030"></script>
+<script src="sannolikhet.js?v=20261120-1130"></script>
 </body>
 </html>
