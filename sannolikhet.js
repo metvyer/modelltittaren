@@ -494,8 +494,12 @@ async function svFil(dtg, v, t) {
 async function svFas(o, sakn) {
   const idx = await svIndex(); if (!idx || idx.dtg !== o.dtg || !idx.v.includes(o.v) || o.s % idx.s) return { antal: 0 };
   const r = svRektangel(o.s, idx);
-  if (o.y0 < r.y0 || o.y1 > r.y1 || o.x0 < r.x0 || o.x1 > r.x1) return { antal: 0 };
-  const tider = sakn.filter(t => idx.tider.includes(t)); if (!tider.length) return { antal: 0 };
+  // 20/11 kvall: som snabbfasen - overlappar omradet rutan bara delvis tas den delen harifran (andelen = tackt)
+  if (o.y1 < r.y0 || o.y0 > r.y1 || o.x1 < r.x0 || o.x0 > r.x1) return { antal: 0 };
+  const delvis = o.y0 < r.y0 || o.y1 > r.y1 || o.x0 < r.x0 || o.x1 > r.x1;
+  const tackt = ((Math.min(o.y1, r.y1) - Math.max(o.y0, r.y0)) / o.s + 1) * ((Math.min(o.x1, r.x1) - Math.max(o.x0, r.x0)) / o.s + 1) / (o.ny * o.nx);
+  const e0 = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === r.y0 && x.y1 === r.y1 && x.x0 === r.x0 && x.x1 === r.x1);
+  const tider = sakn.filter(t => idx.tider.includes(t) && !(e0 && e0.tider.includes(t))); if (!tider.length) return { antal: 0, delvis, tackt };
   const k = o.s / idx.s, NY = (idx.y1 - idx.y0) / idx.s + 1, NX = (idx.x1 - idx.x0) / idx.s + 1, ny = (r.y1 - r.y0) / o.s + 1, nx = (r.x1 - r.x0) / o.s + 1;
   let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === r.y0 && x.y1 === r.y1 && x.x0 === r.x0 && x.x1 === r.x1);
   if (!e) { e = { dtg: o.dtg, v: o.v, s: o.s, ...r, tider: [] }; P.index.push(e); }
@@ -511,7 +515,7 @@ async function svFas(o, sakn) {
     await DB.put(nyckelE(e, t), arr); minneSatt(nyckelE(e, t), arr); if (!e.tider.includes(t)) e.tider.push(t); antal++;
   }
   e.anv = Date.now(); await DB.put("index", P.index); await stadaLager(e);
-  return { antal, kb };
+  return { antal, kb, delvis, tackt };
 }
 // NYTT 20/11: autoladdning fran Sverigeoversikten (GitHub) nar kartan ar tom for vald period - inget fran met.no.
 // Provas en gang per kombination (korning, parameter, omrade, upplosning, period).
@@ -529,7 +533,8 @@ async function svAuto() {
     if (nyckel === svAutoSenast) return; svAutoSenast = nyckel;
     const sakn = saknadeTimmar(o, lista); if (!sakn.length) return;
     const r = await svFas(o, sakn);
-    if (r.antal) { await probVisa(); ritaOmrade(); status("Hämtat från Sverigeöversikten (GitHub) – " + r.antal + " timmar, " + Math.round(r.kb || 0) + " kB, inget från met.no.", ""); }
+    if (r.antal) { await probVisa(); ritaOmrade(); status("Hämtat från Sverigeöversikten (GitHub) – " + r.antal + " timmar, " + Math.round(r.kb || 0) + " kB, inget från met.no." +
+      (r.delvis ? " Den täcker " + Math.round(r.tackt * 100) + " % av ditt område – tryck Hämta fält för resten från met.no." : ""), ""); }
   } catch (e) {} finally { svAutoPagar = false; }
 }
 const ENS_SNAPP = 8, ENS_TBLOCK = 12;
@@ -553,6 +558,11 @@ async function probHamta(auto, utanSnabb) {
       const sv = await svFas(o, sakn);
       if (sv.antal) { sakn = saknadeTimmar(o, lista); kb += sv.kb; await probVisa(); ritaOmrade();
         if (!sakn.length) { status("Klart: från den förhämtade Sverigeöversikten (GitHub, " + sv.antal + " timmar, " + (sv.kb / 1024).toFixed(1) + " MB, " + ((performance.now() - t0) / 1000).toFixed(0) + " s) – ingen hämtning från met.no."); return; } }
+      // 20/11 kvall: delvis utanfor rutan -> visa det som finns och fraga (som snabbfasen). Galler aven om
+      // rutan redan var laddad (autoladdningen) - forsta trycket fragar, Hamta resten gar till met.no.
+      if (sv.delvis && !utanSnabb && SVIDX && sakn.every(t => SVIDX.tider.includes(t))) { visaRest = true; $("pRest").hidden = false;
+        status("Visar den förhämtade Sverigeöversikten (GitHub) – den täcker " + Math.round(sv.tackt * 100) + " % av ditt område. Flytta eller krympa ramen in i den gröna rutan, eller tryck Hämta resten för hela ditt område från met.no.", "");
+        P.fragar = true; return; }
     }
     // snabbfasen: cachade omraden fran mellanservern (registret)
     if (!utanSnabb && sakn.length) {
