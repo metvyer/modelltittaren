@@ -456,10 +456,10 @@ def ytTemp(iy, ix):
     # havsytans temperatur: prova utan hojd-dimension och i en havspunkt (mitt i Ostersjon, 58.0N 19.5E)
     hy, hx = F.ruta(58.0, 19.5)
     for fil, fr in [("ens", f"sea_surface_temperature[0:1:12][0:29][{hy}][{hx}]"), ("ens", f"sea_surface_temperature[0:1:12][0][0:29][{hy}][{hx}]"),
-                    ("det", f"sea_surface_temperature[0:1:12][{hy}][{hx}]"), ("det", f"sea_surface_temperature[0:1:12][0][{hy}][{hx}]")]:
+                    ("det", f"SFX_SST[0:1:12][0][{hy}][{hx}]"), ("ens", f"SFX_SST[0:1:12][0][0:29][{hy}][{hx}]")]:
         url = BAS + (ENS_FIL(dtg) if fil == "ens" else "meps_det_2_5km_" + ddtg + ".ncml") + ".ascii?" + urllib.parse.quote(fr, safe="")
         st, txt, sek, by = hamta(url, tidsgrans=120)
-        v = tolka_grid(txt, "sea_surface_temperature") if st == 200 else []
+        v = tolka_grid(txt, fr.split("[")[0]) if st == 200 else []
         ok = [x for x in v if ok_varde(x)]
         skriv(f"- {fil} `{fr}`: svar {st}" + (f", {len(ok)} av {len(v)} värden, {min(ok):.4g}–{max(ok):.4g}" if ok else f", {len(v)} värden") + (f" | {txt[:160]!r}" if st != 200 else ""))
     skriv()

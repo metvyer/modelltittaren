@@ -1288,6 +1288,9 @@ const M0P = {
   vind: { namn: "Medelvind 10 m", var: "wind_speed", enh: "kt", klass: [10, 15, 20, 25, 30, 40], konv: v => v * KT },
   by:   { namn: "Byvind", var: "wind_speed_of_gust", enh: "kt", klass: [20, 25, 32, 40, 50], konv: v => v * KT },
   bas:  { namn: "Molnbas", var: "cloud_base_altitude", enh: "ft", klass: [1500, 1000, 500, 300, 200], lagre: true, konv: v => v * FOT },
+  // 20/11 kvall: yttemperatur och havsytans temperatur (SFX_SST finns bara i det-filen)
+  t0:   { namn: "Yttemperatur 0 m", var: "air_temperature_0m", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10], konv: v => v - 273.15 },
+  sst:  { namn: "Havsytans temperatur", var: "SFX_SST", enh: "°C", klass: [0, 2, 4, 6, 8, 10, 12, 15], konv: v => v - 273.15 },
 };
 const M0_FARG = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
 const M0_HALV = 120, M0_S = 2;   // 120 rutor at varje hall (300 km), var 2:a ruta (5 km)
@@ -2421,6 +2424,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-2130"></script>
+<script src="sannolikhet.js?v=20261120-2145"></script>
 </body>
 </html>

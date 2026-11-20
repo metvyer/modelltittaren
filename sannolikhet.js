@@ -36,13 +36,16 @@ const PPARAM = {
   hog:   { namn: "Höga moln", var: "high_type_cloud_area_fraction", enhet: "/8", konv: oktas, villkor: "≥", agg: "max", std: 5, snabb: [1, 3, 5, 7, 8], bitar: 8, steg: 0.1 },
   tot:   { namn: "Total molnmängd", var: "cloud_area_fraction", enhet: "/8", konv: oktas, villkor: "≥", agg: "max", std: 7, snabb: [1, 3, 5, 7, 8], bitar: 8, steg: 0.1 },
   dimma: { namn: "Dimma (modellens dimandel)", var: "fog_area_fraction", enhet: "%", konv: v => Math.min(100, (v > 1.5 ? v : v * 100)), villkor: "≥", agg: "max", std: 50, snabb: [10, 30, 50, 70, 90], bitar: 8, steg: 1 },
-  // 20/11 (test M): 0-gradersnivan saknas (fyllnadsvarde) nar hela profilen ar under 0 °C -> raknas som 0 ft (marken)
-  noll:  { namn: "0-gradersnivå", var: "altitude_of_0_degree_isotherm", enhet: "ft", konv: v => v * FOT, saknasSom: 0, villkor: "<", agg: "min", std: 2000, snabb: [5000, 3000, 2000, 1000, 500], bitar: 8,
+  // 20/11 kvall (test P): 0-gradersnivan finns BARA for medlem 0 i ensemblefilen - sidan visar da medlem 0 automatiskt
+  noll:  { namn: "0-gradersnivå", var: "altitude_of_0_degree_isotherm", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 2000, snabb: [5000, 3000, 2000, 1000, 500], bitar: 8,
            tabell: trappSkala([[0, 1000, 50], [1100, 5000, 100], [5500, 15000, 500], [16000, 20000, 1000]]) },
   sno:   { namn: "Snöfall, summa i perioden (vatten)", var: "snowfall_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 2, snabb: [0.5, 1, 2, 5, 10], bitar: 16, steg: 0.1 },
   // NYTT 20/11: medelvind 10 m (gitterriktad, m/s) - bara for riskpanelens sidvind, visas inte i parameterlistan
   u10:   { namn: "Vind 10 m (x)", var: "x_wind_10m", enhet: "m/s", konv: v => v, villkor: "≥", agg: "max", std: 0, snabb: [], bitar: 8, steg: 1, dold: true },
   v10:   { namn: "Vind 10 m (y)", var: "y_wind_10m", enhet: "m/s", konv: v => v, villkor: "≥", agg: "max", std: 0, snabb: [], bitar: 8, steg: 1, dold: true },
+  // 20/11 kvall: yttemperatur (air_temperature_0m = modellens marktemperatur/hudtemperatur, alla 30 medlemmar enligt test P)
+  t0:    { namn: "Yttemperatur (0 m)", var: "air_temperature_0m", enhet: "°C", konv: v => v - 273.15, villkor: "<", agg: "min", std: 0, snabb: [2, 0, -2, -5, -10], bitar: 8,
+           tabell: trappSkala([[-50, 40, 1]]) },
   t2:    { namn: "Temperatur 2 m", var: "air_temperature_2m", enhet: "°C", konv: v => v - 273.15, villkor: "<", agg: "min", std: 0, snabb: [5, 2, 0, -5, -10, -20], bitar: 8,
            tabell: trappSkala([[-50, 40, 1]]) }
 };
@@ -75,6 +78,7 @@ const VKLASS = {
   nb:   [0.1, 0.5, 1, 5, 10, 20, 40],
   sikt: [10000, 5000, 3000, 1500, 800, 300],
   bas:  [1500, 1000, 500, 300, 200, 100],
+  t0: [5, 2, 0, -5, -10, -20],
   lag: [1, 3, 5, 7], medel: [1, 3, 5, 7], hog: [1, 3, 5, 7], tot: [1, 3, 5, 7],
   dimma: [10, 30, 50, 70, 90],
   noll: [5000, 3000, 2000, 1000, 500],
