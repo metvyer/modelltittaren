@@ -46,6 +46,9 @@ const PPARAM = {
   // 20/11 kvall: yttemperatur (air_temperature_0m = modellens marktemperatur/hudtemperatur, alla 30 medlemmar enligt test P)
   t0:    { namn: "Yttemperatur (0 m)", var: "air_temperature_0m", enhet: "°C", konv: v => v - 273.15, villkor: "<", agg: "min", std: 0, snabb: [2, 0, -2, -5, -10], bitar: 8,
            tabell: trappSkala([[-50, 40, 1]]) },
+  // 20/11 kvall (test P): havsytans temperatur heter SFX_SST (SURFEX), finns for alla 30 medlemmar; saknas over land
+  sst:   { namn: "Havsytans temperatur", var: "SFX_SST", enhet: "°C", konv: v => v - 273.15, villkor: "≥", agg: "max", std: 6, snabb: [0, 2, 4, 6, 8, 10], bitar: 8,
+           tabell: trappSkala([[-5, 35, 1]]) },
   t2:    { namn: "Temperatur 2 m", var: "air_temperature_2m", enhet: "°C", konv: v => v - 273.15, villkor: "<", agg: "min", std: 0, snabb: [5, 2, 0, -5, -10, -20], bitar: 8,
            tabell: trappSkala([[-50, 40, 1]]) }
 };
@@ -79,6 +82,7 @@ const VKLASS = {
   sikt: [10000, 5000, 3000, 1500, 800, 300],
   bas:  [1500, 1000, 500, 300, 200, 100],
   t0: [5, 2, 0, -5, -10, -20],
+  sst: [0, 2, 4, 6, 8, 10, 12, 15],
   lag: [1, 3, 5, 7], medel: [1, 3, 5, 7], hog: [1, 3, 5, 7], tot: [1, 3, 5, 7],
   dimma: [10, 30, 50, 70, 90],
   noll: [5000, 3000, 2000, 1000, 500],
