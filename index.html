@@ -95,6 +95,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .flikar button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
 body.p .baraTH { display: none; }
 body.p #kM0 { display: none; }
+#karta.baraSiffror #kProb image, #karta.baraSiffror #kM0 image { visibility: hidden; }
 .m0rad { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
 .m0rad[hidden] { display: none; }
 .m0tid { min-width: 8.5em; text-align: center; font-weight: 600; }
@@ -228,6 +229,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
     <button class="sek liten baraTH" id="m0Falt" aria-pressed="false" title="Kartfält ur medlem 0 (det-körningen, samma som tid-höjd): nederbörd, medelvind, byvind eller molnbas för en vald timme, 600 × 600 km runt punkten, 5 km. Ett litet anrop per timme.">Kartfält m0</button>
+    <button class="sek liten" id="siffror" aria-pressed="false" title="Värdena som siffror på kartan: av → på (ovanpå färgerna) → bara siffror. Inzoomat syns varje punkt, längre ut blockens högsta (lägsta för sikt/molnbas) värde.">Siffror: av</button>
     <button class="sek liten baraP" id="visaSnabb" aria-pressed="true" title="Gröna rutor = områden som redan finns i mellanserverns cache (någon har hämtat dem) – de hämtas på en sekund utan att fråga met.no">Snabba</button>
     <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
@@ -235,7 +237,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   </div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kOmr"></g><g id="kMark"></g>
+    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g>
   </svg>
   <div class="baraTH m0rad" id="m0Rad" hidden>
     <select id="m0Param"></select>
@@ -1303,7 +1305,7 @@ function m0Omrade() {
 function m0TidText(t) { if (!M || !M.t0) return "+" + t; const d = new Date(M.t0 + t * 3600e3); return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z (+" + t + ")"; }
 async function m0Uppdatera() {
   const g = $("kM0"), rad = $("m0Rad");
-  rad.hidden = !M0F.pa; if (!M0F.pa) { g.textContent = ""; return; }
+  rad.hidden = !M0F.pa; if (!M0F.pa) { g.textContent = ""; if (typeof ritaSiffror === "function") ritaSiffror(); return; }
   const st = $("m0Status");
   if (!M || !M.dtg || !M.stat) { g.textContent = ""; st.textContent = "Välj och hämta en punkt först."; $("m0Tid").textContent = ""; return; }
   if (M0F.t === null) { const nu = Math.round((Date.now() - (M.t0 || Date.now())) / 3600e3); M0F.t = Math.max(0, Math.min(M.nt - 1, nu)); }
@@ -1346,6 +1348,7 @@ function m0Rita() {
   cx.putImageData(img, 0, 0);
   g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
     preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
+  if (typeof ritaSiffror === "function") setTimeout(ritaSiffror, 0);
   g.appendChild(el("rect", { x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s, fill: "none", stroke: "var(--dim)", "stroke-width": 1, "stroke-dasharray": "4 3", "vector-effect": "non-scaling-stroke" }));
 }
 function m0Forklaring() {
@@ -2135,6 +2138,7 @@ function satVb(x, y, w) {
   const a = kartAspekt(); w = Math.min(kartMaxBredd(), Math.max(MIN_BREDD, w)); const h = w * a;
   vb = { x: w >= KX ? (KX - w) / 2 : Math.min(KX - w, Math.max(0, x)), y: h >= KY ? (KY - h) / 2 : Math.min(KY - h, Math.max(0, y)), w, h };
   $("karta").setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h); ritaMarkorer(); if (typeof skalaIsoEtiketter === "function") skalaIsoEtiketter();
+  if (typeof ritaSiffror === "function") { clearTimeout(satVb.tim); satVb.tim = setTimeout(ritaSiffror, 120); }
 }
 function zooma(f, cx, cy) {
   if (cx === undefined) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
@@ -2417,6 +2421,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-2100"></script>
+<script src="sannolikhet.js?v=20261120-2130"></script>
 </body>
 </html>

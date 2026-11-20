@@ -548,6 +548,42 @@ async function svAuto() {
       (r.delvis ? " Den täcker " + Math.round(r.tackt * 100) + " % av ditt område – tryck Hämta fält för resten från met.no." : ""), ""); }
   } catch (e) {} finally { svAutoPagar = false; }
 }
+// ===================================================================
+//  SIFFROR PA KARTAN (NYTT 20/11 kvall, inspiration: NinJo-bilden "Inspiration falt" i Drive)
+//  Lage 0 = av, 1 = siffror ovanpa fargerna, 2 = bara siffror. Inzoomat star vardet i varje rutpunkt; langre ut
+//  delas faltet i block och blockets extremvarde (max, eller min for "<"-parametrar) skrivs ut - sa syns
+//  topparna alltid. Galler sannolikhetsfaltet (lage p) och kartfaltet for medlem 0 (tid-hojd).
+// ===================================================================
+let siffLage = +(lasa("mt:siffror") || 0) || 0;
+const SIFF_NAMN = ["Siffror: av", "Siffror: på", "Bara siffror"], SIFF_PX = 24;
+function sattSiffKnapp() { const k = $("siffror"); if (!k) return; k.textContent = SIFF_NAMN[siffLage]; k.setAttribute("aria-pressed", String(siffLage > 0)); $("karta").classList.toggle("baraSiffror", siffLage === 2); }
+function ritaSiffror() {
+  const g = $("kSiff"); if (!g) return; g.textContent = ""; if (!siffLage) return;
+  let kallor = [];
+  if (lage === "p") kallor = P.siffKalla || [];
+  else if (typeof M0F !== "undefined" && M0F.pa && M0F.o && M0F.data) kallor = [{ o: M0F.o, d: M0F.data, proc: false, lagre: !!M0P[M0F.v].lagre, enh: M0P[M0F.v].enh }];
+  const rekt = $("karta").getBoundingClientRect(); if (!rekt.width) return;
+  const ppu = rekt.width / vb.w, fs = 10.5 / ppu; let antal = 0;
+  const fmt = (v, k) => k.proc ? String(Math.round(v * 100)) : (k.enh === "ft" || k.enh === "m" || Math.abs(v) >= 10) ? String(Math.round(v)) : v.toFixed(1).replace(".", ",");
+  for (const k of kallor) {
+    const o = k.o, d = k.d; if (!o || !d) continue;
+    const steg = Math.max(1, Math.ceil(SIFF_PX / (o.s * ppu)));
+    const yMin = Math.max(0, Math.floor((KY - 1 - (vb.y + vb.h) - o.y0) / o.s)), yMax = Math.min(o.ny - 1, Math.ceil((KY - 1 - vb.y - o.y0) / o.s));
+    const xMin = Math.max(0, Math.floor((vb.x - o.x0) / o.s)), xMax = Math.min(o.nx - 1, Math.ceil((vb.x + vb.w - o.x0) / o.s));
+    const by0 = Math.floor(yMin / steg) * steg, bx0 = Math.floor(xMin / steg) * steg;
+    for (let by = by0; by <= yMax; by += steg) for (let bx = bx0; bx <= xMax; bx += steg) {
+      let bi = -1, bv = NaN;
+      for (let y = by; y < Math.min(o.ny, by + steg); y++) for (let x = bx; x < Math.min(o.nx, bx + steg); x++) {
+        const v = d[y * o.nx + x]; if (!isFinite(v)) continue;
+        if (bi < 0 || (k.lagre ? v < bv : v > bv)) { bi = y * o.nx + x; bv = v; } }
+      if (bi < 0 || (k.proc && bv < 0.05)) continue;
+      const y = Math.floor(bi / o.nx), x = bi % o.nx;
+      g.appendChild(el("text", { x: o.x0 + x * o.s, y: KY - 1 - (o.y0 + y * o.s), "font-size": fs * (steg > 1 ? 1.1 : 1), "font-weight": steg > 1 ? 700 : 500, "text-anchor": "middle", "dominant-baseline": "central",
+        fill: "#111827", stroke: "#ffffff", "stroke-width": fs / 3.5, "paint-order": "stroke", "pointer-events": "none" }, fmt(bv, k)));
+      if (++antal > 4000) return;
+    }
+  }
+}
 const ENS_SNAPP = 8, ENS_TBLOCK = 12;
 async function probHamta(auto, utanSnabb) {
   auto = auto === true; utanSnabb = utanSnabb === true;
@@ -807,6 +843,10 @@ async function probVisa() {
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === v).sort((x, y) => y.s - x.s);
   const vis = []; let pmax = 0;
   for (const e of kand) { const r = await beraknaOmrade(e, pa, a, b, fran, trosk, lista); if (r) vis.push(r); }
+  // 20/11 kvall: har bara medlem 0 varden (ovriga saknas) -> visa medlem 0 i stallet for sannolikhet
+  if (!probVisa.inre) P.m0Auto = false;
+  if (vis.length && visaLage() === "sannolikhet") { const u = new Set(vis.flatMap(r => r.utan || [])); if (u.size >= ENS_MEDL - 1 && !u.has(0)) {
+    $("pVisa").value = "m0"; P.m0Auto = true; probVisa.inre = true; try { return await probVisa(); } finally { probVisa.inre = false; } } }
   // Under automatisk hamtning vid stegning visas den gamla bilden tills den nya perioden finns.
   if (!vis.length && (P.upptagen || P.autoVantar)) return;
   rensa();
@@ -836,6 +876,9 @@ async function probVisa() {
     g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
       preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   }
+  // NYTT 20/11 kvall: kalla for siffrorna pa kartan (sannolikhet i %, annars vardet)
+  P.siffKalla = vis.map(r => ({ o: r.o, d: visa === "sannolikhet" ? r.prob : r.val, proc: visa === "sannolikhet", lagre: visa !== "sannolikhet" && pa.villkor === "<", enh: visa === "sannolikhet" ? "%" : pa.enhet }));
+  setTimeout(ritaSiffror, 0);
   // isolinjer ovanpa fargerna
   if (visaIso) for (const r of vis) {
     const nivaer = visa === "sannolikhet" ? ISO_PROB.map(n => ({ ...n, f: r.prob }))
@@ -855,6 +898,7 @@ async function probVisa() {
     if (fav) { const mx = SVIDX && SVIDX.tider ? Math.max(...SVIDX.tider) : 36; status(b > mx ? "Förhämtat finns till +" + mx + " h – välj en tidigare period (eller använd fliken Sannolikhet)." : "Laddar från den förhämtade översikten …", ""); return; }
     if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
   const utan = [...new Set(vis.flatMap(r => r.utan || []))].sort((x, y) => x - y);
+  if (P.m0Auto) setTimeout(() => { const e = $("pStatus"); if (e && !/bara medlem 0/.test(e.textContent)) e.textContent += " Parametern har bara värden för medlem 0 – visar medlem 0."; }, 0);
   const utanText = utan.length ? " " + (utan.length === 1 ? "Medlem " + utan[0] + " saknar" : "Medlemmarna " + utan.join(", ") + " saknar") + " " + pa.namn.split(",")[0].toLowerCase() + " i datat och räknas inte (" + (ENS_MEDL - utan.length) + " medlemmar)." : "";
   if (/^m\d+$/.test(visa) && utan.includes(+visa.slice(1))) {
     $("pSam").textContent = "Medlem " + visa.slice(1) + " saknar " + pa.namn.split(",")[0].toLowerCase() + " i datat för den här körningen – kartan blir tom. (met.no levererar sikt och molnbas för den nyaste medlemmen 0 först i nästa körning, där den heter medlem 15.)";
@@ -1246,6 +1290,7 @@ function bytLage(nytt) {
   $("underrubrik").textContent = fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
   lagra("mt:lageVy", fav ? "f" : nytt); $("kTips").hidden = true;
   if (fav && !varFav) favIn();
+  setTimeout(ritaSiffror, 50);
   ritaMarkorer(); ritaOmrade(); probVisa();
   if (nytt === "p") { hamtaRegister().then(ritaOmrade); svIndex().then(() => { ritaOmrade(); probVisa(); }); }
 }
@@ -1354,6 +1399,7 @@ function bytLage(nytt) {
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
   $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f"));
   favKnappar(); $("pTrosk").addEventListener("input", favMarkera);
+  sattSiffKnapp(); $("siffror").addEventListener("click", () => { siffLage = (siffLage + 1) % 3; lagra("mt:siffror", String(siffLage)); sattSiffKnapp(); ritaSiffror(); });
   try { await laddaIndex(); } catch (e) {}
   // 20/11 kvall: nya besokare (inget sparat val) borjar i Favoriter
   const forst = lasa("mt:lageVy");
