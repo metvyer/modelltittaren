@@ -23,7 +23,7 @@ let ensFormat = "bin";                               // binart (.dods) forst, te
 // Parametrar. villkor ">=" eller "<". agg = hur timmarna i perioden slas ihop per medlem.
 const PPARAM = {
   // Lagring: heltal (kod) * steg i visningsenheten. 8 bitar for byvind (1 kt, 0-254), annars 16 bitar.
-  by:   { namn: "Byvind", var: "wind_speed_of_gust", enhet: "kt", konv: v => v * KT, villkor: "≥", agg: "max", std: 32, snabb: [25, 32, 35, 45, 50], bitar: 8, steg: 1 },
+  by:   { namn: "Byvind", var: "wind_speed_of_gust", enhet: "kt", konv: v => v * KT, villkor: "≥", agg: "max", std: 32, snabb: [25, 27, 32, 35, 45, 50], bitar: 8, steg: 1 },
   nb:   { namn: "Nederbörd, summa i perioden", var: "precipitation_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 5, snabb: [1, 5, 10, 20, 40], bitar: 16, steg: 0.1 },
   sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [10000, 5000, 3000, 2000, 1500, 1000, 800, 500, 300, 100], bitar: 8,
           tabell: trappSkala([[0, 200, 10], [225, 500, 25], [550, 1000, 50], [1100, 5000, 100], [5200, 10000, 200], [11000, 75000, 1000]]) },
@@ -144,7 +144,22 @@ const DB = (() => {
 let visaOmr = lasa("mt:visaOmr") !== "nej";   // ramar runt hamtade omraden
 let visaIso = lasa("mt:visaIso") === "ja";      // isolinjer (NYTT 19/11), av som standard
 // Isolinjer: sannolikhet 30/70 %; vardelage: fasta nivaer per parameter + troskeln. Olika utseende per niva.
-const ISO_PROB = [{ v: 0.3, namn: "30 %", streck: "6 3", bredd: 1.9 }, { v: 0.7, namn: "70 %", streck: "", bredd: 2.6 }];
+// 20/11 kvall: isolinjer i sannolikhetslaget valjs fritt bland 10-90 % (av/pa-knappar, sparas i mt:isoProb)
+const ISO_PROB_ALLA = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+function isoProbVal() { try { const a = JSON.parse(lasa("mt:isoProb") || "null"); if (Array.isArray(a)) return a.filter(x => ISO_PROB_ALLA.includes(x)).sort((a, b) => a - b); } catch (e) {} return [30, 70]; }
+function isoProbNivaer() {
+  const val = isoProbVal();
+  return val.map((x, i) => ({ v: x / 100, namn: x + " %", ...ISO_STIL[Math.min(ISO_STIL.length - 1, Math.round(i * (ISO_STIL.length - 1) / Math.max(1, val.length - 1)))] }));
+}
+function ritaIsoProbKnappar() {
+  const c = $("pIsoProb"); if (!c) return; c.textContent = ""; const val = isoProbVal();
+  for (const x of ISO_PROB_ALLA) { const b = document.createElement("button"); b.textContent = x; b.setAttribute("aria-pressed", String(val.includes(x)));
+    b.addEventListener("click", () => { const nu = isoProbVal(), i = nu.indexOf(x); if (i >= 0) nu.splice(i, 1); else nu.push(x); lagra("mt:isoProb", JSON.stringify(nu));
+      if (nu.length && !visaIso) { visaIso = true; lagra("mt:visaIso", "ja"); $("visaIso").setAttribute("aria-pressed", "true"); }
+      ritaIsoProbKnappar(); probVisa(); });
+    c.append(b); }
+  $("pIsoProbFalt").hidden = visaLage() !== "sannolikhet";
+}
 // 19/11 kvall (Jakob): fasta isolinjer aven for sikt (3/2/1 km) och molnbas (1200/400 ft). Grovre linje = varre.
 const ISO_VARDE = { by: [{ v: 32, streck: "6 3", bredd: 1.9 }, { v: 45, streck: "", bredd: 2.6 }],
   sikt: [{ v: 3000, streck: "6 3", bredd: 1.5 }, { v: 2000, streck: "3 2", bredd: 2 }, { v: 1000, streck: "", bredd: 2.6 }],
@@ -889,7 +904,7 @@ async function probVisa() {
   setTimeout(ritaSiffror, 0);
   // isolinjer ovanpa fargerna
   if (visaIso) for (const r of vis) {
-    const nivaer = visa === "sannolikhet" ? ISO_PROB.map(n => ({ ...n, f: r.prob }))
+    const nivaer = visa === "sannolikhet" ? isoProbNivaer().map(n => ({ ...n, f: r.prob }))
       : [...isoNivaerVarde(v).map(n => ({ ...n, f: r.val })), ...(isFinite(trosk) && !isoValen(v).includes(trosk) ? [{ v: trosk, ...ISO_TROSK, f: r.val }] : [])];
     for (const n of nivaer) {
       // sikt/bas: lagre ar varre -> linjen ar densamma, nivan ar bara ett varde
@@ -948,7 +963,7 @@ function isoForkl(f, streck, bredd, text) {
 function ritaIsoForkl(f) {
   if (!visaIso) return;
   const v = $("pParam").value, pa = PPARAM[v], tr = parseFloat($("pTrosk").value.replace(",", "."));
-  if (visaLage() === "sannolikhet") for (const n of ISO_PROB) isoForkl(f, n.streck, n.bredd, "isolinje " + n.namn);
+  if (visaLage() === "sannolikhet") for (const n of isoProbNivaer()) isoForkl(f, n.streck, n.bredd, "isolinje " + n.namn);
   else { for (const n of isoNivaerVarde(v)) isoForkl(f, n.streck, n.bredd, n.v.toLocaleString("sv-SE") + " " + pa.enhet);
     if (isFinite(tr) && !isoValen(v).includes(tr)) isoForkl(f, ISO_TROSK.streck, ISO_TROSK.bredd, "egen " + tr.toLocaleString("sv-SE") + " " + pa.enhet); }
 }
@@ -1344,7 +1359,8 @@ function bytLage(nytt) {
   // 19/11 em: troskeln ar alltid installbar - i vardelaget styr den troskel-isolinjen (och meteogrammet)
   const troskAv = () => { $("pTrosk").disabled = false; };
   troskAv();
-  vs.addEventListener("change", () => { lagra("mt:pVisa", vs.value); troskAv(); sattParam(true); probVisa(); if (P.meteo) ritaMeteogram(); });
+  vs.addEventListener("change", () => { lagra("mt:pVisa", vs.value); troskAv(); sattParam(true); ritaIsoProbKnappar(); probVisa(); if (P.meteo) ritaMeteogram(); });
+  ritaIsoProbKnappar();
   $("pMeteo").addEventListener("click", visaMeteogram);
   // NYTT 19/11 em: nederbordslage i meteogrammet + dragbar startlinje
   const nbs = $("pMeteoNb");
