@@ -890,7 +890,7 @@ async function probVisa() {
   // isolinjer ovanpa fargerna
   if (visaIso) for (const r of vis) {
     const nivaer = visa === "sannolikhet" ? ISO_PROB.map(n => ({ ...n, f: r.prob }))
-      : [...(ISO_VARDE[v] || []).map(n => ({ ...n, f: r.val })), ...(isFinite(trosk) ? [{ v: trosk, ...ISO_TROSK, f: r.val }] : [])];
+      : [...isoNivaerVarde(v).map(n => ({ ...n, f: r.val })), ...(isFinite(trosk) && !isoValen(v).includes(trosk) ? [{ v: trosk, ...ISO_TROSK, f: r.val }] : [])];
     for (const n of nivaer) {
       // sikt/bas: lagre ar varre -> linjen ar densamma, nivan ar bara ett varde
       const d = isoSegment(n.f, r.o, n.v); if (!d) continue;
@@ -949,8 +949,8 @@ function ritaIsoForkl(f) {
   if (!visaIso) return;
   const v = $("pParam").value, pa = PPARAM[v], tr = parseFloat($("pTrosk").value.replace(",", "."));
   if (visaLage() === "sannolikhet") for (const n of ISO_PROB) isoForkl(f, n.streck, n.bredd, "isolinje " + n.namn);
-  else { for (const n of ISO_VARDE[v] || []) isoForkl(f, n.streck, n.bredd, n.v + " " + pa.enhet);
-    if (isFinite(tr)) isoForkl(f, ISO_TROSK.streck, ISO_TROSK.bredd, "tröskel " + tr.toLocaleString("sv-SE") + " " + pa.enhet); }
+  else { for (const n of isoNivaerVarde(v)) isoForkl(f, n.streck, n.bredd, n.v.toLocaleString("sv-SE") + " " + pa.enhet);
+    if (isFinite(tr) && !isoValen(v).includes(tr)) isoForkl(f, ISO_TROSK.streck, ISO_TROSK.bredd, "egen " + tr.toLocaleString("sv-SE") + " " + pa.enhet); }
 }
 function ritaPForklaring() {
   const f = $("pForkl"); f.textContent = ""; ritaIsoForkl(f);
@@ -1233,13 +1233,35 @@ function stegText(pa, v) {
 }
 
 // ---------- Kontroller ----------
+// NYTT 20/11 kvall: i VARDELAGET (Visa = medel/max/min/enskild medlem) ar snabbvalen av/pa-knappar for isolinjer -
+// alla, ingen, en eller nagra. Valen sparas per parameter (mt:isoVal:<param>). Egen troskel ger alltid en extra linje.
+// I sannolikhetslaget valjer snabbvalen troskeln som forut.
+function isoValen(v) {
+  try { const a = JSON.parse(lasa("mt:isoVal:" + v) || "null"); if (Array.isArray(a)) return a.filter(x => PPARAM[v].snabb.includes(x)); } catch (e) {}
+  return (ISO_VARDE[v] || []).map(n => n.v).filter(x => PPARAM[v].snabb.includes(x));
+}
+const ISO_STIL = [{ streck: "6 3", bredd: 1.5 }, { streck: "3 2", bredd: 1.9 }, { streck: "", bredd: 2.3 }, { streck: "10 3 2 3", bredd: 2.3 }, { streck: "", bredd: 3.2 }, { streck: "2 2", bredd: 3 }];
+// Valda isolinjer med stil: lindrigast forst (tunn, streckad), varst sist (tjock, hel)
+function isoNivaerVarde(v) {
+  const pa = PPARAM[v], val = isoValen(v).slice().sort((a, b) => pa.villkor === "<" ? b - a : a - b);
+  return val.map((x, i) => ({ v: x, ...ISO_STIL[Math.min(ISO_STIL.length - 1, Math.round(i * (ISO_STIL.length - 1) / Math.max(1, val.length - 1)))] }));
+}
 function sattParam(behallTrosk) {
-  const pa = PPARAM[$("pParam").value];
-  $("pEnhet").textContent = pa.enhet; $("pTroskEtikett").textContent = "Tröskel (" + pa.villkor + ")";
+  const v = $("pParam").value, pa = PPARAM[v], vardelage = visaLage() !== "sannolikhet";
+  $("pEnhet").textContent = pa.enhet; $("pTroskEtikett").textContent = vardelage ? "Egen linje (" + pa.villkor + ")" : "Tröskel (" + pa.villkor + ")";
   if (!behallTrosk) $("pTrosk").value = pa.std;
   const c = $("pChips"); c.textContent = "";
-  for (const v of pa.snabb) { const b = document.createElement("button"); b.textContent = v.toLocaleString("sv-SE"); b.setAttribute("aria-pressed", String(+$("pTrosk").value === v));
-    b.addEventListener("click", () => { $("pTrosk").value = v; lagra("mt:pTrosk:" + $("pParam").value, String(v)); sattParam(true); probVisa(); }); c.append(b); }
+  c.title = vardelage ? "Isolinjer: tänd eller släck varje värde (alla, ingen, en eller några)" : "Välj tröskel";
+  const val = isoValen(v);
+  for (const x of pa.snabb) { const b = document.createElement("button"); b.textContent = x.toLocaleString("sv-SE");
+    b.setAttribute("aria-pressed", String(vardelage ? val.includes(x) : +$("pTrosk").value === x));
+    b.addEventListener("click", () => {
+      if (vardelage) {
+        const nu = isoValen(v), i = nu.indexOf(x); if (i >= 0) nu.splice(i, 1); else nu.push(x); lagra("mt:isoVal:" + v, JSON.stringify(nu));
+        if (nu.length && !visaIso) { visaIso = true; lagra("mt:visaIso", "ja"); $("visaIso").setAttribute("aria-pressed", "true"); }
+      } else { $("pTrosk").value = x; lagra("mt:pTrosk:" + v, String(x)); }
+      sattParam(true); probVisa(); });
+    c.append(b); }
 }
 function probOmradeAndrat() { P.fragar = false; ritaOmrade(); probVisa().then(() => { if (!P.varden && !P.upptagen) status("Tryck Hämta fält för att hämta området.", ""); }); }
 // NYTT 20/11 kvall: FAVORITER. Samma karta och data som sannolikhetsvyn (lage "p"), men last till den forhamtade
@@ -1322,7 +1344,7 @@ function bytLage(nytt) {
   // 19/11 em: troskeln ar alltid installbar - i vardelaget styr den troskel-isolinjen (och meteogrammet)
   const troskAv = () => { $("pTrosk").disabled = false; };
   troskAv();
-  vs.addEventListener("change", () => { lagra("mt:pVisa", vs.value); troskAv(); probVisa(); if (P.meteo) ritaMeteogram(); });
+  vs.addEventListener("change", () => { lagra("mt:pVisa", vs.value); troskAv(); sattParam(true); probVisa(); if (P.meteo) ritaMeteogram(); });
   $("pMeteo").addEventListener("click", visaMeteogram);
   // NYTT 19/11 em: nederbordslage i meteogrammet + dragbar startlinje
   const nbs = $("pMeteoNb");
