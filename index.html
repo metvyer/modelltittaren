@@ -110,6 +110,34 @@ body.fav .ejFav { display: none !important; }
 .favpanel .favrad b { min-width: 5.5em; font-size: 13px; }
 .favpanel button[aria-pressed="true"] { background: var(--acc); color: #fff; border-color: var(--acc); }
 body:not(.p) .baraP { display: none; }
+/* NYTT 21/11: TAF-fliken */
+body.taf .baraTH, body.taf .baraP, body.taf .ejTaf { display: none !important; }
+body.taf .arbete { grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1.2fr); }
+body.taf #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
+body:not(.taf) #kTaf { display: none; }
+body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none; }
+@media (max-width: 860px) { body.taf .arbete { grid-template-columns: minmax(0, 1fr); } }
+.tafinst { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; margin-bottom: 8px; }
+.tafinst input[type=number] { width: 5em; }
+.tafinst .grp { display: inline-flex; gap: 4px; align-items: center; }
+.tafinst .gul { color: #a16207; font-weight: 700; } .tafinst .rod { color: #b91c1c; font-weight: 700; }
+.taftab { border-collapse: collapse; font-size: 12px; width: 100%; }
+.taftab th, .taftab td { padding: 0; height: 20px; }
+.taftab th.tim { font-weight: 500; color: var(--dim); font-size: 10px; text-align: left; }
+.taftab td.namn { white-space: nowrap; padding: 0 6px 0 0; }
+.taftab td.met { white-space: nowrap; padding: 0 6px; font-variant-numeric: tabular-nums; }
+.taftab td.cell { min-width: 9px; border-left: 1px solid var(--panel); }
+.taftab td.cell.dygn, .taftab th.dygn { border-left: 2px solid var(--fg); }
+.taftab td.cell.nu { box-shadow: inset 2px 0 0 #111; }
+.taftab tr { border-top: 1px solid var(--grid); }
+.taftab tr.vindrad { border-top: 0; } .taftab tr.vindrad td.cell { height: 10px; }
+.taftab tr.larm td.namn { background: #fee2e2; }
+.taftab .prick { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #111; margin-right: 4px; vertical-align: -1px; }
+.taftab .amd { color: #fff; background: #dc2626; border-radius: 3px; padding: 0 3px; font-size: 10.5px; font-weight: 700; }
+.taftab .cor { color: #111; background: #facc15; border-radius: 3px; padding: 0 3px; font-size: 10.5px; font-weight: 700; }
+.taftab .larmtxt { color: #b91c1c; font-weight: 700; }
+.taftab .tafx { border: 0; background: none; cursor: pointer; color: var(--dim); font-size: 14px; padding: 0 3px; }
+.taftab .dim { color: var(--dim); }
 body.p .arbete { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); }
 /* Sannolikhet: kartan sa stor som skarmen tillater (hogst ca 78 % av hojden), samma proportioner */
 body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }   /* 20/11 kvall: fyller rutan, se satVb */
@@ -214,10 +242,10 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button>
 </div>
 
-<div class="kontroller">
+<div class="kontroller ejTaf">
   <div class="falt"><label for="punkt">Punkt</label><select id="punkt"></select></div>
   <div class="falt"><label for="lat">Lat</label><input id="lat" class="koord" inputmode="decimal"></div>
   <div class="falt"><label for="lon">Lon</label><input id="lon" class="koord" inputmode="decimal"></div>
@@ -249,7 +277,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   <div class="karttid baraP" id="kartTid" aria-live="polite"></div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g>
+    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g><g id="kTaf"></g>
   </svg>
   </div>
   <div class="baraTH m0rad" id="m0Rad" hidden>
@@ -315,6 +343,27 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   </div>
   <p class="karttips">Varje färgad ruta är en hämtad punkt. Sannolikheten = andel av de 30 medlemmarna som når tröskeln någon gång under perioden (nederbörd: summan över perioden). Håll muspekaren över kartan för medlemmarnas värden.</p>
   <p class="karttips" id="pLager"></p>
+</div>
+<div id="vyTAF" hidden>
+  <div class="tafinst">
+    <span class="grp"><span class="gul">Gul</span> sikt &lt; <input type="number" id="tafGulSikt" step="100"> m eller bas &lt; <input type="number" id="tafGulBas" step="100"> ft</span>
+    <span class="grp"><span class="rod">Röd</span> sikt &lt; <input type="number" id="tafRodSikt" step="100"> m eller bas &lt; <input type="number" id="tafRodBas" step="100"> ft</span>
+    <span class="grp" title="Molnbas = lägsta BKN, OVC eller VV. Varje timme får den sämsta färgen som TAF:en tillåter (grund, BECMG, TEMPO, PROB, FM)."></span>
+  </div>
+  <div class="tafinst">
+    <button class="sek liten" id="tafVind" aria-pressed="false" title="Extra rad per flygplats: sidvind i byar mot bästa banan. BECMG = sämsta av före och efter (riktningen kan svänga genom intervallet), TEMPO/PROB = sämsta av grund och TEMPO, VRB = hela styrkan.">Sidvind</button>
+    <span class="grp">gul ≥ <input type="number" id="tafGulSv"> kt, röd ≥ <input type="number" id="tafRodSv"> kt</span>
+    <button class="sek liten" id="tafLjud" aria-pressed="false" title="Ljud när METAR är sämre än TAF:en eller en ny AMD kommer (klicka någonstans på sidan en gång efter att den öppnats, annars spärrar webbläsaren ljudet)">Ljud</button>
+    <button class="sek liten" id="tafAvis" aria-pressed="false" title="Systemavisering (notis) vid larm – webbläsaren frågar om lov första gången">Avisering</button>
+  </div>
+  <div class="tafinst">
+    <span class="grp">Lägg till <input type="text" id="tafNy" size="5" maxlength="4" placeholder="ESNQ"><button class="sek liten" id="tafLagg">Lägg till</button></span>
+    <button class="sek liten" id="tafStd" title="Tillbaka till de 11 förvalda flygplatserna">Förvalda 11</button>
+    <button class="sek liten" id="tafNu">Uppdatera nu</button>
+    <span class="lagetips" id="tafStatus"></span>
+  </div>
+  <div class="lagetips">Klicka på en flygplats på kartan för att lägga till eller ta bort den. Håll musen över en ruta för TAF-texten. Linjalen på kartan går från 2 h bakåt till 30 h fram; svart streck = nu. Helt gröna TAF:er visas som en kort stump med giltighetstid.</div>
+  <div id="tafTabell" style="overflow-x:auto"></div>
 </div>
 <div id="vyTH">
 <dl class="info">
@@ -2165,6 +2214,7 @@ function satVb(x, y, w) {
   vb = { x: w >= KX ? (KX - w) / 2 : Math.min(KX - w, Math.max(0, x)), y: h >= KY ? (KY - h) / 2 : Math.min(KY - h, Math.max(0, y)), w, h };
   $("karta").setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h); ritaMarkorer(); if (typeof skalaIsoEtiketter === "function") skalaIsoEtiketter();
   if (typeof ritaSiffror === "function") { clearTimeout(satVb.tim); satVb.tim = setTimeout(ritaSiffror, 120); }
+  if (typeof tafRitaKarta === "function" && lage === "taf") { clearTimeout(satVb.tim2); satVb.tim2 = setTimeout(tafRitaKarta, 80); }
 }
 function zooma(f, cx, cy) {
   if (cx === undefined) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
@@ -2325,6 +2375,14 @@ function kartTips(e) {
 }
 function kartKlick(e, mal) {
   const sel = $("punkt"), fri = friPunkt || e.shiftKey, mk = !fri && mal && mal.closest ? mal.closest(".mk") : null;
+  // 21/11: TAF-fliken - klick pa en flygplats laggs till/tas bort i bevakningen
+  if (lage === "taf") {
+    let icao = null;
+    if (mk) { const id = mk.dataset.id; if (id[0] === "p") icao = PUNKTER[+id.slice(1)][1]; else if (id[0] === "f") { const f = FLYG[+id.slice(1)]; if (f) icao = f[0]; } }
+    else { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); icao = narmasteICAO(ll.lat, ll.lon); }
+    if (icao && typeof tafVaxla === "function") tafVaxla(icao);
+    return;
+  }
   if (mk) {
     const id = mk.dataset.id;
     if (id[0] === "p") { sel.value = id.slice(1); sattPunkt(); }
@@ -2447,6 +2505,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-2240"></script>
+<script src="sannolikhet.js?v=20261121-0030"></script>
+<script src="taf.js?v=20261121-0030"></script>
 </body>
 </html>

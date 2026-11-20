@@ -1376,10 +1376,12 @@ function bytLage(nytt) {
   if (nytt !== (fav ? "f" : lage) && typeof visaTestskylt === "function") visaTestskylt();   // testskylt vid flikbyte (19/11 kvall)
   const varFav = fav; fav = nytt === "f"; if (fav) nytt = "p";
   if (varFav && !fav) favUt();
-  lage = nytt; document.body.classList.toggle("p", nytt === "p"); document.body.classList.toggle("fav", fav);
+  lage = nytt; document.body.classList.toggle("p", nytt === "p"); document.body.classList.toggle("fav", fav); document.body.classList.toggle("taf", nytt === "taf");
   $("flikTH").setAttribute("aria-selected", String(nytt === "th")); $("flikP").setAttribute("aria-selected", String(nytt === "p" && !fav)); $("flikF").setAttribute("aria-selected", String(fav));
-  $("vyTH").hidden = nytt === "p"; $("vyP").hidden = nytt !== "p";
-  $("underrubrik").textContent = fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
+  $("flikTAF").setAttribute("aria-selected", String(nytt === "taf"));
+  $("vyTH").hidden = nytt !== "th"; $("vyP").hidden = nytt !== "p"; $("vyTAF").hidden = nytt !== "taf";
+  $("underrubrik").textContent = nytt === "taf" ? "TAF-bevakning · grön/gul/röd per timme, METAR och larm" : fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
+  if (nytt === "taf" && typeof tafIn === "function") setTimeout(tafIn, 0);
   lagra("mt:lageVy", fav ? "f" : nytt); $("kTips").hidden = true;
   if (fav && !varFav) favIn();
   setTimeout(ritaSiffror, 50);
@@ -1490,7 +1492,7 @@ function bytLage(nytt) {
   setInterval(() => { if (lage === "p" && visaSnabb && !document.hidden) hamtaRegister().then(ritaOmrade); }, 60e3);
   $("visaOmr").addEventListener("click", e => { visaOmr = !visaOmr; lagra("mt:visaOmr", visaOmr ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaOmr)); ritaOmrade(); });
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
-  $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f"));
+  $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f")); $("flikTAF").addEventListener("click", () => bytLage("taf"));
   favKnappar(); $("pTrosk").addEventListener("input", favMarkera);
   $("m0Linje").setAttribute("aria-pressed", String(visaM0Linje));
   $("m0Linje").addEventListener("click", e => { visaM0Linje = !visaM0Linje; lagra("mt:m0Linje", visaM0Linje ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaM0Linje)); probVisa(); });
@@ -1498,5 +1500,5 @@ function bytLage(nytt) {
   try { await laddaIndex(); } catch (e) {}
   // 20/11 kvall: nya besokare (inget sparat val) borjar i Favoriter
   const forst = lasa("mt:lageVy");
-  if (forst === "p") bytLage("p"); else if (forst === "f" || !forst) bytLage("f");
+  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "f" || !forst) bytLage("f");
 })();
