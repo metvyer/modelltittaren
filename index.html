@@ -193,6 +193,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <div class="falt"><label for="klistra">Klistra in "lat, lon"</label><input id="klistra" placeholder="59.65, 17.92" style="width:140px"></div>
   <div class="falt baraTH"><label for="topp">Topp</label><select id="topp"><option value="450">FL450</option><option value="250">FL250</option><option value="200">FL200</option><option value="150">FL150</option><option value="90">FL90</option><option value="30">FL30</option></select></div>
   <div class="falt baraTH"><label for="korning">Körning</label><select id="korning"></select></div>
+  <button class="sek baraTH" id="baraSkew" aria-pressed="false" title="Hämta bara det skew-T behöver (temperatur, fukt och vind på alla modellnivåer + markvärden) i 6-timmarsbitar. Ett tryck på Hämta = ett dygn (+0 till +23 först, sedan nästa). Tid-höjd-diagrammet blir då nästan tomt.">Bara skew-T</button>
   <button id="hamta" class="baraTH">Hämta</button>
   <button id="stopp" class="sek baraTH" disabled>Stopp</button>
 </div>
@@ -304,13 +305,15 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button class="sek liten" id="skewIn" title="Zooma in (eller mushjul / nyp med två fingrar)">+</button>
     <button class="sek liten" id="skewUt" title="Zooma ut">−</button>
     <button class="sek liten" id="skewHela" title="Hela diagrammet (eller dubbelklicka)">Hela</button>
+    <button class="sek liten" id="skewVatten" aria-pressed="false" title="Flytande molnvatten (g/kg) som stapel till höger. Lila = underkylt (T under 0 °C) – nedisningsrisk. Hämtas för timmarna du tittar på (eller med Bara skew-T).">Molnvatten</button>
+    <button class="sek liten" id="skewGraupel" aria-pressed="false" title="Graupel (trindsnö/snöhagel, g/kg) som egen stapel till höger. Hämtas för timmarna du tittar på (eller med Bara skew-T).">Graupel</button>
     <button class="sek liten" id="skewLyft" aria-pressed="false" title="Lyftkurva från marken (2 m-värden), LCL, LFC, EL, CAPE och CIN – och nedisningsindex som röda staplar till höger">Lyft/CAPE</button>
     <span id="skewInfo" class="dim"></span>
     <button class="sek liten" id="skewStang" title="Stäng skew-T">✕</button>
   </div>
   <svg id="skewSvg" viewBox="0 0 640 540" preserveAspectRatio="xMidYMid meet"></svg>
   <div id="skewLyftText" class="skewlyft" hidden></div>
-  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Lyft/CAPE: orange streckad = lyftkurva från marken, röd yta = CAPE, blå = CIN, röda staplar till höger = nedisningsindex (TRC eller mer). Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶. Klickar du en ny plats på kartan följer skew-T med (samma timme).</div>
+  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Lyft/CAPE: orange streckad = lyftkurva från marken, röd yta = CAPE, blå = CIN, röda staplar till höger = nedisningsindex (TRC eller mer). Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. <b>Molnvatten</b>/<b>Graupel</b> (knappar): staplar per nivå i g/kg (full stapel = 0,5 g/kg), lila = underkylt vatten (T under 0 °C), siffran under = största värdet (lila = största underkylda). Modellens eget molnvatten – en uppskattning, inte en mätning. <b>Bara skew-T</b> (bredvid Hämta): hämtar bara skew-T-data, ett dygn per tryck i 6 h-bitar. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶. Klickar du en ny plats på kartan följer skew-T med (samma timme).</div>
 </div>
 
 <div class="forklaring" id="fVind" hidden>
@@ -386,8 +389,11 @@ const dtgText = d => d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCD
 const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(9, 11)));
 const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
 let avbryt = null, stoppad = false, vindLage = false;
-// Testskylten: visas vid start och vid varje flikbyte (bytLage i sannolikhet.js anropar visaTestskylt)
-function visaTestskylt() { const t = $("testskylt"); if (!t) return; t.hidden = false; const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
+// Testskylten: visas vid start, vid varje flikbyte (bytLage i sannolikhet.js anropar visaTestskylt)
+// och (NYTT 20/11) automatiskt var 20:e minut raknat fran senaste gangen den visades
+const TESTSKYLT_MIN = 20; let testskyltSen = 0;
+function visaTestskylt() { const t = $("testskylt"); if (!t) return; t.hidden = false; testskyltSen = Date.now(); const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
+setInterval(() => { const t = $("testskylt"); if (t && t.hidden && Date.now() - testskyltSen >= TESTSKYLT_MIN * 60e3) visaTestskylt(); }, 30e3);
 document.addEventListener("DOMContentLoaded", () => { const b = $("testskyltOk"); if (b) b.addEventListener("click", () => { $("testskylt").hidden = true; }); visaTestskylt(); });
 let visaNiv = lasa("mt:visaNiv") === "ja";
 let visaHovring = lasa("mt:visaHovring") !== "nej";   // NYTT 19/11 kvall: hovringsrutan i tid-hojd (diagram + tabell) av/pa
@@ -642,7 +648,9 @@ function nyModell(dtg, nt, iy, ix) {
     wx: new Float64Array(nt * NIV).fill(NaN), wy: new Float64Array(nt * NIV).fill(NaN), wHar: new Uint8Array(nt * NIV),
     px: new Float64Array(nt * NTRYCK).fill(NaN), py: new Float64Array(nt * NTRYCK).fill(NaN), pwHar: new Uint8Array(nt * NTRYCK),
     // NYTT 19/11 em: temperatur (K) och specifik fukt (kg/kg) pa modellnivaerna (forhamtat fran GitHub, varv 2)
-    ta: new Float64Array(nt * NIV).fill(NaN), qv: new Float64Array(nt * NIV).fill(NaN), tqHar: new Uint8Array(nt * NIV) };
+    ta: new Float64Array(nt * NIV).fill(NaN), qv: new Float64Array(nt * NIV).fill(NaN), tqHar: new Uint8Array(nt * NIV),
+    // NYTT 20/11: flytande molnvatten och graupel (kg/kg) pa modellnivaerna, for skew-T
+    lw: new Float64Array(nt * NIV).fill(NaN), lwHar: new Uint8Array(nt * NIV), gr: new Float64Array(nt * NIV).fill(NaN), grHar: new Uint8Array(nt * NIV) };
 }
 function lasStatik(txt) {
   const d = tolka(txt); if (!d.time || !d.ap || !d.b) return false;
@@ -675,12 +683,18 @@ function laggIn(txt, a, b, etikett) {
       }
       continue;
     }
-    if (typ === "u" || typ === "v") {   // vind: var VIND_DT:e timme, modellnivaer var VIND_DK:e
-      const steg = typ === "u" ? VIND_DK : 1, nn = Math.floor((r2 - r1) / steg) + 1, n3 = Math.floor((b - a) / VIND_DT) + 1;
-      const [xn, yn, br, X, Y, H] = typ === "u" ? ["x_wind_ml", "y_wind_ml", NIV, M.wx, M.wy, M.wHar] : ["x_wind_pl", "y_wind_pl", NTRYCK, M.px, M.py, M.pwHar];
+    if (typ === "W" || typ === "R") {   // NYTT 20/11: molnvatten (W) / graupel (R), varje timme, nivaer r1..r2
+      const v = d[typ === "W" ? "mass_fraction_of_cloud_condensed_water_in_air_ml" : "mass_fraction_of_graupel_in_air_ml"]; if (!v) continue;
+      const [arr, har] = typ === "W" ? [M.lw, M.lwHar] : [M.gr, M.grHar];
+      for (let t = 0; t < n && a + t < M.nt; t++) for (let k = 0; k < nr; k++) { const x = v[t * nr + k]; if (x === undefined || !isFinite(x)) continue; arr[(a + t) * NIV + r1 + k] = x; har[(a + t) * NIV + r1 + k] = 1; }
+      continue;
+    }
+    if (typ === "u" || typ === "v" || typ === "U") {   // vind: var VIND_DT:e timme ("U" = varje timme, bara skew-T), modellnivaer var VIND_DK:e
+      const dt = typ === "U" ? 1 : VIND_DT, steg = typ === "v" ? 1 : VIND_DK, nn = Math.floor((r2 - r1) / steg) + 1, n3 = Math.floor((b - a) / dt) + 1;
+      const [xn, yn, br, X, Y, H] = typ !== "v" ? ["x_wind_ml", "y_wind_ml", NIV, M.wx, M.wy, M.wHar] : ["x_wind_pl", "y_wind_pl", NTRYCK, M.px, M.py, M.pwHar];
       const vx = d[xn], vy = d[yn]; if (!vx || !vy) continue;
-      for (let t = 0; t < n3 && a + t * VIND_DT < M.nt; t++) for (let k = 0; k < nn; k++) {
-        const i = (a + t * VIND_DT) * br + r1 + k * steg; if (vx[t * nn + k] === undefined) continue;
+      for (let t = 0; t < n3 && a + t * dt < M.nt; t++) for (let k = 0; k < nn; k++) {
+        const i = (a + t * dt) * br + r1 + k * steg; if (vx[t * nn + k] === undefined) continue;
         X[i] = vx[t * nn + k]; Y[i] = vy[t * nn + k]; H[i] = 1;
       }
       continue;
@@ -1236,6 +1250,10 @@ const SK = { B: 640, H: 540, V: 16, HO: 78, TOPP: 8, BOTT: 52, TBREDD: 60 };
 // 19/11 kvall: skew-T har ALLTID samma hojdomfang som Jakobs forlaga - fran marken till SKEW_PTOPP (ca FL385),
 // oberoende av diagramtoppen i tid-hojd. Da blir lutningen (45°) och skalan densamma varje gang.
 const SKEW_PTOPP = 200, SKEW_PBOTT = 1058;   // hPa (FL-10 = 1050 hPa syns, for hogtryck)
+// NYTT 20/11: Bara skew-T (6 h-bitar, ett dygn per tryck) + molnvatten/graupel som staplar till hoger
+const SKEW_BIT = 6, VATTEN_P = 400, VATTEN_MAX = 0.5, GRAUPEL_MAX = 0.5;   // hPa; staplarnas fulla langd i g/kg
+const VATTEN_FARG = "#0284c7", UNDERKYLT_FARG = "#c026d3", GRAUPEL_FARG = "#b45309";
+let baraSkew = lasa("mt:baraSkew") === "ja", visaVatten = lasa("mt:skewVatten") === "ja", visaGraupel = lasa("mt:skewGraupel") === "ja";
 let visaLyft = lasa("mt:visaLyft") === "ja";   // NYTT 19/11 kvall: lyftkurva/CAPE/nedisning i skew-T (av som standard)
 let SKZ = { z: 1, pB: 0, TL: 0, M: null, geo: null };   // zoomlage i skew-T (pB = 0 -> utgangslage)
 const SKZ_MAX = 8;
@@ -1257,37 +1275,64 @@ function skewBegransa() {   // inte under 1100 hPa eller over 100 hPa
   const span = (SKZ.span || Math.log(SKEW_PBOTT / SKEW_PTOPP)) / SKZ.z; if (SKZ.pB * Math.exp(-span) < 100) SKZ.pB = 100 * Math.exp(span);
 }
 function skewNollstall() { SKZ.pB = 0; ritaSkewT(); }
-function skewK1(t) { const ps = M.yta[0][t]; for (let k = 0; k < NIV; k++) if ((M.ap[k] + M.b[k] * ps) / 100 >= SKEW_PTOPP) return Math.max(0, k - 1); return 0; }
-function skewBehov(t) {
-  const k1 = skewK1(t); let tq = false, w = false;
+// NYTT 20/11: forsta modellnivan (uppifran) med tryck >= pGrans. Utan marktryck for timmen anvands ett
+// uppskattat marktryck ur markhojden (som i behov()).
+function skewK(t, pGrans) {
+  let ps = M.ytaOK[t] ? M.yta[0][t] : NaN; if (!(ps > 0)) ps = 101325 * (1 - 2.25577e-5 * M.terr) ** 5.25588;
+  for (let k = 0; k < NIV; k++) if ((M.ap[k] + M.b[k] * ps) / 100 >= pGrans) return k; return NIV - 1;
+}
+function skewK1(t) { return Math.max(0, skewK(t, SKEW_PTOPP) - 1); }
+// Molnvatten/graupel hamtas bara upp till VATTEN_P hPa (underkylt vatten i laga och medelhoga moln)
+function skewKW(t) { return Math.max(0, skewK(t, VATTEN_P) - 1); }
+function skewBehov(t, timvind) {
+  const k1 = skewK1(t), kw = skewKW(t); let tq = false, w = false, lw = false, gr = false;
   for (let k = k1; k < NIV; k++) if (!M.tqHar[t * NIV + k]) { tq = true; break; }
   for (let k = NIV - 1; k >= k1; k -= VIND_DK) if (!M.wHar[t * NIV + k]) { w = true; break; }
-  return { k1, tq, w };
+  if (visaVatten) for (let k = kw; k < NIV; k++) if (!M.lwHar[t * NIV + k]) { lw = true; break; }
+  if (visaGraupel) for (let k = kw; k < NIV; k++) if (!M.grHar[t * NIV + k]) { gr = true; break; }
+  return { k1, kw, tq, w, lw, gr, s: !M.ytaOK[t], nagot: tq || w || lw || gr || !M.ytaOK[t] };
 }
-async function hamtaSkewTimme(t) {
-  const { k1, tq, w } = skewBehov(t); if (!tq && !w) return true;
-  const yx = "[" + M.iy + "][" + M.ix + "]", tt = "[" + t + ":" + t + "]", v = [], e = [];
+// Variabler for skew-T, timmarna a..b (vind varje timme, "U"). Anvands bade for en timme och for 6 h-bitar.
+function skewDelar(a, b) {
+  let k1 = NIV - 1, kw = NIV - 1, s = false, tq = false, w = false, lw = false, gr = false;
+  for (let t = a; t <= b; t++) { const q = skewBehov(t); k1 = Math.min(k1, q.k1); kw = Math.min(kw, q.kw); s = s || q.s; tq = tq || q.tq; w = w || q.w; lw = lw || q.lw; gr = gr || q.gr; }
+  const yx = "[" + M.iy + "][" + M.ix + "]", tt = "[" + a + ":" + b + "]", v = [], e = [];
+  if (s) { YTA.forEach(n => v.push(n + tt + "[0]" + yx)); e.push("s"); }
   if (tq) { ["air_temperature_ml", "specific_humidity_ml"].forEach(n => v.push(n + tt + "[" + k1 + ":" + (NIV - 1) + "]" + yx)); e.push("T" + k1 + "-" + (NIV - 1)); }
   if (w) { let ks = k1; const rest = (NIV - 1 - ks) % VIND_DK; if (rest) ks += rest;
-    ["x_wind_ml", "y_wind_ml"].forEach(n => v.push(n + "[" + t + ":" + VIND_DT + ":" + t + "][" + ks + ":" + VIND_DK + ":" + (NIV - 1) + "]" + yx)); e.push("u" + ks + "-" + (NIV - 1)); }
+    ["x_wind_ml", "y_wind_ml"].forEach(n => v.push(n + tt + "[" + ks + ":" + VIND_DK + ":" + (NIV - 1) + "]" + yx)); e.push("U" + ks + "-" + (NIV - 1)); }
+  if (lw) { v.push("mass_fraction_of_cloud_condensed_water_in_air_ml" + tt + "[" + kw + ":" + (NIV - 1) + "]" + yx); e.push("W" + kw + "-" + (NIV - 1)); }
+  if (gr) { v.push("mass_fraction_of_graupel_in_air_ml" + tt + "[" + kw + ":" + (NIV - 1) + "]" + yx); e.push("R" + kw + "-" + (NIV - 1)); }
+  if (!v.length) return null;
+  return { url: BAS + FIL(M.dtg) + ".ascii?" + enc(v.join(",")), etikett: e.join(".") };
+}
+const skewBitUrl = skewDelar;
+async function hamtaSkewTimme(t) {
+  const bu = skewDelar(t, t); if (!bu) return true;
   $("skewInfo").textContent = "Hämtar timmen …";
-  const res = await hamta(BAS + FIL(M.dtg) + ".ascii?" + enc(v.join(",")));
+  const res = await hamta(bu.url);
   if (res.st !== 200) { $("skewInfo").textContent = "Kunde inte hämta (svar " + res.st + ")."; return false; }
-  const et = e.join("."); await sparaBit(t, t, et, res.txt); laggIn(res.txt, t, t, et); $("skewInfo").textContent = ""; return true;
+  await sparaBit(t, t, bu.etikett, res.txt); laggIn(res.txt, t, t, bu.etikett); $("skewInfo").textContent = ""; return true;
 }
 async function oppnaSkewT(t, rullaTill) {
-  if (!M || !M.stat || !M.ytaOK[t]) return;
+  if (!M || !M.stat) return;
   const nyOppnad = $("skewRuta").hidden;
   if (SKZ.M !== M) { SKZ.M = M; SKZ.pB = 0; }   // ny punkt/korning -> utgangslaget
   skewT = Math.max(0, Math.min(M.nt - 1, t)); $("skewRuta").hidden = false; rita();
   if (nyOppnad || rullaTill) setTimeout(() => $("skewRuta").scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
   ritaSkewT();                                  // det som finns direkt
   const m = M, tt = skewT;
-  if (skewBehov(tt).tq || skewBehov(tt).w) { try { await hamtaSkewTimme(tt); } catch (e) { $("skewInfo").textContent = "Kunde inte hämta timmen."; } if (M === m && skewT === tt) { ritaSkewT(); rita(); } }
+  // Pagar en Bara skew-T-hamtning tar den timmen i sin tur (ingen extra fraga mot met.no)
+  if (upptagen && F && F.skew) { if (skewBehov(tt).nagot) $("skewInfo").textContent = tt <= F.slut ? "Timmen hämtas i bitarna – vänta …" : "Timmen hör till nästa dygn – tryck Hämta när denna hämtning är klar."; return; }
+  if (skewBehov(tt).nagot) { try { await hamtaSkewTimme(tt); } catch (e) { $("skewInfo").textContent = "Kunde inte hämta timmen."; } if (M === m && skewT === tt) { ritaSkewT(); rita(); } }
 }
+let skewBredd = SK.B;   // viewBox-bredd: SK.B + 30 per stapelkolumn (molnvatten, graupel)
 function ritaSkewT() {
   const svg = $("skewSvg"); svg.textContent = ""; if (!M || skewT === null) return;
+  const kolV = visaVatten ? SK.B : 0, kolG = visaGraupel ? SK.B + (visaVatten ? 30 : 0) : 0;
+  skewBredd = SK.B + (visaVatten ? 30 : 0) + (visaGraupel ? 30 : 0); svg.setAttribute("viewBox", "0 0 " + skewBredd + " " + SK.H);
   const t = skewT, css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
+  if (!M.ytaOK[t]) { $("skewTitel").textContent = "Skew-T +" + t; svg.appendChild(el("text", { x: 320, y: 270, "font-size": 13, "text-anchor": "middle", fill: c("--dim") }, "Timmen är inte hämtad än …")); return; }
   const ps = M.yta[0][t], d = new Date(M.t0 + t * 3600e3);
   $("skewTitel").textContent = "Skew-T " + platsNamn(M.lat, M.lon) + " – " + VECKODAG[d.getUTCDay()] + " " + d.getUTCDate() + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + " UTC (+" + t + ")";
   const k1 = skewK1(t);
@@ -1411,6 +1456,26 @@ function ritaSkewT() {
     g("rect", { x: 1, y: yP(pb), width: (SK.V - 3) * Math.min(1, v / 100), height: Math.max(0.5, yP(pa) - yP(pb)), fill: farg[kat], stroke: c("--line"), "stroke-width": 0.3 }); }
   g("text", { x: 1, y: Y1 + 30, "font-size": 9, fill: c("--dim") }, "moln");
   g("text", { x: X1, y: Y1 + 30, "font-size": 10, "text-anchor": "end", fill: c("--dim") }, "°C");
+  // NYTT 20/11: molnvatten och graupel som horisontella staplar per modellniva i egna kolumner till hoger.
+  // Full langd = VATTEN_MAX / GRAUPEL_MAX g/kg (langre varden klipps och far en pil). Molnvatten dar T < 0 °C
+  // (underkylt) ritas lila, annars blatt. Storsta vardet skrivs under kolumnen.
+  const stapelKolumn = (x0, arr, har, gmax, fargF, rubrik) => {
+    const kw = skewKW(t); let mx = 0, mxU = 0, finns = false;
+    g("rect", { x: x0 + 2, y: Y0, width: 26, height: Hd, fill: "none", stroke: c("--grid"), "stroke-width": 0.6 });
+    for (let k = NIV - 1; k >= kw; k--) { if (!har[t * NIV + k]) continue; finns = true; const v = arr[t * NIV + k] * 1000; if (!(v > 0.001)) continue;
+      const p = pk(k); if (p < pTopp || p > pBott) continue;
+      const pa = k === NIV - 1 ? ps / 100 : (pk(k) + pk(k + 1)) / 2, pb = k > 0 ? (pk(k) + pk(k - 1)) / 2 : pk(k), kall = M.tqHar[t * NIV + k] && M.ta[t * NIV + k] < 273.15;
+      mx = Math.max(mx, v); if (kall) mxU = Math.max(mxU, v);
+      const y0 = Math.max(Y0, yP(pb)), y1 = Math.min(Y1, yP(pa)); if (y1 <= y0) continue;
+      g("rect", { x: x0 + 3, y: y0, width: 24 * Math.min(1, v / gmax), height: Math.max(0.6, y1 - y0), fill: fargF(kall), opacity: 0.85 });
+      if (v > gmax) g("text", { x: x0 + 27, y: (y0 + y1) / 2 + 3, "font-size": 8, "text-anchor": "end", fill: "#fff" }, "›"); }
+    g("text", { x: x0 + 15, y: Y1 + 13, "font-size": 8.5, "text-anchor": "middle", fill: c("--dim") }, rubrik);
+    g("text", { x: x0 + 15, y: Y1 + 24, "font-size": 8.5, "text-anchor": "middle", fill: c("--fg") }, finns ? (mx > 0.001 ? mx.toFixed(2).replace(".", ",") : "0") : "–");
+    if (fargF(true) !== fargF(false) && mxU > 0.001) g("text", { x: x0 + 15, y: Y1 + 35, "font-size": 8.5, "font-weight": 700, "text-anchor": "middle", fill: UNDERKYLT_FARG }, mxU.toFixed(2).replace(".", ","));
+    if (!finns) g("text", { x: x0 + 15, y: (Y0 + Y1) / 2, "font-size": 8, "text-anchor": "middle", fill: c("--dim"), transform: "rotate(-90 " + (x0 + 15) + " " + ((Y0 + Y1) / 2) + ")" }, "hämtas …");
+  };
+  if (visaVatten) stapelKolumn(kolV, M.lw, M.lwHar, VATTEN_MAX, kall => kall ? UNDERKYLT_FARG : VATTEN_FARG, "vatten");
+  if (visaGraupel) stapelKolumn(kolG, M.gr, M.grHar, GRAUPEL_MAX, () => GRAUPEL_FARG, "graupel");
   // vindflaggor till hoger
   const gV = el("g", {}); svg.appendChild(gV); let senY = -99; const z = hojder(t, 0);
   if (z) for (const vp of vindPunkter(t)) { let p = NaN;
@@ -1425,7 +1490,9 @@ function ritaSkewT() {
     const p = pk(bk), fl = Math.max(0, Math.round((1 - (p / 1013.25) ** 0.190263) * 145366.45 / 100));
     const tc = M.tqHar[t * NIV + bk] ? (M.ta[t * NIV + bk] - 273.15).toFixed(1) : "–", td = tdK(bk);
     $("skewInfo").textContent = "Nivå " + bk + ": " + Math.round(p) + " hPa, FL" + p3(fl) + (z ? ", " + Math.round(z[bk] * FOT / 10) * 10 + " ft över mark" : "") + " · T " + tc + " · Td " + (isFinite(td) ? td.toFixed(1) : "–") + " °C" +
-      (M.clHar[t * NIV + bk] ? " · moln " + Math.round(M.cl[t * NIV + bk]) + " %" : "");
+      (M.clHar[t * NIV + bk] ? " · moln " + Math.round(M.cl[t * NIV + bk]) + " %" : "") +
+      (visaVatten && M.lwHar[t * NIV + bk] ? " · vatten " + (M.lw[t * NIV + bk] * 1000).toFixed(3).replace(".", ",") + " g/kg" + (M.lw[t * NIV + bk] > 1e-6 && M.ta[t * NIV + bk] < 273.15 ? " (underkylt)" : "") : "") +
+      (visaGraupel && M.grHar[t * NIV + bk] ? " · graupel " + (M.gr[t * NIV + bk] * 1000).toFixed(3).replace(".", ",") + " g/kg" : "");
   };
   svg.onpointerleave = () => { $("skewInfo").textContent = ""; };
 }
@@ -1587,26 +1654,27 @@ function gomTips() { $("tips").hidden = true; const r = $("tipsRam"); if (r) r.r
 //  FORLOPP (stapel per 24 h-bit, tickande tid, uppskattad tid kvar)
 // ===================================================================
 let F = null, tick = null, upptagen = false, koad = false;
-const bitTidNyckel = () => "mt:bitTid:" + $("topp").value + (vindLage ? "v" : "");
-function forvantadBitTid() { const v = +lasa(bitTidNyckel()); return v > 0 ? v : (+$("topp").value <= 30 ? 28 : 42); }
+const bitTidNyckel = () => baraSkew ? "mt:bitTid:skew" + (visaVatten ? "w" : "") + (visaGraupel ? "r" : "") : "mt:bitTid:" + $("topp").value + (vindLage ? "v" : "");
+function forvantadBitTid() { const v = +lasa(bitTidNyckel()); return v > 0 ? v : baraSkew ? 25 + (visaVatten ? 8 : 0) + (visaGraupel ? 8 : 0) : (+$("topp").value <= 30 ? 28 : 42); }
 function noteraBitTid(s) { const k = bitTidNyckel(), v = +lasa(k); lagra(k, String(v > 0 ? v * 0.6 + s * 0.4 : s)); }
 function sekText(s) { s = Math.round(s); return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + p2(s % 60) + " s"; }
 function visaForlopp() {
   const box = $("forlopp"); if (!F) { box.hidden = true; return; }
   box.hidden = false; const st = $("stapel"); st.textContent = "";
   const nu = performance.now(); let kvar = 0;
-  if (M && M.stat) for (let a = 0; a < M.nt; a += BIT) {
-    const b = Math.min(a + BIT - 1, M.nt - 1), d = document.createElement("div"), aktiv = F.t1 && F.a === a;
+  const BL = F.skew ? SKEW_BIT : BIT, bu = F.skew ? skewBitUrl : bitUrl;   // Bara skew-T: 6 h-bitar
+  if (M && M.stat) for (let a = 0; a < (F.skew ? F.slut + 1 : M.nt); a += BL) {
+    const b = Math.min(a + BL - 1, M.nt - 1), d = document.createElement("div"), aktiv = F.t1 && F.a === a;
     d.title = "+" + a + " till +" + b + " h";
     if (aktiv) { d.className = "aktiv"; const sp = document.createElement("span"); sp.style.width = Math.min(95, (nu - F.t1) / 10 / F.forv) + "%"; d.appendChild(sp); }
-    else if (!bitUrl(a, b)) d.className = "klar"; else kvar++;
+    else if (!bu(a, b)) d.className = "klar"; else kvar++;
     st.appendChild(d);
   }
   const txt = $("forloppText");
   if (!F.t1) { txt.textContent = F.fas; return; }
   const s = (nu - F.t1) / 1000, rest = Math.max(3, F.forv - s) + kvar * F.forv;
   txt.innerHTML = "";
-  txt.append("Bit " + (F.a / BIT + 1) + " av " + Math.ceil(M.nt / BIT) + ": +" + F.a + " till +" + F.b + " h · " + Math.floor(s) + " s ");
+  txt.append((F.skew ? "Skew-T, bit " + (F.a / SKEW_BIT + 1) + " av " + Math.ceil((F.slut + 1) / SKEW_BIT) : "Bit " + (F.a / BIT + 1) + " av " + Math.ceil(M.nt / BIT)) + ": +" + F.a + " till +" + F.b + " h · " + Math.floor(s) + " s ");
   const dim = document.createElement("span"); dim.className = "dim"; dim.textContent = "(brukar ta ca " + Math.round(F.forv) + " s)"; txt.append(dim);
   txt.append(" · ca " + sekText(rest) + " kvar" + (F.varv > 0 ? " · fyller på nivåer för ny topp" : ""));
 }
@@ -1647,6 +1715,30 @@ async function hamtaAllt() {
     }
     rita(); ritaMarkorer(); F.fas = "Kontrollerar vad som saknas …";
     laddaMetar();   // parallellt, ritar om nar den kommer
+    // NYTT 20/11: Bara skew-T - forsta dygnet som inte ar komplett (+0..+23, sedan +24..+47 osv.) i 6 h-bitar.
+    // Skew-T oppnas efter forsta biten (aktuell timme om den finns i dygnet) och fylls pa efter hand.
+    if (baraSkew) {
+      let start = -1; for (let t = 0; t < nt && start < 0; t++) if (skewBehov(t).nagot) start = t;
+      if (start >= 0) {
+        const a0 = Math.floor(start / SKEW_BIT) * SKEW_BIT, slut = Math.min(nt - 1, Math.floor(start / 24) * 24 + 23);
+        F.skew = true; F.slut = slut; F.forv = forvantadBitTid();
+        for (let a = a0; a <= slut; a += SKEW_BIT) {
+          const b = Math.min(a + SKEW_BIT - 1, slut), bu = skewBitUrl(a, b); if (!bu) continue;
+          status("Hämtar skew-T +" + a + " till +" + b + " h …"); F.a = a; F.b = b; F.forv = forvantadBitTid(); F.t1 = performance.now(); visaForlopp();
+          const res = await hamta(bu.url);
+          if (res.st !== 200) throw new Error("Hämtningen av skew-T +" + a + " till +" + b + " h misslyckades (svar " + res.st + "). Tryck Hämta igen för att fortsätta.");
+          const sek = (performance.now() - F.t1) / 1000; F.t1 = 0; tider.push(sek.toFixed(0)); noteraBitTid(sek); kb += res.txt.length / 1024;
+          await sparaBit(a, b, bu.etikett, res.txt); laggIn(res.txt, a, b, bu.etikett); rita();
+          if ($("skewRuta").hidden || skewT === null) { const nu = Math.round((Date.now() - M.tid[0] * 1000) / 3600e3); oppnaSkewT(nu >= a && nu <= b ? nu : a, true); }
+          else if (skewT >= a && skewT <= b) oppnaSkewT(skewT);
+          visaForlopp();
+        }
+      }
+      const tot = ((performance.now() - t0) / 1000).toFixed(0); let kvarH = 0; for (let t = 0; t < nt; t++) if (skewBehov(t).nagot) kvarH++;
+      status(tider.length ? "Skew-T klart: " + tot + " s, " + tider.length + " anrop (" + tider.join(", ") + " s), " + kb.toFixed(0) + " kB." + (kvarH ? " Tryck Hämta för nästa dygn." : "") : "Skew-T: allt fanns redan i webbläsaren.");
+      if (!tider.length && ($("skewRuta").hidden || skewT === null)) oppnaSkewT(Math.max(0, Math.min(nt - 1, Math.round((Date.now() - M.tid[0] * 1000) / 3600e3))), true);
+      return;
+    }
     // Varv 0 hamtar allt som saknas. Byts toppen under hamtningen fyller varv 1-2 pa det som da saknas.
     for (let varv = 0; varv < 3; varv++) {
       let nagot = false; F.varv = varv;
@@ -1927,10 +2019,20 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skewStang").addEventListener("click", () => { skewT = null; $("skewRuta").hidden = true; rita(); });
   // zoom och panorering i skew-T (NYTT 19/11 kvall)
   { const sv = $("skewSvg"), mitt = () => [(SKZ.geo.X0 + SKZ.geo.X1) / 2, (SKZ.geo.Y0 + SKZ.geo.Y1) / 2];
-    const vb = ev => { const r = sv.getBoundingClientRect(); return [(ev.clientX - r.left) * SK.B / r.width, (ev.clientY - r.top) * SK.H / r.height, SK.B / r.width]; };
+    const vb = ev => { const r = sv.getBoundingClientRect(); return [(ev.clientX - r.left) * skewBredd / r.width, (ev.clientY - r.top) * SK.H / r.height, skewBredd / r.width]; };
     $("skewIn").addEventListener("click", () => SKZ.geo && skewZooma(1.5, ...mitt()));
     $("skewUt").addEventListener("click", () => SKZ.geo && skewZooma(1 / 1.5, ...mitt()));
     $("skewHela").addEventListener("click", skewNollstall);
+    // NYTT 20/11: Bara skew-T, Molnvatten, Graupel
+    $("baraSkew").setAttribute("aria-pressed", String(baraSkew));
+    $("baraSkew").addEventListener("click", e => { baraSkew = !baraSkew; lagra("mt:baraSkew", baraSkew ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(baraSkew));
+      status(baraSkew ? "Bara skew-T: Hämta (eller klick på kartan) hämtar temperatur, fukt och vind för skew-T, ett dygn i taget." : "Tid-höjd: Hämta hämtar hela diagrammet igen."); });
+    for (const [id, nyck] of [["skewVatten", "mt:skewVatten"], ["skewGraupel", "mt:skewGraupel"]]) {
+      $(id).setAttribute("aria-pressed", String(id === "skewVatten" ? visaVatten : visaGraupel));
+      $(id).addEventListener("click", e => { const pa = e.currentTarget.getAttribute("aria-pressed") !== "true";
+        if (id === "skewVatten") visaVatten = pa; else visaGraupel = pa; lagra(nyck, pa ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(pa));
+        if (skewT !== null && !$("skewRuta").hidden) oppnaSkewT(skewT); });
+    }
     $("skewLyft").setAttribute("aria-pressed", String(visaLyft));
     $("skewLyft").addEventListener("click", e => { visaLyft = !visaLyft; lagra("mt:visaLyft", visaLyft ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaLyft)); ritaSkewT(); });
     $("skewKarta").addEventListener("click", () => document.querySelector(".kartpanel").scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -1941,7 +2043,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
       if (pek.size === 2) { const [a, b] = [...pek.values()]; nyp = Math.hypot(a[0] - b[0], a[1] - b[1]); } });
     sv.addEventListener("pointermove", ev => {
       if (!pek.has(ev.pointerId) || !SKZ.geo) return; const fore = pek.get(ev.pointerId); pek.set(ev.pointerId, [ev.clientX, ev.clientY]);
-      const r = sv.getBoundingClientRect(), k = SK.B / r.width;
+      const r = sv.getBoundingClientRect(), k = skewBredd / r.width;
       if (pek.size === 2 && nyp) { const [a, b] = [...pek.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
         if (d > 0 && Math.abs(d / nyp - 1) > 0.02) { skewZooma(d / nyp, ((a[0] + b[0]) / 2 - r.left) * k, ((a[1] + b[1]) / 2 - r.top) * k); nyp = d; } return; }
       if (pek.size === 1 && SKZ.z > 1) skewPanorera((ev.clientX - fore[0]) * k, (ev.clientY - fore[1]) * k);
