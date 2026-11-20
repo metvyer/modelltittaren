@@ -433,6 +433,29 @@ def remsaMot(iy, ix):
     skriv()
 
 
+def ytTemp(iy, ix):
+    """P (20/11 kvall): finns yttemperatur (0 m) och havsytans temperatur i ensemblefilen, och for vilka medlemmar?
+    Samma for 0-gradersnivan (har bara medlem 0 varden?). Plus det-filen for jamforelse."""
+    skriv("## P. Yttemperatur, havsyta och 0-gradersnivå per medlem")
+    dtg = senaste_ens()
+    if not dtg: skriv("Ingen körning."); return
+    skriv("| fil | variabel | svar | min | max | medlemmar med värden | värden saknas |"); skriv("|---|---|---|---|---|---|---|")
+    for var in ["air_temperature_0m", "sea_surface_temperature", "altitude_of_0_degree_isotherm", "air_temperature_2m"]:
+        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + urllib.parse.quote(f"{var}[0:1:{TIDER - 1}][0][0:29][{iy}][{ix}]", safe=""), tidsgrans=120)
+        v = tolka_grid(txt, var) if st == 200 else []
+        ok = [x for x in v if ok_varde(x)]
+        medl = sorted({i % 30 for i, x in enumerate(v) if ok_varde(x)})
+        mtxt = "alla 30" if len(medl) == 30 else (", ".join(map(str, medl)) if medl else "inga")
+        skriv(f"| ens | {var} | {st} | {min(ok):.4g} | {max(ok):.4g} | {mtxt} | {len(v) - len(ok)} av {len(v)} |" if ok else f"| ens | {var} | {st} | – | – | {mtxt} | {len(v)} värden |")
+    nu = datetime.now(timezone.utc); d = nu - timedelta(hours=nu.hour % 3 + 6); ddtg = d.strftime("%Y%m%dT%HZ")
+    for var in ["air_temperature_0m", "sea_surface_temperature", "altitude_of_0_degree_isotherm"]:
+        st, txt, sek, by = hamta(BAS + "meps_det_2_5km_" + ddtg + ".ncml.ascii?" + urllib.parse.quote(f"{var}[0:1:12][0][{iy}][{ix}]", safe=""), tidsgrans=120)
+        v = tolka_grid(txt, var) if st == 200 else []
+        ok = [x for x in v if ok_varde(x)]
+        skriv(f"| det {ddtg} | {var} | {st} | " + (f"{min(ok):.4g} | {max(ok):.4g} | – | {len(v) - len(ok)} av {len(v)} |" if ok else f"– | – | – | {len(v)} värden |"))
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -462,6 +485,8 @@ def main():
         skewTid(iy, ix)
     if "O" in delar:
         remsaMot(iy, ix)
+    if "P" in delar:
+        ytTemp(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
