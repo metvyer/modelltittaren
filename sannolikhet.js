@@ -360,7 +360,7 @@ async function aktivKorning() {
 function tidText(t) {
   if (!P.dtg) return "+" + t;
   const d = new Date(dtgDatum(P.dtg).getTime() + t * 3600e3);
-  return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z (+" + t + ")";
+  return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z";   // 20/11 kvall: utan ledtid nar korningen ar kand
 }
 function fyllTider() {
   const f = $("pFran"), t = $("pTill"), fv = f.value, tv = t.value;
@@ -826,9 +826,26 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk, lista) {
 // ---------- Tidslinje under kartan ----------
 // En ruta per timme (+0 till +61). Farg = hamtad for omradet och parametern, ram = vald period,
 // tjock vanstergrans = nytt dygn (00 UTC). Klick flyttar perioden sa att den borjar dar.
+// NYTT 20/11 kvall: vald tid/period tydligt pa kartan (alltid, aven innan nagot ar hamtat)
+function ritaKartTid() {
+  const e = $("kartTid"); if (!e) return;
+  let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
+  if (!isFinite(a) || !P.dtg) { e.textContent = ""; return; }
+  const v = $("pParam").value, pa = PPARAM[v], visa = visaLage(), d = t => new Date(dtgDatum(P.dtg).getTime() + t * 3600e3);
+  const da = d(a), db = d(b), samma = da.getUTCDate() === db.getUTCDate();
+  const huvud = a === b ? tidText(a) : tidText(a) + " – " + (samma ? p2(db.getUTCHours()) + "Z" : tidText(b));
+  const vad = pa.namn.split(",")[0].split(" (")[0] + (visa === "sannolikhet" ? " " + pa.villkor + " " + $("pTrosk").value + " " + pa.enhet + (a === b ? "" : pa.agg === "summa" ? ", summa" : ", någon gång") : ", " + visaNamn(visa).toLowerCase());
+  e.textContent = huvud; const sm = document.createElement("small"); sm.textContent = vad + " · körning " + P.dtg.slice(9, 12); e.appendChild(sm);
+}
 function ritaTidslinje() {
+  ritaKartTid();
   const el = $("tidslinje"), et = $("tidsEtiketter"); if (!el) return;
   const o = berakna(); let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
+  // vald tid/period skriven ovanfor markeringen
+  const tv = $("tidsVald");
+  if (tv) { tv.textContent = ""; if (P.dtg) { const sp = document.createElement("span"); sp.style.left = ((a + b + 1) / 2 / ENS_TIDER * 100) + "%";
+    sp.textContent = a === b ? tidText(a) : tidText(a) + " – " + p2(new Date(dtgDatum(P.dtg).getTime() + b * 3600e3).getUTCHours()) + "Z";
+    tv.appendChild(sp); requestAnimationFrame(() => { const r = sp.getBoundingClientRect(), R = tv.getBoundingClientRect(); if (r.left < R.left) sp.style.transform = "translateX(" + (-50 + (R.left - r.left) / r.width * 100) + "%)"; else if (r.right > R.right) sp.style.transform = "translateX(" + (-50 - (r.right - R.right) / r.width * 100) + "%)"; }); } }
   const har = new Set();
   if (o && P.dtg) for (const e of P.index) if (innehaller(e, { ...o, dtg: P.dtg })) e.tider.forEach(t => har.add(t));
   const bas = P.dtg ? dtgDatum(P.dtg).getTime() : null;
@@ -844,6 +861,8 @@ function ritaTidslinje() {
       if ((t === 0 && d.getUTCHours() <= 16) || (t > 0 && d.getUTCHours() === 0)) {
         const l = document.createElement("span"); l.style.left = (t / ENS_TIDER * 100) + "%";
         l.textContent = VECKODAG[d.getUTCDay()] + (t === 0 ? " " + p2(d.getUTCHours()) + "Z" : ""); et.append(l);
+      } else if (d.getUTCHours() === 12 && t > 3) {   // 20/11 kvall: "12" mitt pa dygnet
+        const l = document.createElement("span"); l.className = "tim"; l.style.left = (t / ENS_TIDER * 100) + "%"; l.textContent = "12Z"; et.append(l);
       }
     }
     el.append(sp);

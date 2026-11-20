@@ -119,9 +119,18 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .tidsmitt { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .tidslinje { display: flex; height: 24px; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; cursor: pointer; background: var(--panel); }
 .tidslinje span { flex: 1; background: color-mix(in srgb, var(--grid) 45%, transparent); border-left: 1px solid var(--panel); }
-.tidslinje span.har { background: color-mix(in srgb, var(--acc) 55%, transparent); }
-.tidslinje span.per { box-shadow: inset 0 4px 0 var(--fg), inset 0 -4px 0 var(--fg); }
+/* 20/11 kvall: tydligare - hamtad = fylld bla, ej hamtad = ljusgra rutig, vald period = svart ram + mork fyllning */
+.tidslinje span { background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--grid) 35%, transparent) 0 3px, transparent 3px 6px); }
+.tidslinje span.har { background: color-mix(in srgb, var(--acc) 75%, transparent); }
+.tidslinje span.per { box-shadow: inset 0 5px 0 var(--fg), inset 0 -5px 0 var(--fg); background-color: color-mix(in srgb, var(--fg) 25%, transparent); }
 .tidslinje span.har.per { background: var(--acc); }
+.tidsvald { position: relative; height: 18px; }
+.tidsvald span { position: absolute; bottom: 1px; transform: translateX(-50%); white-space: nowrap; font-size: 12.5px; font-weight: 700; color: var(--fg); background: var(--panel); padding: 0 4px; border: 1px solid var(--fg); border-radius: 4px; line-height: 15px; }
+.kartram { position: relative; }
+.karttid { position: absolute; top: 8px; left: 8px; z-index: 2; pointer-events: none; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; font-size: 15px; font-weight: 700; color: var(--fg); box-shadow: 0 1px 4px rgba(0,0,0,.15); max-width: calc(100% - 16px); }
+.karttid small { display: block; font-size: 11.5px; font-weight: 500; color: var(--dim); }
+.karttid:empty { display: none; }
+.tidsetiketter span.tim { color: color-mix(in srgb, var(--dim) 70%, transparent); font-size: 10px; }
 .tidslinje span.dygn { border-left: 2px solid var(--fg); }
 .tidslinje span:hover { outline: 2px solid var(--fg); outline-offset: -2px; }
 .tidsetiketter { position: relative; height: 14px; font-size: 11px; color: var(--dim); }
@@ -235,10 +244,13 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
     <span class="kartpos" id="kartPos"></span>
   </div>
+  <div class="kartram">
+  <div class="karttid baraP" id="kartTid" aria-live="polite"></div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
     <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g>
   </svg>
+  </div>
   <div class="baraTH m0rad" id="m0Rad" hidden>
     <select id="m0Param"></select>
     <button class="sek liten" id="m0Bak" title="En timme bakåt">◀</button><span id="m0Tid" class="m0tid"></span><button class="sek liten" id="m0Fram" title="En timme framåt">▶</button>
@@ -246,10 +258,10 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   </div>
   <div class="baraP tidsrad">
     <button class="sek" id="tBak" title="Bakåt (vänsterpil)">◀</button>
-    <div class="tidsmitt"><div class="tidslinje" id="tidslinje" title="Klicka på en timme för att flytta perioden dit"></div><div class="tidsetiketter" id="tidsEtiketter"></div></div>
+    <div class="tidsmitt"><div class="tidsvald" id="tidsVald"></div><div class="tidslinje" id="tidslinje" title="Klicka på en timme för att flytta perioden dit"></div><div class="tidsetiketter" id="tidsEtiketter"></div></div>
     <button class="sek" id="tFram" title="Framåt (högerpil)">▶</button>
   </div>
-  <div class="baraP tidsforkl"><span><i style="background:var(--acc)"></i>hämtad för området</span><span><i style="background:color-mix(in srgb, var(--grid) 45%, transparent)"></i>ej hämtad</span><span><i style="box-shadow:inset 0 3px 0 var(--fg),inset 0 -3px 0 var(--fg)"></i>vald period</span><span>← → stegar</span></div>
+  <div class="baraP tidsforkl"><span><i style="background:var(--acc)"></i>hämtad för området</span><span><i style="background:repeating-linear-gradient(45deg, color-mix(in srgb, var(--grid) 60%, transparent) 0 3px, transparent 3px 6px);border:1px solid var(--line)"></i>ej hämtad</span><span><i style="box-shadow:inset 0 3px 0 var(--fg),inset 0 -3px 0 var(--fg)"></i>vald period</span><span>← → stegar</span></div>
   <div class="kartforklaring baraTH">
     <span><i class="mk tom"></i>ej hämtad</span><span><i class="mk halv"></i>påbörjad</span><span><i class="mk full"></i>hämtad</span><span><i class="mk vald"></i>vald</span>
   </div>
@@ -2425,6 +2437,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-2210"></script>
+<script src="sannolikhet.js?v=20261120-2220"></script>
 </body>
 </html>
