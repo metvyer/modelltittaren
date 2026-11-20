@@ -41,6 +41,31 @@ jobs:
           fi
           ls -R forhamtat | head -20
 
+      # NYTT 20/11: varv 0 = Sverigeoversikten (ensemblens byvind/sikt/molnbas, 5 km, +0..+36) - FORE tid-hojd
+      - name: Numpy (for Sverigeöversikten)
+        run: python3 -m pip install --quiet --break-system-packages numpy || python3 -m pip install --quiet numpy
+
+      - name: Sverigeöversikt (varv 0)
+        id: ens
+        run: python3 verktyg/forhamta.py forhamtat ens
+
+      - name: Spara datat på grenen data (varv 0)
+        if: steps.ens.outputs.andrat == 'ja'
+        run: |
+          cd forhamtat
+          git init -q
+          git checkout -q -b data
+          git add -A
+          git -c user.name="modelltittaren-bot" -c user.email="actions@users.noreply.github.com" commit -q -m "Sverigeöversikt $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
+          rm -rf .git
+
+      - name: Publicera Sverigeöversikten direkt
+        if: steps.ens.outputs.andrat == 'ja'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run publicera.yml -R "${{ github.repository }}" --ref main || echo "Kunde inte starta Publicera"
+
       - name: Förhämta ny körning (varv 1, moln och vind)
         id: hamta
         run: python3 verktyg/forhamta.py forhamtat

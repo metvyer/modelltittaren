@@ -198,8 +198,15 @@ const innehaller = (e, o) => e.dtg === o.dtg && e.v === o.v && e.s === o.s && e.
 // ---------- Omrade ----------
 // Omradet lasas till ett fast rutnat (index delbara med steget), sa att ett mindre omrade
 // inuti ett hamtat alltid traffar samma punkter och kan visas utan ny hamtning.
+// NYTT 20/11: "Sverige" = den forhamtade Sverigerutan (GitHub, se forhamta.py SV) - samma rektangel for alla
+const SV_RUTA = { y0: 168, y1: 808, x0: 312, x1: 660 };
+function svRektangel(s) { return { y0: SV_RUTA.y0, y1: SV_RUTA.y0 + Math.floor((SV_RUTA.y1 - SV_RUTA.y0) / s) * s, x0: SV_RUTA.x0, x1: SV_RUTA.x0 + Math.floor((SV_RUTA.x1 - SV_RUTA.x0) / s) * s }; }
 function berakna() {
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
+  if ($("pStorlek").value === "sv") {
+    const s = Math.max(2, +$("pUppl").value), r = svRektangel(s);
+    return { v: $("pParam").value, s, ...r, ny: (r.y1 - r.y0) / s + 1, nx: (r.x1 - r.x0) / s + 1, lat: isFinite(lat) ? lat : 62, lon: isFinite(lon) ? lon : 16 };
+  }
   if (!isFinite(lat) || !isFinite(lon)) return null;
   const f = rutaF(lat, lon), s = +$("pUppl").value, halv = +$("pStorlek").value / 2 / 2.5;
   const fyll = (c, max) => { let a = Math.floor(Math.max(0, c - halv) / s) * s, b = a + Math.ceil(2 * halv / s) * s;
@@ -436,6 +443,45 @@ async function snabbFas(o, oH, sakn, pa) {
   await DB.put("index", P.index);
   return ut;
 }
+
+// ===================================================================
+//  SVERIGEOVERSIKTEN fran GitHub (NYTT 20/11): forhamtat/ens/index.json + <DTG>/<v>_<t>.bin.gz
+//  Byvind, sikt och molnbas, 5 km, +0..+36, alla 30 medlemmar, samma kodning som sidan. Ligger ditt
+//  omrade inom Sverigerutan (och upplosningen ar 5, 10 eller 20 km) tas timmarna harifran - ingen thredds.
+//  Hela Sverigerutan laggs in, sa kartan visar hela landet.
+// ===================================================================
+let SVIDX = null, SVT = 0;
+async function svIndex() {
+  if (SVIDX !== null && Date.now() - SVT < 300e3) return SVIDX;
+  try { const r = await fetch("forhamtat/ens/index.json", { cache: "no-store" }); SVIDX = r.ok ? await r.json() : false; } catch (e) { SVIDX = false; }
+  SVT = Date.now(); return SVIDX;
+}
+async function svFil(dtg, v, t) {
+  try { const r = await fetch("forhamtat/ens/" + dtg + "/" + v + "_" + t + ".bin.gz"); if (!r.ok) return null;
+    const ds = r.body.pipeThrough(new DecompressionStream("gzip")); return new Uint8Array(await new Response(ds).arrayBuffer()); } catch (e) { return null; }
+}
+async function svFas(o, sakn) {
+  const idx = await svIndex(); if (!idx || idx.dtg !== o.dtg || !idx.v.includes(o.v) || o.s % idx.s) return { antal: 0 };
+  const r = svRektangel(o.s);
+  if (o.y0 < r.y0 || o.y1 > r.y1 || o.x0 < r.x0 || o.x1 > r.x1) return { antal: 0 };
+  const tider = sakn.filter(t => idx.tider.includes(t)); if (!tider.length) return { antal: 0 };
+  const k = o.s / idx.s, NY = (idx.y1 - idx.y0) / idx.s + 1, NX = (idx.x1 - idx.x0) / idx.s + 1, ny = (r.y1 - r.y0) / o.s + 1, nx = (r.x1 - r.x0) / o.s + 1;
+  let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === r.y0 && x.y1 === r.y1 && x.x0 === r.x0 && x.x1 === r.x1);
+  if (!e) { e = { dtg: o.dtg, v: o.v, s: o.s, ...r, tider: [] }; P.index.push(e); }
+  let antal = 0, kb = 0;
+  for (const t of tider) {
+    status("Hämtar Sverigeöversikten från GitHub: +" + t + " h …");
+    const d = await svFil(o.dtg, o.v, t); if (!d || d.length < ENS_MEDL * NY * NX) continue;
+    kb += d.length / 1024;
+    let arr = d;
+    if (k > 1) { arr = new Uint8Array(ENS_MEDL * ny * nx);
+      for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) arr[(m * ny + y) * nx + x] = d[(m * NY + y * k) * NX + x * k]; }
+    else arr = d.subarray(0, ENS_MEDL * NY * NX);
+    await DB.put(nyckelE(e, t), arr); minneSatt(nyckelE(e, t), arr); if (!e.tider.includes(t)) e.tider.push(t); antal++;
+  }
+  e.anv = Date.now(); await DB.put("index", P.index); await stadaLager(e);
+  return { antal, kb };
+}
 const ENS_SNAPP = 8, ENS_TBLOCK = 12;
 async function probHamta(auto, utanSnabb) {
   auto = auto === true; utanSnabb = utanSnabb === true;
@@ -452,6 +498,12 @@ async function probHamta(auto, utanSnabb) {
       let lo = Math.floor(a / g) * g, hi = Math.ceil((b + o.s) / g) * g - o.s; if (hi > maxA) hi = maxA; return [lo, hi]; };
     const [hy0, hy1] = snapp(o.y0, o.y1, LCC.ny - 1), [hx0, hx1] = snapp(o.x0, o.x1, LCC.nx - 1);
     const oH = { ...o, y0: hy0, y1: hy1, x0: hx0, x1: hx1, ny: (hy1 - hy0) / o.s + 1, nx: (hx1 - hx0) / o.s + 1 }, n = oH.ny * oH.nx;
+    // Sverigeoversikten fran GitHub (forhamtad) - forst av allt
+    if (sakn.length && pa.agg !== "summa") {
+      const sv = await svFas(o, sakn);
+      if (sv.antal) { sakn = saknadeTimmar(o, lista); kb += sv.kb; await probVisa(); ritaOmrade();
+        if (!sakn.length) { status("Klart: från den förhämtade Sverigeöversikten (GitHub, " + sv.antal + " timmar, " + (sv.kb / 1024).toFixed(1) + " MB, " + ((performance.now() - t0) / 1000).toFixed(0) + " s) – ingen hämtning från met.no."); return; } }
+    }
     // snabbfasen: cachade omraden fran mellanservern (registret)
     if (!utanSnabb && sakn.length) {
       status("Kollar om området redan finns i mellanserverns cache …");
@@ -1080,7 +1132,7 @@ function bytLage(nytt) {
   });
   // 2,5 km bara upp till MAX_KM_25: valen som inte gar ihop gras ut (och ett omojligt sparat val rattas)
   const sparrUppl = () => {
-    const fin = $("pUppl").value === "1", stor = +$("pStorlek").value > MAX_KM_25;
+    const fin = $("pUppl").value === "1", stor = $("pStorlek").value === "sv" || +$("pStorlek").value > MAX_KM_25;
     for (const op of $("pStorlek").options) op.disabled = fin && +op.value > MAX_KM_25;
     $("pUppl").querySelector('option[value="1"]').disabled = stor;
     if (fin && stor) { $("pUppl").value = "2"; lagra("mt:pUppl", "2"); }

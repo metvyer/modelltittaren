@@ -18,7 +18,7 @@ i samma filer (bitar med etikett "T..."), se TQ_DELAR.
 Data fran MET Norway (thredds.met.no), CC BY 4.0. Bara standardbiblioteket.
 Ett anrop i taget, mjuk vantan vid 429/5xx, identifierande User-Agent.
 """
-import json, math, os, shutil, sys, time, urllib.error, urllib.request
+import json, math, os, re, shutil, sys, time, urllib.error, urllib.request
 from datetime import datetime, timedelta, timezone
 
 BAS = os.environ.get("MT_BAS", "https://thredds.met.no/thredds/dodsC/mepslatest/")   # MT_BAS: bara for test
@@ -267,10 +267,182 @@ def varv_tq(ut):
     return 0
 
 
+# ===================================================================
+#  SVERIGEOVERSIKT (NYTT 20/11, Jakob: "kor Sverige oversikten") - varv 0, fore tid-hojd
+#  Ensemblens byvind, sikt och molnbas for Sverige med omnejd i 5 km, +0..+36, alla 30 medlemmar.
+#  Lagras exakt som sidan sjalv lagrar (1 byte per varde, samma kodning som koda() i sannolikhet.js),
+#  en gzip-fil per parameter och timme: forhamtat/ens/<DTG>/<v>_<t>.bin.gz, layout [medlem][y][x].
+#  Medlem 15-29 = forra korningens 0-14 tre timmar senare (testkorning G) -> tas ur forra korningens
+#  filer om de finns, annars hamtas de. Medlem 0:s sikt/molnbas finns inte i ensemblefilen -> det-filen.
+#  Matt 20/11 (del L): Sverige 5 km byvind 13 h x 15 medl. = 12 s, 41 MB fran thredds, gzip 0,7 MB/timme.
+# ===================================================================
+ENS_FILN = lambda dtg: "meps_lagged_6_h_subset_2_5km_" + dtg + ".ncml"
+SV = {"y0": 168, "y1": 808, "x0": 312, "x1": 660, "s": 2}     # delbart med 8 -> passar sidans rutnat for 5/10/20 km
+SV_TIDER = list(range(0, 37))
+SV_BLOCK = [(0, 12), (13, 25), (26, 36)]
+ENS_MEDL, ENS_NYA = 30, 15
+KT = 3600 / 1852
+FOT = 3.28084
+
+
+def _trapp(delar):
+    ut = []
+    for a, b, st in delar:
+        v = a
+        while v <= b + 1e-9:
+            ut.append(int(math.floor(v + 0.5))); v += st
+    return ut
+
+
+# samma som PPARAM i sannolikhet.js (bara de tre parametrarna i oversikten)
+SV_PARAM = {
+    "by": {"var": "wind_speed_of_gust", "konv": lambda v: v * KT, "tabell": None},
+    "sikt": {"var": "visibility_in_air", "konv": lambda v: v,
+             "tabell": _trapp([[0, 200, 10], [225, 500, 25], [550, 1000, 50], [1100, 5000, 100], [5200, 10000, 200], [11000, 75000, 1000]])},
+    "bas": {"var": "cloud_base_altitude", "konv": lambda v: v * FOT,
+            "tabell": _trapp([[0, 200, 10], [250, 1000, 50], [1100, 5000, 100], [5500, 20000, 500], [25000, 25000, 1]])},
+}
+
+
+def _koda_np(pa, a):
+    """Som koda() i sannolikhet.js men for en hel numpy-vektor (float32) -> uint8, 255 = saknas."""
+    import numpy as np
+    a = np.asarray(a, dtype=np.float64); ok = np.isfinite(a) & (np.abs(a) < 1e30)
+    v = pa["konv"](np.where(ok, a, 0.0)); T = pa["tabell"]
+    if T:
+        T = np.asarray(T, dtype=np.float64)
+        k = np.searchsorted(T, v, side="right") - 1
+        k = np.clip(k, 0, len(T) - 1)
+    else:
+        k = np.clip(np.floor(v + 0.5), 0, 254)
+    return np.where(ok, k, 255).astype(np.uint8)
+
+
+def _koda(pa, raa):
+    """Som koda() i sannolikhet.js: 255 = saknas."""
+    if not math.isfinite(raa) or abs(raa) > 1e30:
+        return 255
+    v = pa["konv"](raa); T = pa["tabell"]
+    if T:
+        if v >= T[-1]: return len(T) - 1
+        if v <= T[0]: return 0
+        import bisect
+        return bisect.bisect_right(T, v) - 1
+    return max(0, min(254, int(math.floor(v + 0.5))))
+
+
+def hamta_bin(url, n, tidsgrans=300):
+    """Binart (.dods) -> lista med n float32, eller None."""
+    import struct
+    for f in range(1, 5):
+        STAT["anrop"] += 1
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=tidsgrans) as r:
+                buf = r.read(); STAT["byte"] += len(buf)
+            i = buf.find(b"\nData:\n")
+            if i >= 0:
+                import numpy as np
+                p = i + 7; antal = struct.unpack(">I", buf[p:p + 4])[0]
+                if antal >= n: return np.frombuffer(buf, dtype=">f4", count=n, offset=p + 8)
+            print("  ovantat svar", flush=True)
+        except urllib.error.HTTPError as e:
+            print(f"  svar {e.code}", flush=True)
+            if e.code in (400, 403, 404): return None
+        except Exception as e:
+            print(f"  fel {e}", flush=True)
+        if f < 4: time.sleep(15 * 2 ** (f - 1))
+    return None
+
+
+def senaste_ens():
+    nu = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    d = nu - timedelta(hours=nu.hour % 3)
+    for i in range(6):
+        dtg = (d - timedelta(hours=3 * i)).strftime("%Y%m%dT%HZ")
+        code, txt = hamta(BAS + ENS_FILN(dtg) + ".ascii?time", forsok=2, tidsgrans=60)
+        m = re.search(r"\ntime\[(\d+)\]", txt) if code == 200 else None
+        if m and int(m.group(1)) >= 62: return dtg
+        time.sleep(1)
+    return None
+
+
+def varv_ens(ut):
+    import gzip
+    endir = os.path.join(ut, "ens"); os.makedirs(endir, exist_ok=True)
+    idxfil = os.path.join(endir, "index.json")
+    gammal = {}
+    try:
+        with open(idxfil, encoding="utf-8") as f: gammal = json.load(f)
+    except Exception: pass
+    dtg = senaste_ens()
+    if not dtg: print("Sverige: ingen komplett ensemblekorning hittad."); return 0
+    if gammal.get("dtg") == dtg and gammal.get("klar"):
+        print(f"Sverige: {dtg} finns redan."); return 0
+    t0 = time.time(); STAT["anrop"] = 0; STAT["byte"] = 0
+    y0, y1, x0, x1, s_ = SV["y0"], SV["y1"], SV["x0"], SV["x1"], SV["s"]
+    ny, nx = (y1 - y0) // s_ + 1, (x1 - x0) // s_ + 1; n = ny * nx
+    forra = gammal.get("dtg") if gammal.get("klar") else None
+    dtgF = (datetime.strptime(dtg, "%Y%m%dT%HZ") - timedelta(hours=3)).strftime("%Y%m%dT%HZ")
+    if forra != dtgF: forra = None
+    dirn = os.path.join(endir, dtg); os.makedirs(dirn, exist_ok=True)
+    print(f"Sverige: {dtg}, {ny}x{nx} punkter (5 km), forra korningen {'finns' if forra else 'saknas'}", flush=True)
+    ateranvant = 0
+    for v, pa in SV_PARAM.items():
+        for a, b in SV_BLOCK:
+            nt = b - a + 1
+            import numpy as np
+            koder = [np.full(ENS_MEDL * n, 255, dtype=np.uint8) for _ in range(nt)]
+            # medlem 0-14
+            fr = enc(f"{pa['var']}[{a}:1:{b}][0][0:{ENS_NYA - 1}][{y0}:{s_}:{y1}][{x0}:{s_}:{x1}]")
+            vals = hamta_bin(BAS + ENS_FILN(dtg) + ".dods?" + fr, nt * ENS_NYA * n)
+            if vals is None: print(f"  {v} +{a}..+{b}: misslyckades - avbryter"); return 1
+            kod = _koda_np(pa, vals)
+            for k in range(nt): koder[k][:ENS_NYA * n] = kod[k * ENS_NYA * n:(k + 1) * ENS_NYA * n]
+            # medlem 15-29: forra korningens 0-14 vid t+3, annars hamta
+            saknas = []
+            for k in range(nt):
+                t = a + k; gf = os.path.join(endir, forra, f"{v}_{t + 3}.bin.gz") if forra else None
+                if gf and os.path.exists(gf):
+                    with gzip.open(gf, "rb") as f: g = f.read()
+                    koder[k][ENS_NYA * n:] = np.frombuffer(g, dtype=np.uint8, count=ENS_NYA * n); ateranvant += 1
+                else: saknas.append(k)
+            if saknas:
+                ka, kb = saknas[0], saknas[-1]
+                fr = enc(f"{pa['var']}[{a + ka}:1:{a + kb}][0][{ENS_NYA}:{ENS_MEDL - 1}][{y0}:{s_}:{y1}][{x0}:{s_}:{x1}]")
+                vals = hamta_bin(BAS + ENS_FILN(dtg) + ".dods?" + fr, (kb - ka + 1) * ENS_NYA * n)
+                if vals is None: print(f"  {v} medl 15-29: misslyckades - avbryter"); return 1
+                kod = _koda_np(pa, vals)
+                for kk in range(kb - ka + 1): koder[ka + kk][ENS_NYA * n:] = kod[kk * ENS_NYA * n:(kk + 1) * ENS_NYA * n]
+            # medlem 0:s sikt/molnbas ur det-filen
+            if v in ("sikt", "bas") and all((ko[:n] == 255).all() for ko in koder):
+                fr = enc(f"{pa['var']}[{a}:1:{b}][0][{y0}:{s_}:{y1}][{x0}:{s_}:{x1}]")
+                vals = hamta_bin(BAS + FIL(dtg) + ".dods?" + fr, nt * n)
+                if vals is not None:
+                    kod = _koda_np(pa, vals)
+                    for k in range(nt): koder[k][:n] = kod[k * n:(k + 1) * n]
+            for k in range(nt):
+                with gzip.open(os.path.join(dirn, f"{v}_{a + k}.bin.gz"), "wb", compresslevel=6) as f: f.write(koder[k].tobytes())
+            print(f"  {v} +{a}..+{b} klart ({time.time() - t0:.0f} s)", flush=True)
+    # bara senaste korningen ligger kvar
+    for d in os.listdir(endir):
+        if d != dtg and os.path.isdir(os.path.join(endir, d)):
+            import shutil; shutil.rmtree(os.path.join(endir, d))
+    idx = {"dtg": dtg, "klar": True, "y0": y0, "y1": y1, "x0": x0, "x1": x1, "s": s_, "tider": SV_TIDER, "v": list(SV_PARAM),
+           "skapad": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
+    with open(idxfil, "w", encoding="utf-8") as f: json.dump(idx, f, ensure_ascii=False)
+    mb = sum(os.path.getsize(os.path.join(dirn, x)) for x in os.listdir(dirn)) / 1e6
+    print(f"Sverige klart: {time.time() - t0:.0f} s, {STAT['anrop']} anrop, {STAT['byte'] / 1e6:.0f} MB fran thredds, {mb:.0f} MB filer, {ateranvant} timmar medl. 15-29 fran forra")
+    with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as f: f.write("andrat=ja\n")
+    return 0
+
+
 def main():
     ut = sys.argv[1] if len(sys.argv) > 1 else "forhamtat"
     if len(sys.argv) > 2 and sys.argv[2] == "tq":   # varv 2 (NYTT 19/11 em)
         return varv_tq(ut)
+    if len(sys.argv) > 2 and sys.argv[2] == "ens":  # varv 0 (NYTT 20/11) - Sverigeoversikten
+        return varv_ens(ut)
     thdir = os.path.join(ut, "th")
     os.makedirs(thdir, exist_ok=True)
     idxfil = os.path.join(thdir, "index.json")
