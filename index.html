@@ -94,6 +94,14 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .flikar button { background: transparent; color: var(--dim); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 14px; font-weight: 600; }
 .flikar button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
 body.p .baraTH { display: none; }
+/* NYTT 20/11 kvall: Favoriter = sannolikhetsvyn lasd till den forhamtade rutan (5 km), med fardiga knappar */
+.favpanel { display: none; }
+body.fav .favpanel { display: block; border: 1px solid var(--mkhamt); border-radius: 8px; padding: 8px 10px; margin: 0 0 10px; }
+body.fav .ejFav { display: none !important; }
+.favpanel .favskylt { font-size: 13px; margin-bottom: 6px; }
+.favpanel .favrad { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0; }
+.favpanel .favrad b { min-width: 5.5em; font-size: 13px; }
+.favpanel button[aria-pressed="true"] { background: var(--acc); color: #fff; border-color: var(--acc); }
 body:not(.p) .baraP { display: none; }
 body.p .arbete { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); }
 /* Sannolikhet: kartan sa stor som skarmen tillater (hogst ca 78 % av hojden), samma proportioner */
@@ -190,7 +198,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button>
 </div>
 
 <div class="kontroller">
@@ -236,23 +244,29 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
 
 <section class="hoger">
 <div id="vyP" hidden>
+  <div class="favpanel" id="favPanel">
+    <div class="favskylt" id="favSkylt">Förhämtat …</div>
+    <div class="favrad"><b>Byvind ≥</b><span id="favBy"></span></div>
+    <div class="favrad"><b>Sikt &lt;</b><span id="favSikt"></span></div>
+    <div class="favrad"><b>Molnbas &lt;</b><span id="favBas"></span></div>
+  </div>
   <div class="pkontroller">
-    <div class="falt"><label for="pKorningVal">Körning</label><select id="pKorningVal"></select></div>
-    <div class="falt"><label for="pParam">Parameter</label><select id="pParam"></select></div>
-    <div class="falt"><label for="pVisa">Visa</label><select id="pVisa" title="Sannolikhet över tröskeln, eller värdet självt: medel/högsta/lägsta av medlemmarna eller en enskild medlem"></select></div>
+    <div class="falt ejFav"><label for="pKorningVal">Körning</label><select id="pKorningVal"></select></div>
+    <div class="falt ejFav"><label for="pParam">Parameter</label><select id="pParam"></select></div>
+    <div class="falt ejFav"><label for="pVisa">Visa</label><select id="pVisa" title="Sannolikhet över tröskeln, eller värdet självt: medel/högsta/lägsta av medlemmarna eller en enskild medlem"></select></div>
     <div class="falt"><label for="pTrosk" id="pTroskEtikett">Tröskel</label><div class="rad"><input id="pTrosk" class="koord" inputmode="decimal"><span id="pEnhet" class="enhet"></span></div></div>
-    <div class="falt"><label>Snabbval</label><div class="chips" id="pChips"></div></div>
+    <div class="falt ejFav"><label>Snabbval</label><div class="chips" id="pChips"></div></div>
   </div>
   <div class="pkontroller">
     <div class="falt"><label for="pFran">Från</label><select id="pFran"></select></div>
     <div class="falt"><label for="pTill">Till</label><div class="rad"><select id="pTill"></select><button class="sek liten" id="pEnTimme" title="Sätt Till = Från (en enda timme)">= Från</button></div></div>
     <div class="falt"><label>Flytta perioden</label><div class="rad"><button class="sek liten" id="pBak" title="Bakåt">◀</button><button class="sek liten" id="pFram" title="Framåt">▶</button></div></div>
-    <div class="falt"><label>&nbsp;</label><label class="kryss"><input type="checkbox" id="pAuto" checked> Hämta automatiskt när jag stegar</label></div>
+    <div class="falt ejFav"><label>&nbsp;</label><label class="kryss"><input type="checkbox" id="pAuto" checked> Hämta automatiskt när jag stegar</label></div>
     <div class="falt"><label for="pSteg">Steg</label><select id="pSteg"><option value="1">1 h</option><option value="per">periodens längd</option><option value="3">3 h</option><option value="6">6 h</option><option value="12">12 h</option></select></div>
-    <div class="falt"><label for="pDt">Timmar att använda</label><select id="pDt"><option value="1">varje timme</option><option value="3">var 3:e timme</option><option value="6">var 6:e timme</option></select></div>
-    <div class="falt"><label for="pStorlek">Område</label><select id="pStorlek"><option value="75">75 km</option><option value="150" selected>150 km</option><option value="300">300 km</option><option value="600">600 km</option><option value="1000">1000 km</option><option value="sv">Sverige (färdigt, GitHub)</option></select></div>
-    <div class="falt"><label for="pUppl">Upplösning</label><select id="pUppl"><option value="1">2,5 km</option><option value="2" selected>5 km</option><option value="4">10 km</option><option value="8">20 km</option></select></div>
-    <button id="pHamta">Hämta fält</button><button id="pRest" class="sek" hidden title="Hämta hela ditt område från met.no (det som visas nu kom ur mellanserverns cache och täcker inte allt)">Hämta resten</button><button id="pStopp" class="sek" disabled>Stopp</button>
+    <div class="falt ejFav"><label for="pDt">Timmar att använda</label><select id="pDt"><option value="1">varje timme</option><option value="3">var 3:e timme</option><option value="6">var 6:e timme</option></select></div>
+    <div class="falt ejFav"><label for="pStorlek">Område</label><select id="pStorlek"><option value="75">75 km</option><option value="150" selected>150 km</option><option value="300">300 km</option><option value="600">600 km</option><option value="1000">1000 km</option><option value="sv">Hela förhämtade rutan (GitHub)</option></select></div>
+    <div class="falt ejFav"><label for="pUppl">Upplösning</label><select id="pUppl"><option value="1">2,5 km</option><option value="2" selected>5 km</option><option value="4">10 km</option><option value="8">20 km</option></select></div>
+    <button id="pHamta" class="ejFav">Hämta fält</button><button id="pRest" class="sek ejFav" hidden title="Hämta hela ditt område från met.no (det som visas nu kom ur mellanserverns cache och täcker inte allt)">Hämta resten</button><button id="pStopp" class="sek ejFav" disabled>Stopp</button>
   </div>
   <dl class="info">
     <dt>Körning</dt><dd id="pKorning">–</dd>
@@ -2288,6 +2302,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-1750"></script>
+<script src="sannolikhet.js?v=20261120-1900"></script>
 </body>
 </html>

@@ -223,7 +223,7 @@ const innehaller = (e, o) => e.dtg === o.dtg && e.v === o.v && e.s === o.s && e.
 // NYTT 20/11: "Sverige" = den forhamtade Sverigerutan (GitHub, se forhamta.py SV) - samma rektangel for alla
 // 20/11: utokad till hela Ostersjon (soderut till ca 54° N, Finska viken). Rutan tas fran GitHubs index.json
 // nar den finns (gamla korningar har den mindre rutan), annars SV_RUTA.
-const SV_RUTA = { y0: 112, y1: 808, x0: 312, x1: 744 };
+const SV_RUTA = { y0: 0, y1: 856, x0: 312, x1: 800 };   // 20/11 kvall: till MEPS sydkant (~51° N), hela Finland, Baltikum
 function svRektangel(s, B) { B = B || (SVIDX && SVIDX.y0 !== undefined ? SVIDX : SV_RUTA);
   return { y0: B.y0, y1: B.y0 + Math.floor((B.y1 - B.y0) / s) * s, x0: B.x0, x1: B.x0 + Math.floor((B.x1 - B.x0) / s) * s }; }
 function berakna() {
@@ -508,7 +508,7 @@ async function svFas(o, sakn) {
   if (!e) { e = { dtg: o.dtg, v: o.v, s: o.s, ...r, tider: [] }; P.index.push(e); }
   let antal = 0, kb = 0;
   for (const t of tider) {
-    status("Hämtar Sverigeöversikten från GitHub: +" + t + " h …");
+    status("Hämtar den förhämtade översikten från GitHub: +" + t + " h …");
     const d = await svFil(o.dtg, o.v, t); if (!d || d.length < ENS_MEDL * NY * NX) continue;
     kb += d.gzKb || 0;
     let arr = d;
@@ -536,7 +536,7 @@ async function svAuto() {
     if (nyckel === svAutoSenast) return; svAutoSenast = nyckel;
     const sakn = saknadeTimmar(o, lista); if (!sakn.length) return;
     const r = await svFas(o, sakn);
-    if (r.antal) { await probVisa(); ritaOmrade(); status("Hämtat från Sverigeöversikten (GitHub) – " + r.antal + " timmar, " + Math.round(r.kb || 0) + " kB, inget från met.no." +
+    if (r.antal) { await probVisa(); ritaOmrade(); status("Hämtat från den förhämtade översikten (GitHub) – " + r.antal + " timmar, " + Math.round(r.kb || 0) + " kB, inget från met.no." +
       (r.delvis ? " Den täcker " + Math.round(r.tackt * 100) + " % av ditt område – tryck Hämta fält för resten från met.no." : ""), ""); }
   } catch (e) {} finally { svAutoPagar = false; }
 }
@@ -560,11 +560,11 @@ async function probHamta(auto, utanSnabb) {
     if (sakn.length && pa.agg !== "summa") {
       const sv = await svFas(o, sakn);
       if (sv.antal) { sakn = saknadeTimmar(o, lista); kb += sv.kb; await probVisa(); ritaOmrade();
-        if (!sakn.length) { status("Klart: från den förhämtade Sverigeöversikten (GitHub, " + sv.antal + " timmar, " + (sv.kb / 1024).toFixed(1) + " MB, " + ((performance.now() - t0) / 1000).toFixed(0) + " s) – ingen hämtning från met.no."); return; } }
+        if (!sakn.length) { status("Klart: från den förhämtade översikten (GitHub, " + sv.antal + " timmar, " + (sv.kb / 1024).toFixed(1) + " MB, " + ((performance.now() - t0) / 1000).toFixed(0) + " s) – ingen hämtning från met.no."); return; } }
       // 20/11 kvall: delvis utanfor rutan -> visa det som finns och fraga (som snabbfasen). Galler aven om
       // rutan redan var laddad (autoladdningen) - forsta trycket fragar, Hamta resten gar till met.no.
       if (sv.delvis && !utanSnabb && SVIDX && sakn.every(t => SVIDX.tider.includes(t))) { visaRest = true; $("pRest").hidden = false;
-        status("Visar den förhämtade Sverigeöversikten (GitHub) – den täcker " + Math.round(sv.tackt * 100) + " % av ditt område. Flytta eller krympa ramen in i den gröna rutan, eller tryck Hämta resten för hela ditt område från met.no.", "");
+        status("Visar den förhämtade översikten (GitHub) – den täcker " + Math.round(sv.tackt * 100) + " % av ditt område. Flytta eller krympa ramen in i den gröna rutan, eller tryck Hämta resten för hela ditt område från met.no.", "");
         P.fragar = true; return; }
     }
     // snabbfasen: cachade omraden fran mellanservern (registret)
@@ -842,7 +842,9 @@ async function probVisa() {
   }
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa, visa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
-  if (!vis.length) { svAuto(); if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
+  if (!vis.length) { svAuto();
+    if (fav) { const mx = SVIDX && SVIDX.tider ? Math.max(...SVIDX.tider) : 36; status(b > mx ? "Förhämtat finns till +" + mx + " h – välj en tidigare period (eller använd fliken Sannolikhet)." : "Laddar från den förhämtade översikten …", ""); return; }
+    if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
   const utan = [...new Set(vis.flatMap(r => r.utan || []))].sort((x, y) => x - y);
   const utanText = utan.length ? " " + (utan.length === 1 ? "Medlem " + utan[0] + " saknar" : "Medlemmarna " + utan.join(", ") + " saknar") + " " + pa.namn.split(",")[0].toLowerCase() + " i datat och räknas inte (" + (ENS_MEDL - utan.length) + " medlemmar)." : "";
   if (/^m\d+$/.test(visa) && utan.includes(+visa.slice(1))) {
@@ -1089,7 +1091,7 @@ function meteoDragInit() {
 // Pagar redan en hamtning tas nasta steg nar den ar klar.
 let autoTimer = null;
 function autoHamta() {
-  if (!$("pAuto").checked) return;
+  if (!$("pAuto").checked || fav) return;   // Favoriter hamtar aldrig fran met.no
   clearTimeout(autoTimer); P.autoVantar = true;
   autoTimer = setTimeout(() => {
     if (P.upptagen) { P.autoIgen = true; return; }
@@ -1122,13 +1124,56 @@ function sattParam(behallTrosk) {
     b.addEventListener("click", () => { $("pTrosk").value = v; lagra("mt:pTrosk:" + $("pParam").value, String(v)); sattParam(true); probVisa(); }); c.append(b); }
 }
 function probOmradeAndrat() { P.fragar = false; ritaOmrade(); probVisa().then(() => { if (!P.varden && !P.upptagen) status("Tryck Hämta fält för att hämta området.", ""); }); }
+// NYTT 20/11 kvall: FAVORITER. Samma karta och data som sannolikhetsvyn (lage "p"), men last till den forhamtade
+// Sverigerutan (5 km, GitHub-korningen) med fardiga knappar. Inget hamtas fran met.no i den har fliken.
+// Sannolikhetsvyns egna val sparas nar man gar in och aterstalls nar man gar ut.
+const FAV_KNAPPAR = { by: [27, 32, 45], sikt: [5000, 3000, 2000, 1000], bas: [1200, 500, 400, 300, 200] };
+let fav = false, favSpar = null;
+const FAV_FALT = ["pKorningVal", "pParam", "pVisa", "pTrosk", "pStorlek", "pUppl", "pDt"];
+function favKnappar() {
+  for (const [v, id] of [["by", "favBy"], ["sikt", "favSikt"], ["bas", "favBas"]]) {
+    const box = $(id); box.textContent = "";
+    for (const g of FAV_KNAPPAR[v]) { const b = document.createElement("button"); b.className = "sek liten"; b.dataset.v = v; b.dataset.g = g;
+      b.textContent = g.toLocaleString("sv-SE") + " " + PPARAM[v].enhet; b.addEventListener("click", () => favVal(v, g)); box.appendChild(b); }
+  }
+}
+function favMarkera() { document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === $("pParam").value && +b.dataset.g === parseFloat($("pTrosk").value.replace(",", "."))))); }
+function favVal(v, g) {
+  const sel = $("pParam"); if (sel.value !== v) { sel.value = v; sel.dispatchEvent(new Event("change")); }
+  $("pTrosk").value = g; lagra("mt:pTrosk:" + v, String(g)); lagra("mt:favVal", v + ":" + g); sattParam(true); favMarkera(); probVisa();
+}
+async function favIn() {
+  favSpar = {}; for (const id of FAV_FALT) favSpar[id] = $(id).value;
+  const idx = await svIndex();
+  const sk = $("favSkylt");
+  if (!idx || !idx.dtg) { sk.textContent = "Den förhämtade översikten finns inte just nu – använd fliken Sannolikhet."; return; }
+  const kl = idx.skapad ? new Date(idx.skapad) : null;
+  sk.innerHTML = "<b>Förhämtat – laddas direkt, inget hämtas från met.no.</b> Byvind, sikt och molnbas ur MEPS-ensemblen (30 medlemmar), 5 km, +0 till +" + Math.max(...idx.tider) +
+    " h, för Sverige, Östersjön, Finland och Baltikum. Körning " + idx.dtg + (kl && !isNaN(kl) ? " (klar " + kl.getUTCHours().toString().padStart(2, "0") + ":" + kl.getUTCMinutes().toString().padStart(2, "0") + "Z)" : "") +
+    ". Välj en tröskel nedan eller skriv en egen i rutan Tröskel. Klicka på kartan för meteogram i en punkt.";
+  $("pStorlek").value = "sv"; $("pUppl").value = String(idx.s); $("pVisa").value = "sannolikhet"; $("pDt").value = "1";
+  if ([...$("pKorningVal").options].some(o => o.value === idx.dtg)) $("pKorningVal").value = idx.dtg;
+  bytKorning(idx.dtg);
+  const [v, g] = (lasa("mt:favVal") || "by:27").split(":");
+  if (idx.v.includes(v)) favVal(v, +g); else favVal("by", 27);
+  ritaOmrade(); probVisa();
+}
+function favUt() {
+  if (!favSpar) return;
+  for (const id of FAV_FALT) if (favSpar[id] !== undefined) $(id).value = favSpar[id];
+  const kv = $("pKorningVal").value; bytKorning(kv === "senaste" ? P.senast : kv);
+  favSpar = null; sattParam(true);
+}
 function bytLage(nytt) {
-  if (nytt !== lage && typeof visaTestskylt === "function") visaTestskylt();   // testskylt vid flikbyte (19/11 kvall)
-  lage = nytt; document.body.classList.toggle("p", nytt === "p");
-  $("flikTH").setAttribute("aria-selected", String(nytt === "th")); $("flikP").setAttribute("aria-selected", String(nytt === "p"));
+  if (nytt !== (fav ? "f" : lage) && typeof visaTestskylt === "function") visaTestskylt();   // testskylt vid flikbyte (19/11 kvall)
+  const varFav = fav; fav = nytt === "f"; if (fav) nytt = "p";
+  if (varFav && !fav) favUt();
+  lage = nytt; document.body.classList.toggle("p", nytt === "p"); document.body.classList.toggle("fav", fav);
+  $("flikTH").setAttribute("aria-selected", String(nytt === "th")); $("flikP").setAttribute("aria-selected", String(nytt === "p" && !fav)); $("flikF").setAttribute("aria-selected", String(fav));
   $("vyTH").hidden = nytt === "p"; $("vyP").hidden = nytt !== "p";
-  $("underrubrik").textContent = nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
-  lagra("mt:lageVy", nytt); $("kTips").hidden = true;
+  $("underrubrik").textContent = fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
+  lagra("mt:lageVy", fav ? "f" : nytt); $("kTips").hidden = true;
+  if (fav && !varFav) favIn();
   ritaMarkorer(); ritaOmrade(); probVisa();
   if (nytt === "p") { hamtaRegister().then(ritaOmrade); svIndex().then(() => { ritaOmrade(); probVisa(); }); }
 }
@@ -1232,7 +1277,10 @@ function bytLage(nytt) {
   setInterval(() => { if (lage === "p" && visaSnabb && !document.hidden) hamtaRegister().then(ritaOmrade); }, 60e3);
   $("visaOmr").addEventListener("click", e => { visaOmr = !visaOmr; lagra("mt:visaOmr", visaOmr ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaOmr)); ritaOmrade(); });
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
-  $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p"));
+  $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f"));
+  favKnappar(); $("pTrosk").addEventListener("input", favMarkera);
   try { await laddaIndex(); } catch (e) {}
-  if (lasa("mt:lageVy") === "p") bytLage("p");
+  // 20/11 kvall: nya besokare (inget sparat val) borjar i Favoriter
+  const forst = lasa("mt:lageVy");
+  if (forst === "p") bytLage("p"); else if (forst === "f" || !forst) bytLage("f");
 })();
