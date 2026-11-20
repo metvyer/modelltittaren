@@ -94,6 +94,12 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .flikar button { background: transparent; color: var(--dim); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 14px; font-weight: 600; }
 .flikar button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
 body.p .baraTH { display: none; }
+body.p #kM0 { display: none; }
+.m0rad { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
+.m0rad[hidden] { display: none; }
+.m0tid { min-width: 8.5em; text-align: center; font-weight: 600; }
+.m0forkl { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.m0forkl i { display: inline-block; width: 12px; height: 10px; margin-right: 3px; vertical-align: -1px; border-radius: 2px; }
 /* NYTT 20/11 kvall: Favoriter = sannolikhetsvyn lasd till den forhamtade rutan (5 km), med fardiga knappar */
 .favpanel { display: none; }
 body.fav .favpanel { display: block; border: 1px solid var(--mkhamt); border-radius: 8px; padding: 8px 10px; margin: 0 0 10px; }
@@ -105,7 +111,7 @@ body.fav .ejFav { display: none !important; }
 body:not(.p) .baraP { display: none; }
 body.p .arbete { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); }
 /* Sannolikhet: kartan sa stor som skarmen tillater (hogst ca 78 % av hojden), samma proportioner */
-body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
+body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }   /* 20/11 kvall: fyller rutan, se satVb */
 /* Tidslinje under kartan (sannolikhet) */
 .tidsrad { display: flex; gap: 6px; align-items: center; }
 .tidsrad button { min-width: 40px; font-size: 15px; }
@@ -221,6 +227,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
     <button class="sek liten" id="zHem" title="Visa hela MEPS-området">Hela</button>
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
+    <button class="sek liten baraTH" id="m0Falt" aria-pressed="false" title="Kartfält ur medlem 0 (det-körningen, samma som tid-höjd): nederbörd, medelvind, byvind eller molnbas för en vald timme, 600 × 600 km runt punkten, 5 km. Ett litet anrop per timme.">Kartfält m0</button>
     <button class="sek liten baraP" id="visaSnabb" aria-pressed="true" title="Gröna rutor = områden som redan finns i mellanserverns cache (någon har hämtat dem) – de hämtas på en sekund utan att fråga met.no">Snabba</button>
     <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
@@ -228,8 +235,13 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   </div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kProb"></g><g id="kOmr"></g><g id="kMark"></g>
+    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kOmr"></g><g id="kMark"></g>
   </svg>
+  <div class="baraTH m0rad" id="m0Rad" hidden>
+    <select id="m0Param"></select>
+    <button class="sek liten" id="m0Bak" title="En timme bakåt">◀</button><span id="m0Tid" class="m0tid"></span><button class="sek liten" id="m0Fram" title="En timme framåt">▶</button>
+    <span id="m0Forkl" class="m0forkl"></span><span id="m0Status" class="lagetips"></span>
+  </div>
   <div class="baraP tidsrad">
     <button class="sek" id="tBak" title="Bakåt (vänsterpil)">◀</button>
     <div class="tidsmitt"><div class="tidslinje" id="tidslinje" title="Klicka på en timme för att flytta perioden dit"></div><div class="tidsetiketter" id="tidsEtiketter"></div></div>
@@ -253,6 +265,7 @@ body.p #karta { width: min(100%, calc(78vh * 949 / 1069)); margin: 0 auto; }
   <div class="pkontroller">
     <div class="falt ejFav"><label for="pKorningVal">Körning</label><select id="pKorningVal"></select></div>
     <div class="falt ejFav"><label for="pParam">Parameter</label><select id="pParam"></select></div>
+    <div class="falt"><label for="pMedl">Medlemmar</label><select id="pMedl" title="Vilka ensemblemedlemmar som räknas. 0–14 är den senaste körningen, 15–29 är samma medlemmar ur körningen 3 h tidigare. Skiljer sig nya och gamla mycket har modellen hoppat mellan körningarna. Med 15 medlemmar går sannolikheten i steg om ca 7 %."><option value="alla">Alla 30</option><option value="nya">15 nya (0–14)</option><option value="gamla">15 gamla (15–29, förra körningen)</option></select></div>
     <div class="falt ejFav"><label for="pVisa">Visa</label><select id="pVisa" title="Sannolikhet över tröskeln, eller värdet självt: medel/högsta/lägsta av medlemmarna eller en enskild medlem"></select></div>
     <div class="falt"><label for="pTrosk" id="pTroskEtikett">Tröskel</label><div class="rad"><input id="pTrosk" class="koord" inputmode="decimal"><span id="pEnhet" class="enhet"></span></div></div>
     <div class="falt ejFav"><label>Snabbval</label><div class="chips" id="pChips"></div></div>
@@ -972,7 +985,9 @@ function tolkaMetar(raw) {
   let sikt = cavok ? 9999 : NaN; const s = raw.match(/\b(?:\d{5}|VRB\d{2})(?:G\d{2,3})?KT(?:\s+\d{3}V\d{3})?\s+(\d{4})(?:NDV)?\b/); if (s) sikt = +s[1];
   // temperatur: TT/TdTd (M = minus)
   const tt = raw.match(/\s(M?\d{2})\/(M?\d{2})?(?=\s)/), tc = tt ? parseInt(tt[1].replace("M", "-"), 10) : NaN;
-  return { lager, vv, inga: cavok || nsc, sikt, tc };
+  // 20/11 kvall: vind dddffGggKT (kt) for meteogrammet
+  const vd = raw.match(/\b(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?KT\b/), ff = vd ? +vd[2] : NaN, gg = vd && vd[3] ? +vd[3] : NaN;
+  return { lager, vv, inga: cavok || nsc, sikt, tc, ff, gg };
 }
 async function hamtaMetar(icao, timmar) {
   const k = icao + ":" + timmar, c = metarCache.get(k); if (c && Date.now() - c.t < METAR_TTL) return c.obs;
@@ -1253,6 +1268,7 @@ function rita() {
     }
   }
   ritaRisk(svg, ax, sk.botten + 8 + EXTRA + RADER.length * RAD_H + 6, nt, t0, c);
+  if (M0F.pa) setTimeout(m0Uppdatera, 0);
   // info
   const d0 = new Date(t0);
   $("iRuta").textContent = isFinite(M.glat) ? M.glat.toFixed(3) + "N " + M.glon.toFixed(3) + "E, " + avstand(M.lat, M.lon, M.glat, M.glon).toFixed(1) + " km från punkten, modellens markhöjd " + Math.round(M.terr) + " m (ruta y=" + M.iy + " x=" + M.ix + ")" : "–";
@@ -1261,6 +1277,91 @@ function rita() {
   if (M.vald) { kt.insertAdjacentHTML("beforeend", ' <span class="vald">– vald körning</span>'); }
   else if (M.ny) { kt.insertAdjacentHTML("beforeend", ' <span class="ny">– NY KÖRNING</span>'); }
 }
+// ===================================================================
+//  KARTFALT MEDLEM 0 (NYTT 20/11 kvall) - i tid-hojd: ett falt ur det-korningen for en vald timme,
+//  600 x 600 km runt punkten var 5:e km (rutan snappas till 8-rutorsgrid sa att Cloudflare-cachen traffar).
+// ===================================================================
+const M0P = {
+  nb:   { namn: "Nederbörd", var: "precipitation_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, konv: v => v },
+  vind: { namn: "Medelvind 10 m", var: "wind_speed", enh: "kt", klass: [10, 15, 20, 25, 30, 40], konv: v => v * KT },
+  by:   { namn: "Byvind", var: "wind_speed_of_gust", enh: "kt", klass: [20, 25, 32, 40, 50], konv: v => v * KT },
+  bas:  { namn: "Molnbas", var: "cloud_base_altitude", enh: "ft", klass: [1500, 1000, 500, 300, 200], lagre: true, konv: v => v * FOT },
+};
+const M0_FARG = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
+const M0_HALV = 120, M0_S = 2;   // 120 rutor at varje hall (300 km), var 2:a ruta (5 km)
+let M0F = { pa: lasa("mt:m0Falt") === "ja", v: M0P[lasa("mt:m0Param")] ? lasa("mt:m0Param") : "nb", t: null, nyckel: "", data: null, o: null, hamtar: false };
+const m0Cache = new Map();
+const m0Farger = v => M0_FARG.slice(M0_FARG.length - M0P[v].klass.length);
+function m0Omrade() {
+  if (!M || !isFinite(M.iy)) return null;
+  const sn = v => Math.round(v / 8) * 8, cy = sn(M.iy), cx = sn(M.ix);
+  const y0 = Math.max(0, cy - M0_HALV), y1 = Math.min(KY - 1 - ((Math.min(KY - 1, cy + M0_HALV) - y0) % M0_S), cy + M0_HALV);
+  const x0 = Math.max(0, cx - M0_HALV), x1 = Math.min(KX - 1 - ((Math.min(KX - 1, cx + M0_HALV) - x0) % M0_S), cx + M0_HALV);
+  const yy1 = y0 + Math.floor((y1 - y0) / M0_S) * M0_S, xx1 = x0 + Math.floor((x1 - x0) / M0_S) * M0_S;
+  return { y0, y1: yy1, x0, x1: xx1, s: M0_S, ny: (yy1 - y0) / M0_S + 1, nx: (xx1 - x0) / M0_S + 1 };
+}
+function m0TidText(t) { if (!M || !M.t0) return "+" + t; const d = new Date(M.t0 + t * 3600e3); return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z (+" + t + ")"; }
+async function m0Uppdatera() {
+  const g = $("kM0"), rad = $("m0Rad");
+  rad.hidden = !M0F.pa; if (!M0F.pa) { g.textContent = ""; return; }
+  const st = $("m0Status");
+  if (!M || !M.dtg || !M.stat) { g.textContent = ""; st.textContent = "Välj och hämta en punkt först."; $("m0Tid").textContent = ""; return; }
+  if (M0F.t === null) { const nu = Math.round((Date.now() - (M.t0 || Date.now())) / 3600e3); M0F.t = Math.max(0, Math.min(M.nt - 1, nu)); }
+  M0F.t = Math.max(0, Math.min(M.nt - 1, M0F.t)); $("m0Tid").textContent = m0TidText(M0F.t);
+  const o = m0Omrade(); if (!o) return;
+  const pa = M0P[M0F.v], nyckel = [M.dtg, M0F.v, M0F.t, o.y0, o.y1, o.x0, o.x1].join(":");
+  m0Forklaring();
+  if (nyckel === M0F.nyckel && M0F.data) { m0Rita(); return; }
+  if (m0Cache.has(nyckel)) { M0F.nyckel = nyckel; M0F.data = m0Cache.get(nyckel); M0F.o = o; m0Rita(); st.textContent = ""; return; }
+  if (M0F.hamtar) return; M0F.hamtar = true; st.textContent = "Hämtar " + pa.namn.toLowerCase() + " …";
+  try {
+    const t0 = pa.diff ? Math.max(0, M0F.t - 1) : M0F.t, rum = "[" + o.y0 + ":" + o.s + ":" + o.y1 + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]";
+    const res = await hamta(BAS + FIL(M.dtg) + ".ascii?" + enc(pa.var + "[" + t0 + ":1:" + M0F.t + "][0]" + rum));
+    if (res.st !== 200) throw new Error("svar " + res.st);
+    const raa = tolka(res.txt)[pa.var], n = o.ny * o.nx; if (!raa || raa.length < n) throw new Error("oväntat svar");
+    const d = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      if (pa.diff) { const a = raa[i], b = raa[raa.length > n ? n + i : i]; d[i] = M0F.t === 0 ? 0 : isFinite(a) && isFinite(b) ? Math.max(0, b - a) : NaN; }
+      else d[i] = isFinite(raa[i]) ? pa.konv(raa[i]) : NaN;
+    }
+    m0Cache.set(nyckel, d); if (m0Cache.size > 40) m0Cache.delete(m0Cache.keys().next().value);
+    M0F.nyckel = nyckel; M0F.data = d; M0F.o = o; st.textContent = "";
+  } catch (e) { st.textContent = "Kunde inte hämta (" + e.message + ")."; }
+  finally { M0F.hamtar = false; }
+  m0Rita();
+  // har anvandaren hunnit stega under hamtningen: ta den nya timmen
+  const o2 = m0Omrade(); if (o2 && [M.dtg, M0F.v, M0F.t, o2.y0, o2.y1, o2.x0, o2.x1].join(":") !== M0F.nyckel) m0Uppdatera();
+}
+function m0Rita() {
+  const g = $("kM0"); g.textContent = ""; const o = M0F.o, d = M0F.data; if (!M0F.pa || !o || !d) return;
+  const pa = M0P[M0F.v], K = pa.klass, F = m0Farger(M0F.v).map(c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
+  const cv = document.createElement("canvas"); cv.width = o.nx; cv.height = o.ny;
+  const cx = cv.getContext("2d"), img = cx.createImageData(o.nx, o.ny), px = img.data;
+  for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
+    const w = d[y * o.nx + x]; if (!isFinite(w)) continue; let k = -1;
+    for (let i = 0; i < K.length; i++) if (pa.lagre ? w < K[i] : w >= K[i]) k = i;
+    if (k < 0) continue;
+    const i = ((o.ny - 1 - y) * o.nx + x) * 4; px[i] = F[k][0]; px[i + 1] = F[k][1]; px[i + 2] = F[k][2]; px[i + 3] = 215;
+  }
+  cx.putImageData(img, 0, 0);
+  g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
+    preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
+  g.appendChild(el("rect", { x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s, fill: "none", stroke: "var(--dim)", "stroke-width": 1, "stroke-dasharray": "4 3", "vector-effect": "non-scaling-stroke" }));
+}
+function m0Forklaring() {
+  const f = $("m0Forkl"), pa = M0P[M0F.v], fa = m0Farger(M0F.v); f.textContent = "";
+  pa.klass.forEach((k, i) => { const sp = document.createElement("span"), ii = document.createElement("i"); ii.style.background = fa[i];
+    sp.append(ii, (pa.lagre ? "< " : "≥ ") + k.toLocaleString("sv-SE") + " " + pa.enh); f.appendChild(sp); });
+}
+function m0Tips(e) {
+  const o = M0F.o, d = M0F.data; if (!o || !d) return false;
+  const p = kartPunkt(e), fy = KY - 1 - p.y, y = Math.round((fy - o.y0) / o.s), x = Math.round((p.x - o.x0) / o.s);
+  if (y < 0 || y >= o.ny || x < 0 || x >= o.nx) return false;
+  const w = d[y * o.nx + x], pa = M0P[M0F.v];
+  visaKTips(pa.namn + " (medlem 0) " + m0TidText(M0F.t) + ": " + (isFinite(w) ? (pa.enh === "ft" ? Math.round(w) : w.toFixed(1).replace(".", ",")) + " " + pa.enh : M0F.v === "bas" ? "inga moln" : "–"), e.clientX + 14, e.clientY + 14);
+  return true;
+}
+
 
 // ===================================================================
 //  RISKPANEL (NYTT 20/11) - under tid-hojd, staplar = sannolikhet per timme (andel av ensemblens medlemmar)
@@ -1357,7 +1458,7 @@ function ritaRisk(svg, ax, y0, nt, t0, c) {
   if (saknas && !riskHamtar && !RISKD.fel) setTimeout(riskHamta, 0);
   ax.appendChild(el("text", { x: 4, y: y0 + 12, "font-size": 9.5, "font-weight": 700, fill: c("--dim") }, "Risk %"));
   svg.appendChild(el("text", { x: 4, y: y0 + 12, "font-size": 10, fill: c("--dim") }, saknas ? (RISKD.fel ? "Riskpanelen: " + RISKD.fel : "Riskpanelen hämtas …") :
-    "Sannolikhet = andel av ensemblens medlemmar (" + RISKD.ensDtg + "). Streckad linje = 50 %. Håll musen över en stapel."));
+    "Sannolikhet = andel av ensemblens medlemmar (" + RISKD.ensDtg + ", " + ({ alla: "alla 30", nya: "15 nya", gamla: "15 gamla" }[$("pMedl").value] || "alla 30") + " – välj under Sannolikhet). Streckad linje = 50 %. Håll musen över en stapel."));
   const offs = !saknas ? Math.round((dtgDatum(RISKD.ensDtg).getTime() - t0) / 3600e3) : 0;   // ensemblens +0 i tid-hojds timmar
   const lon = isFinite(M.glon) ? M.glon : M.lon, th = LCC.n * (lon - 15) * LCC.rad, cs = Math.cos(th), sn = Math.sin(th);
   rader.forEach((r, i) => {
@@ -1375,6 +1476,7 @@ function ritaRisk(svg, ax, y0, nt, t0, c) {
       const te = t - offs; if (te < 0 || te >= ENS_TIDER) continue;
       let n = 0, j = 0;
       for (let m = 0; m < NM; m++) {
+        if (typeof iUrval === "function" && !iUrval(m)) continue;   // 20/11 kvall: medlemsurvalet (alla / 15 nya / 15 gamla)
         let v;
         if (r.k === "sv") {
           const g = D.by[te * NM + m], u = D.u10[te * NM + m], w = D.v10[te * NM + m]; if (!isFinite(g) || !isFinite(u) || !isFinite(w)) continue;
@@ -1530,7 +1632,7 @@ async function oppnaSkewT(t, rullaTill) {
   if (!M || !M.stat) return;
   const nyOppnad = $("skewRuta").hidden;
   if (SKZ.M !== M) { SKZ.M = M; SKZ.pB = 0; }   // ny punkt/korning -> utgangslaget
-  skewT = Math.max(0, Math.min(M.nt - 1, t)); $("skewRuta").hidden = false; rita();
+  skewT = Math.max(0, Math.min(M.nt - 1, t)); $("skewRuta").hidden = false; if (M0F.pa) M0F.t = skewT; rita();
   if (nyOppnad || rullaTill) setTimeout(() => $("skewRuta").scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
   ritaSkewT();                                  // det som finns direkt
   const m = M, tt = skewT;
@@ -2025,14 +2127,18 @@ function hamtStatus(dtg, iy, ix) {
   if (!lasa(k + "har")) return 0;
   return +(lasa(k + "klar") || 0) >= +$("topp").value ? 2 : 1;
 }
+// 20/11 kvall: viewBox far samma form som kartrutan pa skarmen. Helt utzoomat syns hela MEPS-omradet (med kanter
+// om rutan har annan form), inzoomat fyller kartan hela rutan i stallet for att lamna vitt pa sidorna.
+function kartAspekt() { const r = $("karta").getBoundingClientRect(); return r.width > 20 && r.height > 20 ? r.height / r.width : KY / KX; }
+const kartMaxBredd = () => Math.max(KX, KY / kartAspekt());
 function satVb(x, y, w) {
-  w = Math.min(KX, Math.max(MIN_BREDD, w)); const h = w * KY / KX;
-  vb = { x: Math.min(KX - w, Math.max(0, x)), y: Math.min(KY - h, Math.max(0, y)), w, h };
+  const a = kartAspekt(); w = Math.min(kartMaxBredd(), Math.max(MIN_BREDD, w)); const h = w * a;
+  vb = { x: w >= KX ? (KX - w) / 2 : Math.min(KX - w, Math.max(0, x)), y: h >= KY ? (KY - h) / 2 : Math.min(KY - h, Math.max(0, y)), w, h };
   $("karta").setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h); ritaMarkorer(); if (typeof skalaIsoEtiketter === "function") skalaIsoEtiketter();
 }
 function zooma(f, cx, cy) {
   if (cx === undefined) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
-  const w = Math.min(KX, Math.max(MIN_BREDD, vb.w * f)), q = w / vb.w;
+  const w = Math.min(kartMaxBredd(), Math.max(MIN_BREDD, vb.w * f)), q = w / vb.w;
   satVb(cx - (cx - vb.x) * q, cy - (cy - vb.y) * q, w);
 }
 function kartPunkt(ev) {
@@ -2153,7 +2259,7 @@ function startaKarta() {
   svg.addEventListener("pointerup", slut); svg.addEventListener("pointercancel", slut);
   svg.addEventListener("pointerleave", () => { if (!pek.size) $("kartPos").textContent = ""; $("kTips").hidden = true; });
   $("zIn").addEventListener("click", () => zooma(0.67)); $("zUt").addEventListener("click", () => zooma(1.5));
-  $("zHem").addEventListener("click", () => satVb(0, 0, KX));
+  $("zHem").addEventListener("click", () => satVb(0, 0, 1e9));
   $("visaFlyg").setAttribute("aria-pressed", String(visaFlyg));
   $("visaFlyg").addEventListener("click", e => { visaFlyg = !visaFlyg; lagra("mt:visaFlyg", visaFlyg ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaFlyg)); ritaMarkorer(); });
   let skift = false;
@@ -2169,12 +2275,12 @@ function startaKarta() {
   addEventListener("keydown", e => { if (e.key === "Shift") { skift = true; friKlass(); } });
   addEventListener("keyup", e => { if (e.key === "Shift") { skift = false; friKlass(); } });
   addEventListener("blur", () => { skift = false; friKlass(); });
-  if (window.ResizeObserver) new ResizeObserver(() => ritaMarkorer()).observe(svg);
+  if (window.ResizeObserver) new ResizeObserver(() => satVb(vb.x, vb.y, vb.w)).observe(svg);   // ny form pa rutan -> ny viewBox
   satVb(250, 240, 610);   // start: hela Sverige
 }
 let friPunkt = false;
-function visaKTips(text, x, y) {
-  const t = $("kTips"); t.textContent = text; t.hidden = false;
+function visaKTips(text, x, y, html) {   // html = true: texten ar HTML (bara egen text, aldrig observerat innehall)
+  const t = $("kTips"); if (html) t.innerHTML = text; else t.textContent = text; t.hidden = false;
   const w = t.offsetWidth, h = t.offsetHeight;
   if (x + w > innerWidth - 8) x = innerWidth - 8 - w; if (y + h > innerHeight - 8) y = y - h - 30;
   t.style.left = Math.max(8, x) + "px"; t.style.top = Math.max(8, y) + "px";
@@ -2183,6 +2289,7 @@ function visaKTips(text, x, y) {
 function kartTips(e) {
   const mk = e.target && e.target.closest ? e.target.closest(".mk") : null;
   if (!mk && lage === "p" && e.pointerType !== "touch") { probTips(e); return; }
+  if (!mk && lage === "th" && M0F.pa && e.pointerType !== "touch" && !friPunkt && m0Tips(e)) return;
   if (!mk || friPunkt || e.shiftKey || e.pointerType === "touch") { $("kTips").hidden = true; return; }
   visaKTips(mk.dataset.tips, e.clientX + 14, e.clientY + 14);
 }
@@ -2240,6 +2347,14 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
   $("lNiv").setAttribute("aria-pressed", String(visaNiv));
   $("lIso").setAttribute("aria-pressed", String(visaIsoT));
+  // NYTT 20/11 kvall: kartfalt medlem 0
+  for (const k in M0P) $("m0Param").add(new Option(M0P[k].namn + " (" + M0P[k].enh + ")", k));
+  $("m0Param").value = M0F.v; $("m0Falt").setAttribute("aria-pressed", String(M0F.pa));
+  $("m0Falt").addEventListener("click", e => { M0F.pa = !M0F.pa; lagra("mt:m0Falt", M0F.pa ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(M0F.pa)); m0Uppdatera(); });
+  $("m0Param").addEventListener("change", () => { M0F.v = $("m0Param").value; lagra("mt:m0Param", M0F.v); m0Uppdatera(); });
+  $("m0Bak").addEventListener("click", () => { if (M0F.t !== null) M0F.t--; m0Uppdatera(); });
+  $("m0Fram").addEventListener("click", () => { if (M0F.t !== null) M0F.t++; m0Uppdatera(); });
+  m0Uppdatera();
   // NYTT 20/11: riskpanel
   $("lRisk").setAttribute("aria-pressed", String(RISK.pa)); ritaRiskInst();
   $("lRisk").addEventListener("click", e => { RISK.pa = !RISK.pa; sparaRisk(); e.currentTarget.setAttribute("aria-pressed", String(RISK.pa)); RISKD.fel = ""; ritaRiskInst(); if (M && M.stat) rita(); });
@@ -2302,6 +2417,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-1900"></script>
+<script src="sannolikhet.js?v=20261120-1915"></script>
 </body>
 </html>

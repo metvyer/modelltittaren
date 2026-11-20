@@ -84,11 +84,22 @@ const VKLASS = {
 const VFARG_ALLA = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
 const vfarg = v => VFARG_ALLA.slice(VFARG_ALLA.length - VKLASS[v].length);   // farger for parameterns klasser (de morkaste sist)
 const visaLage = () => ($("pVisa") && $("pVisa").value) || "sannolikhet";
+// NYTT 20/11 kvall: vilka medlemmar som raknas - alla 30, de 15 nya (0-14 = senaste korningen) eller de 15 gamla
+// (15-29 = korningen 3 h tidigare). Galler kartan, tipsrutan, meteogrammet och riskpanelen.
+const MEDL_URVAL = { alla: [...Array(30).keys()], nya: [...Array(15).keys()], gamla: [...Array(15).keys()].map(m => m + 15) };
+const medlemmar = () => MEDL_URVAL[($("pMedl") && $("pMedl").value) || "alla"] || MEDL_URVAL.alla;
+const iUrval = m => { const u = ($("pMedl") && $("pMedl").value) || "alla"; return u === "alla" || (u === "nya" ? m < 15 : m >= 15); };
+// "medlem 7 i 12Z" - medlem m i den eftersläpande filen dtg: 0-14 = dtg, 15-29 = dtg - 3 h (medlem m-15)
+function medlemText(m, dtg) {
+  if (!dtg) return "medl. " + m;
+  const d = new Date(dtgDatum(dtg).getTime() - (m >= 15 ? 3 * 3600e3 : 0));
+  return p2(d.getUTCHours()) + "Z medl. " + (m >= 15 ? m - 15 : m);
+}
 // Varde i punkten p for vald visning, eller NaN
 function visaVarde(agg, n, p, visa) {
   if (/^m\d+$/.test(visa)) return agg[+visa.slice(1) * n + p];
   let s = 0, c = 0, mx = -Infinity, mn = Infinity;
-  for (let m = 0; m < ENS_MEDL; m++) { const w = agg[m * n + p]; if (!isFinite(w)) continue; s += w; c++; if (w > mx) mx = w; if (w < mn) mn = w; }
+  for (let m = 0; m < ENS_MEDL; m++) { if (!iUrval(m)) continue; const w = agg[m * n + p]; if (!isFinite(w)) continue; s += w; c++; if (w > mx) mx = w; if (w < mn) mn = w; }
   if (!c) return NaN;
   return visa === "medel" ? s / c : visa === "max" ? mx : mn;
 }
@@ -264,8 +275,8 @@ function ritaOmrade() {
 // Zooma kartan sa att omradet syns med lite marginal (bara om det ar litet i bild eller utanfor)
 function zoomaTillOmrade(o) {
   const w = (o.x1 - o.x0 + o.s) * 1.8, h = (o.y1 - o.y0 + o.s) * 1.8, cx = (o.x0 + o.x1) / 2, cy = KY - 1 - (o.y0 + o.y1) / 2;
-  const bredd = Math.max(w, h * KX / KY), utanfor = cx < vb.x || cx > vb.x + vb.w || cy < vb.y || cy > vb.y + vb.h;
-  if (utanfor || bredd < vb.w * 0.5) satVb(cx - bredd / 2, cy - bredd * KY / KX / 2, bredd);
+  const asp = typeof kartAspekt === "function" ? kartAspekt() : KY / KX, bredd = Math.max(w, h / asp), utanfor = cx < vb.x || cx > vb.x + vb.w || cy < vb.y || cy > vb.y + vb.h;
+  if (utanfor || bredd < vb.w * 0.5) satVb(cx - bredd / 2, cy - bredd * asp / 2, bredd);
 }
 
 // ---------- Korning ----------
@@ -748,7 +759,8 @@ async function beraknaOmrade(e, pa, a, b, fran, trosk, lista) {
   // en molnfri period (molnbas saknas for nastan alla) inte tolkas som "data saknas".
   const harData = []; for (let m = 0; m < ENS_MEDL; m++) { let h = false; for (let p = 0; p < n; p++) if (isFinite(agg[m * n + p])) { h = true; break; } harData.push(h); }
   const antHar = harData.filter(Boolean).length, utan = antHar >= 0.8 * (ENS_MEDL - 1) ? harData.map((h, m) => h ? -1 : m).filter(m => m >= 0) : [];
-  const nAnv = ENS_MEDL - utan.length, ute = new Set(utan);
+  const ute = new Set(utan); for (let m = 0; m < ENS_MEDL; m++) if (!iUrval(m)) ute.add(m);   // 20/11 kvall: medlemsurval
+  const nAnv = ENS_MEDL - ute.size;
   const prob = new Float32Array(n), ok = w => pa.villkor === "≥" ? w >= trosk : w < trosk;
   for (let p = 0; p < n; p++) { let c = 0; for (let m = 0; m < ENS_MEDL; m++) { if (ute.has(m)) continue; const w = agg[m * n + p]; if (isFinite(w) && ok(w)) c++; } prob[p] = c / nAnv; }
   return { o, agg, prob, utan, nAnv };
@@ -904,6 +916,10 @@ function ritaPForklaring() {
   PKLASS.forEach(([g, c], i) => { const n = PKLASS[i + 1], sp = document.createElement("span"), r = document.createElement("i");
     r.className = "pruta"; r.style.background = c; sp.append(r, n ? g + "–" + n[0] + " %" : "≥ " + g + " %"); f.append(sp); });
 }
+const MMM_FARG = { min: "#2563eb", max: "#dc2626" };
+function mmmHtml(mn, md, mx, rund, enhet) {
+  return '<span style="color:' + MMM_FARG.min + '">min ' + rund(mn) + '</span> · <b>median ' + rund(md) + '</b> · <span style="color:' + MMM_FARG.max + '">max ' + rund(mx) + "</span> " + enhet;
+}
 function median(a) { const s = [...a].sort((x, y) => x - y); return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2; }
 function probTips(e) {
   const V = P.varden; if (!V) { $("kTips").hidden = true; return; }
@@ -911,16 +927,20 @@ function probTips(e) {
   for (const r of V.vis) {
     const o = r.o, y = Math.round((fy - o.y0) / o.s), x = Math.round((p.x - o.x0) / o.s);
     if (y < 0 || y >= o.ny || x < 0 || x >= o.nx) continue;
-    const i = y * o.nx + x, n = o.ny * o.nx, med = [];
-    for (let m = 0; m < ENS_MEDL; m++) { const w = r.agg[m * n + i]; if (isFinite(w)) med.push(w); }
+    const i = y * o.nx + x, n = o.ny * o.nx, med = [], mm = [];
+    for (let m = 0; m < ENS_MEDL; m++) { if (!iUrval(m)) continue; const w = r.agg[m * n + i]; if (isFinite(w)) { med.push(w); mm.push(m); } }
     const ll = franRuta(o.x0 + x * o.s, o.y0 + y * o.s), plats = "\n" + ll.lat.toFixed(2) + "N " + ll.lon.toFixed(2) + "E (rutnät " + (o.s * 2.5).toLocaleString("sv-SE") + " km)";
     if (!med.length) { visaKTips("Ingen medlem har värde här (t.ex. inget moln)" + plats, e.clientX + 14, e.clientY + 14); return; }
     const rund = v => V.pa.enhet === "m" || V.pa.enhet === "ft" ? Math.round(v / 10) * 10 : v.toFixed(1);
     const aggNamn = { max: "högsta", min: "lägsta", summa: "summa" }[V.pa.agg];
     const vRad = V.visa !== "sannolikhet" && r.val ? visaNamn(V.visa) + ": " + (isFinite(r.val[i]) ? rund(r.val[i]) + " " + V.pa.enhet : "inget värde") + "\n" : "";
-    visaKTips(vRad + "Sannolikhet " + Math.round(r.prob[i] * 100) + " % (" + Math.round(r.prob[i] * (r.nAnv || ENS_MEDL)) + " av " + (r.nAnv || ENS_MEDL) + ")\n" +
-      V.pa.namn.split(",")[0] + ", " + aggNamn + " i perioden per medlem:\nmin " + rund(Math.min(...med)) + " · median " + rund(median(med)) + " · max " + rund(Math.max(...med)) + " " + V.pa.enhet +
-      (med.length < ENS_MEDL ? "\n(" + (ENS_MEDL - med.length) + " medlemmar utan värde)" : "") + plats, e.clientX + 14, e.clientY + 14);
+    // 20/11 kvall: min (bla), median (fet), max (rod) + vilken korning/medlem som ger min och max
+    const iMax = med.indexOf(Math.max(...med)), iMin = med.indexOf(Math.min(...med)), urv = medlemmar().length;
+    const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    visaKTips(esc(vRad) + "Sannolikhet " + Math.round(r.prob[i] * 100) + " % (" + Math.round(r.prob[i] * (r.nAnv || urv)) + " av " + (r.nAnv || urv) + ")\n" +
+      esc(V.pa.namn.split(",")[0]) + ", " + aggNamn + " i perioden per medlem:\n" + mmmHtml(med[iMin], median(med), med[iMax], rund, V.pa.enhet) +
+      "\n<span class=\"dim\">max " + medlemText(mm[iMax], P.dtg) + " · min " + medlemText(mm[iMin], P.dtg) + "</span>" +
+      (med.length < urv ? "\n(" + (urv - med.length) + " medlemmar utan värde)" : "") + esc(plats), e.clientX + 14, e.clientY + 14, true);
     return;
   }
   $("kTips").hidden = true;
@@ -966,6 +986,13 @@ async function visaMeteogram() {
   if (!P.meteo || P.meteo.dtg !== dtg) P.meteoStart = 0;   // ny korning -> ackumuleringen borjar om fran +0
   P.meteo = { dtg, v, iy: r.iy, ix: r.ix, d, lat, lon };
   ritaMeteogram();
+  // NYTT 20/11 kvall: vindriktning varje timme (byvind) och METAR-observationer (flygplatser) - ritas nar de kommit
+  const M1 = P.meteo;
+  if (v === "by") try { M1.u = await meteoHamta(dtg, "u10", r.iy, r.ix); M1.w = await meteoHamta(dtg, "v10", r.iy, r.ix); if (P.meteo === M1) ritaMeteogram(); } catch (e) {}
+  if (["by", "sikt", "bas", "t2"].includes(v) && typeof narmasteICAO === "function") try {
+    const icao = narmasteICAO(lat, lon), tim = Math.min(72, Math.ceil((Date.now() - dtgDatum(dtg).getTime()) / 3600e3) + 1);
+    if (icao && tim > 0) { const obs = await hamtaMetar(icao, tim); if (obs && P.meteo === M1) { M1.icao = icao; M1.obs = obs; ritaMeteogram(); } }
+  } catch (e) {}
 }
 // NYTT 19/11 em: nederbord i meteogrammet kan visas som
 //   ack = ackumulerat fran en starttimme (dra startlinjen, klicka pa tidsaxeln, dubbelklick = +0)
@@ -982,7 +1009,7 @@ function ritaMeteogram() {
   $("pMeteoNbRad").hidden = !nb;
   const lage = nb ? nbLage : null;
   const start = Math.min(nt - 2, Math.max(0, P.meteoStart || 0));
-  const raa = (t, m) => { const w = M0.d[t * nm + m]; return isFinite(w) ? w : NaN; };
+  const raa = (t, m) => { if (!iUrval(m)) return NaN; const w = M0.d[t * nm + m]; return isFinite(w) ? w : NaN; };   // 20/11 kvall: medlemsurval
   const bas = dtgDatum(M0.dtg).getTime(), timUTC = t => new Date(bas + t * 3600e3).getUTCHours();
   // Staplar: kolumnerna t0..t1 och ett varde per medlem
   const poster = [];
@@ -1003,7 +1030,7 @@ function ritaMeteogram() {
   const steg = (() => { const r = spann / 5, e = 10 ** Math.floor(Math.log10(r)); for (const f of [1, 2, 2.5, 5, 10]) if (f * e >= r) return f * e; })();
   ymax = Math.ceil((tak || Math.max(1, ymax * 1.05)) / steg) * steg; ymin = Math.floor(ymin * 1.05 / steg) * steg;
   const nSteg = Math.round((ymax - ymin) / steg);
-  const KOL = 14, VM = 46, H = 210, TOPP = 10, UNDER = 34, B = nt * KOL, W = VM + B + 8;
+  const harVind = M0.v === "by" && M0.u && M0.w, KOL = 14, VM = 46, H = 210, TOPP = 10, UNDER = 34 + (harVind ? 22 : 0), B = nt * KOL, W = VM + B + 8;
   meteoGeo = { KOL, VM, nt, TOPP, H };
   const y = w => TOPP + H - (Math.max(ymin, Math.min(w, ymax)) - ymin) / (ymax - ymin) * H;
   const svg = $("pMeteoSvg"); svg.textContent = ""; svg.setAttribute("width", W); svg.setAttribute("height", TOPP + H + UNDER);
@@ -1035,10 +1062,17 @@ function ritaMeteogram() {
     g("rect", { x: x - bb * 0.18, y: y(q90), width: bb * 0.36, height: Math.max(1, y(q10) - y(q90)), fill: "#a9c6ec" });
     g("rect", { x: x - bb * 0.38, y: y(q75), width: bb * 0.76, height: Math.max(1, y(q25) - y(q75)), fill: lada });
     g("line", { x1: x - bb * 0.38, x2: x + bb * 0.38, y1: y(q50), y2: y(q50), stroke: "#1b3a6b", "stroke-width": 1.6 });
-    const ti = el("title"); ti.textContent = periodText(p) + "\nmin " + s[0].toFixed(1) + " · 10 % " + q10.toFixed(1) + " · 25 % " + q25.toFixed(1) + " · median " + q50.toFixed(1) + " · 75 % " + q75.toFixed(1) + " · 90 % " + q90.toFixed(1) + " · max " + s[s.length - 1].toFixed(1) + " " + pa.enhet +
+    // 20/11 kvall: egen tipsruta med farger (min bla, median fet, max rod) och vilken korning/medlem som ger min och max
+    let mMin = -1, mMax = -1; for (let m = 0; m < nm; m++) { const w = p.v[m]; if (!isFinite(w)) continue; if (mMin < 0 || w < p.v[mMin]) mMin = m; if (mMax < 0 || w > p.v[mMax]) mMax = m; }
+    const f1 = w => w.toFixed(1).replace(".", ",");
+    const html = periodText(p) + "\n" + mmmHtml(s[0], q50, s[s.length - 1], f1, pa.enhet) + "\n<span class=\"dim\">10 % " + f1(q10) + " · 25 % " + f1(q25) + " · 75 % " + f1(q75) + " · 90 % " + f1(q90) + "</span>" +
+      "\n<span class=\"dim\">max " + medlemText(mMax, M0.dtg) + " · min " + medlemText(mMin, M0.dtg) + "</span>" +
       (visaTrosk ? "\n" + s.filter(w => pa.villkor === "≥" ? w >= trosk : w < trosk).length + " av " + s.length + " " + pa.villkor + " " + trosk + " " + pa.enhet : "") +
       (nb ? "\n" + s.filter(w => w >= 0.1).length + " av " + s.length + " medlemmar ≥ 0,1 mm" : "");
-    const hit = el("rect", { x: VM + p.t0 * KOL, y: TOPP, width: bb, height: H, fill: "transparent" }); hit.appendChild(ti); svg.appendChild(hit);
+    const hit = el("rect", { x: VM + p.t0 * KOL, y: TOPP, width: bb, height: H, fill: "transparent" });
+    hit.addEventListener("mousemove", ev => visaKTips(html, ev.clientX + 14, ev.clientY + 14, true));
+    hit.addEventListener("mouseleave", () => { $("kTips").hidden = true; });
+    svg.appendChild(hit);
   }
   // linjer: medlem 0 (rod) och ev. vald medlem (svart)
   const linje = (m, farg, br, streck) => { let dd = ""; for (const p of poster) { const w = p.v[m]; if (isFinite(w)) dd += (dd ? "L" : "M") + mitt(p) + " " + y(w); }
@@ -1047,6 +1081,38 @@ function ritaMeteogram() {
   if (vm !== null && vm !== 0) linje(vm, c("--fg"), 1.4, "4 2");
   if (visaTrosk) { g("line", { x1: VM, x2: VM + B, y1: y(trosk), y2: y(trosk), stroke: "#f97316", "stroke-width": 1.4, "stroke-dasharray": "6 3" });
     g("text", { x: VM + B - 2, y: y(trosk) - 3, "font-size": 9.5, "text-anchor": "end", fill: "#c2410c" }, "tröskel " + trosk.toLocaleString("sv-SE") + " " + pa.enhet); }
+  // NYTT 20/11 kvall: METAR-observationer (svarta prickar) for passerade timmar, narmaste flygplats
+  let obsAntal = 0;
+  if (M0.obs && !nb) for (const o of M0.obs) {
+    const h = (o.t - bas) / 3600e3; if (h < -0.5 || h > nt - 0.5) continue;
+    let w = NaN, ihalig = false, txt = "";
+    if (M0.v === "by") { if (isFinite(o.gg)) w = o.gg; else if (isFinite(o.ff)) { w = o.ff; ihalig = true; txt = " (ingen by – medelvind)"; } }
+    else if (M0.v === "sikt") w = isFinite(o.sikt) ? Math.min(o.sikt >= 9999 ? 10000 : o.sikt, 10000) : NaN;
+    else if (M0.v === "bas") { const l = o.lager.filter(x => x.kat >= 2).map(x => x.ft); if (o.vv !== null) l.push(o.vv); w = l.length ? Math.min(...l) : o.inga || o.lager.length ? (tak || 5000) : NaN; if (!l.length && isFinite(w)) txt = " (inga moln SCT+)"; }
+    else if (M0.v === "t2") w = o.tc;
+    if (!isFinite(w)) continue; obsAntal++;
+    const cx_ = VM + (h + 0.5) * KOL, pt = el("circle", { cx: cx_, cy: y(w), r: 3.2, fill: ihalig ? "none" : "#111", stroke: "#111", "stroke-width": 1.4 });
+    const ti = el("title"); ti.textContent = "METAR " + M0.icao + " " + p2(new Date(o.t).getUTCHours()) + ":" + p2(new Date(o.t).getUTCMinutes()) + "Z: " + (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(w) : w) + " " + pa.enhet + txt + "\n" + o.raw;
+    pt.appendChild(ti); svg.appendChild(pt);
+  }
+  // NYTT 20/11 kvall: vindriktning varje timme (byvind) - ensemblens medelriktning ur u/v 10 m, pilen blekare ju
+  // mer medlemmarna ar oense (langden av medelvektorn av enhetsvektorerna)
+  if (harVind) {
+    const yv = TOPP + H + 34 + 10, lon = isFinite(M0.lon) ? M0.lon : 15, th = LCC.n * (lon - 15) * LCC.rad, cs = Math.cos(th), sn = Math.sin(th);
+    g("text", { x: 4, y: yv + 4, "font-size": 9.5, fill: c("--dim") }, "riktn.");
+    for (let t = 0; t < nt; t++) {
+      let sx = 0, sy = 0, k = 0;
+      for (let m = 0; m < nm; m++) { if (!iUrval(m)) continue; const u = M0.u[t * nm + m], w = M0.w[t * nm + m]; if (!isFinite(u) || !isFinite(w)) continue;
+        const ue = u * cs + w * sn, ve = -u * sn + w * cs, f = Math.hypot(ue, ve); if (f < 0.1) continue; sx += ue / f; sy += ve / f; k++; }
+      if (!k) continue;
+      const R = Math.hypot(sx, sy) / k, rikt = (Math.atan2(-sx, -sy) * 180 / Math.PI + 360) % 360;   // varifran vinden blaser
+      const x = VM + t * KOL + KOL / 2, gp = el("g", { transform: "translate(" + x + " " + yv + ") rotate(" + (rikt + 180) + ")", opacity: Math.max(0.2, R) });
+      gp.appendChild(el("line", { x1: 0, y1: 5, x2: 0, y2: -5, stroke: c("--fg"), "stroke-width": 1.3 }));
+      gp.appendChild(el("path", { d: "M -2.8 -2 L 0 -6 L 2.8 -2 Z", fill: c("--fg") }));
+      const ti = el("title"); ti.textContent = tidText(t) + ": vind från " + String(Math.round(rikt)).padStart(3, "0") + "° (ensemblens medelriktning, 10 m), samstämmighet " + Math.round(R * 100) + " %"; gp.appendChild(ti);
+      svg.appendChild(gp);
+    }
+  }
   // startlinjen for ackumulering (dras med mus/finger; handtaget har touch-action: none)
   if (lage === "ack") {
     const xs = VM + start * KOL + KOL / 2;
@@ -1064,7 +1130,10 @@ function ritaMeteogram() {
     (vm !== null && vm !== 0 ? ", svart streckad = medlem " + vm : "") + (visaTrosk ? ", orange = tröskel" : "") + ". Blå skuggning = vald period. Håll musen över en stapel för värden." +
     (lage === "ack" ? " Grön linje = start för ackumuleringen: dra i handtaget eller klicka på tidsaxeln, dubbelklicka för +0." : "") +
     (lage === "h3" || lage === "h6" ? " Varje stapel = summan i blocket (fasta UTC-block, ofullständigt första block hoppas över)." : "") +
-    (METEO_TAK[M0.v] ? " Skalan slutar vid " + METEO_TAK[M0.v].toLocaleString("sv-SE") + " " + pa.enhet + "." : "");
+    (METEO_TAK[M0.v] ? " Skalan slutar vid " + METEO_TAK[M0.v].toLocaleString("sv-SE") + " " + pa.enhet + "." : "") +
+    (obsAntal ? " Svarta prickar = METAR " + M0.icao + (M0.v === "by" ? " (ihålig = medelvind, ingen by rapporterad)" : M0.v === "bas" ? " (lägsta SCT/BKN/OVC/VV)" : "") + "." : "") +
+    (harVind ? " Pilarna = vindriktning 10 m (ensemblens medel), blekare = medlemmarna oense." : "") +
+    (medlemmar().length < ENS_MEDL ? " Bara " + ($("pMedl").value === "nya" ? "de 15 nya medlemmarna (0–14)" : "de 15 gamla medlemmarna (15–29, förra körningen)") + "." : "");
   ruta_.hidden = false;
 }
 // Dra startlinjen (eller klicka pa tidsaxeln under diagrammet) - lyssnarna sitter pa svg-elementet, som finns kvar mellan ritningarna
@@ -1129,7 +1198,7 @@ function probOmradeAndrat() { P.fragar = false; ritaOmrade(); probVisa().then(()
 // Sannolikhetsvyns egna val sparas nar man gar in och aterstalls nar man gar ut.
 const FAV_KNAPPAR = { by: [27, 32, 45], sikt: [5000, 3000, 2000, 1000], bas: [1200, 500, 400, 300, 200] };
 let fav = false, favSpar = null;
-const FAV_FALT = ["pKorningVal", "pParam", "pVisa", "pTrosk", "pStorlek", "pUppl", "pDt"];
+const FAV_FALT = ["pKorningVal", "pParam", "pVisa", "pTrosk", "pStorlek", "pUppl", "pDt", "pFran", "pTill", "pSteg"];
 function favKnappar() {
   for (const [v, id] of [["by", "favBy"], ["sikt", "favSikt"], ["bas", "favBas"]]) {
     const box = $(id); box.textContent = "";
@@ -1154,14 +1223,17 @@ async function favIn() {
   $("pStorlek").value = "sv"; $("pUppl").value = String(idx.s); $("pVisa").value = "sannolikhet"; $("pDt").value = "1";
   if ([...$("pKorningVal").options].some(o => o.value === idx.dtg)) $("pKorningVal").value = idx.dtg;
   bytKorning(idx.dtg);
+  // 20/11 kvall: i Favoriter ar Fran = Till (en timme) varje gang man gar in - aktuell timme, steg 1 h
+  const nu = Math.max(0, Math.min(Math.max(...idx.tider), Math.round((Date.now() - dtgDatum(idx.dtg).getTime()) / 3600e3)));
+  $("pFran").value = nu; $("pTill").value = nu; $("pSteg").value = "1";
   const [v, g] = (lasa("mt:favVal") || "by:27").split(":");
   if (idx.v.includes(v)) favVal(v, +g); else favVal("by", 27);
   ritaOmrade(); probVisa();
 }
 function favUt() {
   if (!favSpar) return;
-  for (const id of FAV_FALT) if (favSpar[id] !== undefined) $(id).value = favSpar[id];
-  const kv = $("pKorningVal").value; bytKorning(kv === "senaste" ? P.senast : kv);
+  $("pKorningVal").value = favSpar.pKorningVal; const kv = $("pKorningVal").value; bytKorning(kv === "senaste" ? P.senast : kv);
+  for (const id of FAV_FALT) if (favSpar[id] !== undefined) $(id).value = favSpar[id];   // efter korningsbytet (som annars flyttar perioden)
   favSpar = null; sattParam(true);
 }
 function bytLage(nytt) {
@@ -1191,6 +1263,9 @@ function bytLage(nytt) {
   for (let m = ENS_NYA; m < ENS_MEDL; m++) og2.appendChild(new Option("Medlem " + m + " (= " + (m - ENS_NYA) + " i förra)", "m" + m));
   vs.append(og, og2);
   vs.value = lasa("mt:pVisa") || "sannolikhet"; if (!vs.value) vs.value = "sannolikhet";
+  // 20/11 kvall: medlemsurval
+  $("pMedl").value = lasa("mt:pMedl") || "alla"; if (!$("pMedl").value) $("pMedl").value = "alla";
+  $("pMedl").addEventListener("change", () => { lagra("mt:pMedl", $("pMedl").value); probVisa(); if (P.meteo) ritaMeteogram(); if (typeof M !== "undefined" && M && M.stat && typeof rita === "function") rita(); });
   // 19/11 em: troskeln ar alltid installbar - i vardelaget styr den troskel-isolinjen (och meteogrammet)
   const troskAv = () => { $("pTrosk").disabled = false; };
   troskAv();
