@@ -516,13 +516,15 @@ function valjVag() {
 
 // Hamtar en URL. Ett anrop i taget, tidsgrans, omforsok vid 429/5xx.
 // binar = true: svaret lases som byte (ArrayBuffer) i .buf i stallet for text.
-async function hamta(url, medRetry = true, binar = false) {
+// 20/11 kvall: maxS = kort tidsgrans (sekunder) for snabba kontroller ("finns korningen?"). Svarar servern inte
+// inom maxS returneras st 0 direkt - utan omforsok och utan att byta vag till thredds.
+async function hamta(url, medRetry = true, binar = false, maxS = 0) {
   const orig = url;
   if ((await valjVag()) === "mellan" && url.startsWith(BAS)) url = MELLAN + url.slice(BAS.length);
   for (let f = 1; f <= 4; f++) {
     if (stoppad) throw new Error("stoppad");
     avbryt = new AbortController();
-    const tid = setTimeout(() => avbryt.abort(), TIMEOUT_S * 1000);
+    const tid = setTimeout(() => avbryt.abort(), (maxS || TIMEOUT_S) * 1000);
     let st = 0, txt = "", buf = null, cache = null;
     try {
       const r = await fetch(url, { signal: avbryt.signal, cache: "no-store" });
@@ -530,6 +532,7 @@ async function hamta(url, medRetry = true, binar = false) {
       if (binar && r.ok) buf = await r.arrayBuffer(); else txt = await r.text();
     } catch (e) { if (stoppad) throw new Error("stoppad"); st = 0; }
     clearTimeout(tid);
+    if (st === 0 && maxS) return { st: 0, txt: "", buf: null, cache: null, tidsgrans: true };
     if (st === 0 && VAG === "direkt") { VAG = null; vagLofte = null; }   // natet bytt? prova vagen igen nasta anrop
     // mellanservern svarar inte alls mitt i en hamtning -> resten av besoket direkt till thredds
     if (st === 0 && url !== orig && VAG === "mellan") {
@@ -2285,6 +2288,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-1730"></script>
+<script src="sannolikhet.js?v=20261120-1750"></script>
 </body>
 </html>

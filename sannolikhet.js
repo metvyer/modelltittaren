@@ -285,9 +285,12 @@ async function sokEnsKorning() {
   return P.senast;
 }
 // Finns korningen komplett pa servern? Svaret sparas under besoket.
+const ENS_KOLL_S = 12;
 async function ensFinns(dtg) {
   if (P.finns.has(dtg)) return true;
-  const r = await hamta(BAS + ENS_FIL(dtg) + ".ascii?time", false);
+  // 20/11 kvall: max 12 s - en korning som haller pa att skrivas kan fa thredds att tanka i over 100 s
+  // (det kostade 1 min 50 s fore en hamtning 20/11 16:11). Inget svar = raknas som "finns inte an".
+  const r = await hamta(BAS + ENS_FIL(dtg) + ".ascii?time", false, false, ENS_KOLL_S);
   const m = r.st === 200 ? r.txt.match(/\ntime\[(\d+)\]/) : null;
   P.svar = { st: r.st, n: m ? +m[1] : 0 };   // for felmeddelandet
   if (m && +m[1] >= ENS_TIDER) { P.finns.add(dtg); return true; }
