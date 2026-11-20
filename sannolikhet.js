@@ -363,7 +363,7 @@ async function snabbFas(o, oH, sakn, pa) {
   const ut = { antal: 0, tackt: 0, kb: 0, traff: 0 };
   if (!visaSnabb || VAG !== "mellan" || !sakn.length) return ut;
   await hamtaRegister(true);
-  const dtgF = dtgText(new Date(dtgDatum(o.dtg).getTime() - ENS_LAGG_H * 3600e3));
+  const dtgF = dtgText(new Date(dtgDatum(o.dtg).getTime() - ENS_LAGG_H * 3600e3)), ms = SAKN[pa.bitar];
   const nya = regOmr(o.dtg, o.v, o.s), gamla = regOmr(dtgF, o.v, o.s);
   // en "bit" = ett rektangel+tidsblock i nya korningen (medlemshalvorna slas ihop)
   const bitar = new Map();
@@ -396,6 +396,16 @@ async function snabbFas(o, oH, sakn, pa) {
       if (!komplett) break;
     }
     if (!komplett) continue;
+    // medlem 0:s sikt/molnbas saknas i ensemblefilen -> samma det-fraga som den forsta hamtningen stallde (ligger i cachen)
+    if (o.v === "sikt" || o.v === "bas") {
+      let tom = true; for (const [, arr] of kodat) { for (let i = 0; i < n; i++) if (arr[i] !== ms) { tom = false; break; } if (!tom) break; }
+      if (tom) try {
+        const fr = enc(pa.var + "[" + b.t0 + ":" + b.st + ":" + b.t1 + "][0][" + b.y0 + ":" + b.s + ":" + b.y1 + "][" + b.x0 + ":" + b.s + ":" + b.x1 + "]");
+        const nt = Math.floor((b.t1 - b.t0) / b.st) + 1, res = await hamta(BAS + DET_FIL(o.dtg) + ".dods?" + fr, false, true);
+        const v = res.st === 200 && res.buf ? lasDods(res.buf, nt * n) : null;
+        if (v) { ut.kb += res.buf.byteLength / 1024; for (const [t, arr] of kodat) { const k = (t - b.t0) / b.st; for (let i = 0; i < n; i++) koda(pa, arr, i, v[k * n + i]); } }
+      } catch (x) {}
+    }
     for (const d of delar) { ut.kb += d.kb; if (d.cache === "HIT") ut.traff++; }
     let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === b.y0 && x.y1 === b.y1 && x.x0 === b.x0 && x.x1 === b.x1);
     if (!e) { e = { ...e0, tider: [] }; P.index.push(e); }
