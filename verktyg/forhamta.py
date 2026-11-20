@@ -377,7 +377,7 @@ def varv_ens(ut):
     except Exception: pass
     dtg = senaste_ens()
     if not dtg: print("Sverige: ingen komplett ensemblekorning hittad."); return 0
-    if gammal.get("dtg") == dtg and gammal.get("klar"):
+    if gammal.get("dtg") == dtg and gammal.get("klar") and all(gammal.get(k) == SV[k] for k in ("y0", "y1", "x0", "x1", "s")):
         print(f"Sverige: {dtg} finns redan."); return 0
     t0 = time.time(); STAT["anrop"] = 0; STAT["byte"] = 0
     y0, y1, x0, x1, s_ = SV["y0"], SV["y1"], SV["x0"], SV["x1"], SV["s"]
