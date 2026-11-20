@@ -1784,10 +1784,21 @@ function valjOchHamta() {
 // ===================================================================
 //  KARTA (MEPS-gittret i Lambert-projektion, hela modellomradet)
 // ===================================================================
-const KX = LCC.nx, KY = LCC.ny, MIN_BREDD = 70;
+const KX = LCC.nx, KY = LCC.ny, MIN_BREDD = 12;   // 20/11: 70 -> 12 sa banorna syns
 // Ovriga flygplatser [ICAO, namn, lat, lon, storlek 0-2] fran OurAirports (public domain).
 // Sma falt (storlek 0) visas forst nar kartan visar mindre an SMA_FALT_BREDD rutor i bredd.
 let FLYG = []; const SMA_FALT_BREDD = 380;
+// NYTT 20/11: banriktningar (banor.json, gjord med verktyg/banor.py ur OurAirports). Banorna ritas som streck
+// nar man zoomat in (kartbredd under BAN_BREDD rutor), med bannummer vid annu narmare zoom.
+let BANOR = {}; const BAN_BREDD = 70, BAN_TEXT_BREDD = 28;
+// Ungefarlig missvisning (grader ost) i Norden 2026, +-2° - bara for banor dar enbart bannumret finns
+// och for egen riktning som anges magnetiskt. Ett par grader fel ger forsumbart fel i sidvinden.
+const missvisning = (lat, lon) => 0.42 * lon + 0.15 * (lat - 55) - 0.5;
+// Banor for en flygplats med sann riktning: [{namn: "03/21", sann}]
+function banorFor(icao, lat, lon) {
+  return (BANOR[icao] || []).map(b => ({ namn: b[0] + "/" + b[1], le: b[0], he: b[1], sann: b[3] === "M" ? (b[2] + missvisning(lat, lon) + 360) % 360 : b[2], m: b[3] === "M", ft: b[4], p: b.length > 5 ? b.slice(5) : null }));
+}
+const banText = (icao, lat, lon) => { const b = banorFor(icao, lat, lon); return b.length ? "\nBanor: " + b.map(x => x.namn + " (" + String(Math.round(x.sann)).padStart(3, "0") + "°" + (x.m ? "≈" : "") + ")").join(", ") : ""; };
 let visaFlyg = lasa("mt:visaFlyg") !== "nej";
 let vb = { x: 0, y: 0, w: KX, h: KY };
 const tillKarta = (lat, lon) => { const f = rutaF(lat, lon); return { x: f.fx, y: KY - 1 - f.fy }; };
@@ -1822,6 +1833,22 @@ function ritaMarkorer() {
   const dtg = M ? M.dtg : lasa("mt:senast"), STAT = ["ej hämtad", "påbörjad", "hämtad"];
   const lista = PUNKTER.map((p, i) => ({ id: "p" + i, namn: p[0] + " " + p[1], kort: p[1], lat: p[2], lon: p[3], fp: true }));
   egna().forEach((e, i) => lista.push({ id: "e" + i, namn: "Egen punkt " + e[0].toFixed(3) + ", " + e[1].toFixed(3), lat: e[0], lon: e[1] }));
+  // NYTT 20/11: banorna som streck (under markorerna) nar man zoomat in
+  if (vb.w < BAN_BREDD) for (const icao in BANOR) for (const b of BANOR[icao]) {
+    if (b.length < 9) continue;
+    const k1 = tillKarta(b[5], b[6]), k2 = tillKarta(b[7], b[8]);
+    if (Math.max(k1.x, k2.x) < vb.x || Math.min(k1.x, k2.x) > vb.x + vb.w || Math.max(k1.y, k2.y) < vb.y || Math.min(k1.y, k2.y) > vb.y + vb.h) continue;
+    const bg = el("g", { "pointer-events": "none" });
+    bg.appendChild(el("line", { x1: k1.x, y1: k1.y, x2: k2.x, y2: k2.y, stroke: "var(--mkbg)", "stroke-width": 6, "stroke-linecap": "butt", "vector-effect": "non-scaling-stroke", opacity: 0.8 }));
+    bg.appendChild(el("line", { x1: k1.x, y1: k1.y, x2: k2.x, y2: k2.y, stroke: "var(--mkfg)", "stroke-width": 3.2, "stroke-linecap": "butt", "vector-effect": "non-scaling-stroke" }));
+    if (vb.w < BAN_TEXT_BREDD) {   // bannummer utanfor vardera banande
+      const dx = k2.x - k1.x, dy = k2.y - k1.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, d = 9 * s;
+      for (const [k, txt, sgn] of [[k1, b[0], -1], [k2, b[1], 1]])
+        bg.appendChild(el("text", { x: k.x + sgn * ux * d, y: k.y + sgn * uy * d, "font-size": 10 * s, "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central",
+          fill: "var(--mkfg)", stroke: "var(--mkbg)", "stroke-width": 2.5 * s, "paint-order": "stroke" }, txt));
+    }
+    g.appendChild(bg);
+  }
   // Ovriga flygplatser som sma prickar (OurAirports). Sma faltet visas forst nar man zoomat in.
   const egnaICAO = new Set(PUNKTER.map(p => p[1])), smaOK = vb.w < SMA_FALT_BREDD;
   if (visaFlyg) FLYG.forEach((f, i) => {
@@ -1830,7 +1857,7 @@ function ritaMarkorer() {
     const r = ruta(f[2], f[3]); if (!r) return;
     const st = dtg ? hamtStatus(dtg, r.iy, r.ix) : 0;
     const m = el("g", { class: "mk", "data-id": "f" + i, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
-    m.dataset.tips = f[1] + " " + f[0] + "\n" + STAT[st] + (dtg ? " (" + dtg + ")" : "");
+    m.dataset.tips = f[1] + " " + f[0] + banText(f[0], f[2], f[3]) + "\n" + STAT[st] + (dtg ? " (" + dtg + ")" : "");
     m.appendChild(el("circle", { r: 5, style: "fill:transparent" }));
     m.appendChild(el("circle", { r: f[4] === 2 ? 2.4 : f[4] === 1 ? 2 : 1.6, style: "fill:" + (st ? "var(--mkhamt)" : "var(--mkfg)") + ";opacity:" + (f[4] === 0 && !st ? .55 : .8) }));
     g.appendChild(m);
@@ -1843,7 +1870,7 @@ function ritaMarkorer() {
     const st = dtg ? hamtStatus(dtg, r.iy, r.ix) : 0; if (!p.fp && !st) continue;
     const k = tillKarta(p.lat, p.lon);
     const m = el("g", { class: "mk", "data-id": p.id, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
-    m.dataset.tips = p.namn + "\n" + STAT[st] + (dtg ? " (" + dtg + ", FL" + $("topp").value + ")" : "");
+    m.dataset.tips = p.namn + (p.kort ? banText(p.kort, p.lat, p.lon) : "") + "\n" + STAT[st] + (dtg ? " (" + dtg + ", FL" + $("topp").value + ")" : "");
     m.appendChild(el("circle", { r: 8, style: "fill:transparent" }));
     const rr = p.fp ? 3.6 : 3;
     m.appendChild(el("circle", { r: rr, style: "fill:" + (st === 2 ? "var(--mkhamt)" : "var(--mkbg)") + ";stroke:var(--mkfg);stroke-width:1.4" }));
@@ -1869,6 +1896,7 @@ function ritaMarkorer() {
 function startaKarta() {
   const svg = $("karta");
   fetch("flygplatser.json").then(r => r.json()).then(f => { FLYG = f; ritaMarkorer(); }).catch(() => {});
+  fetch("banor.json").then(r => r.json()).then(b => { BANOR = b; ritaMarkorer(); }).catch(() => {});
   // snabbdata-ringar (NYTT 19/11 natt): direkt, och sedan varje minut nar tid-hojd syns
   laddaSnabbPunkter(lasa("mt:senast"));
   setInterval(() => { if (lage !== "p" && !document.hidden) laddaSnabbPunkter(M ? M.dtg : lasa("mt:senast")); }, 60e3);
