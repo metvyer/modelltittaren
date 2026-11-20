@@ -142,7 +142,8 @@ const DB = (() => {
 
 // ---------- Tillstand ----------
 let visaOmr = lasa("mt:visaOmr") !== "nej";   // ramar runt hamtade omraden
-let visaIso = lasa("mt:visaIso") === "ja";      // isolinjer (NYTT 19/11), av som standard
+let visaIso = lasa("mt:visaIso") === "ja";
+let visaM0Linje = lasa("mt:m0Linje") === "ja";   // 20/11 kvall: medlem 0:s troskellinje over sannolikhetsfaltet      // isolinjer (NYTT 19/11), av som standard
 // Isolinjer: sannolikhet 30/70 %; vardelage: fasta nivaer per parameter + troskeln. Olika utseende per niva.
 // 20/11 kvall: isolinjer i sannolikhetslaget valjs fritt bland 10-90 % (av/pa-knappar, sparas i mt:isoProb)
 const ISO_PROB_ALLA = [10, 20, 30, 40, 50, 60, 70, 80, 90];
@@ -246,7 +247,10 @@ async function laddaIndex() {
   await stadaLager(null);
 }
 const nyckelE = (e, t) => [e.dtg, e.v, e.s, e.y0, e.y1, e.x0, e.x1, t].join(":");
-const innehaller = (e, o) => e.dtg === o.dtg && e.v === o.v && e.s === o.s && e.y0 <= o.y0 && e.y1 >= o.y1 && e.x0 <= o.x0 && e.x1 >= o.x1;
+// 20/11 kvall: ett hamtat omrade med FINARE upplosning (t.ex. 5 km nar man ber om 10 km) duger ocksa - det
+// som redan finns visas, och inget hamtas i onodan. Kraver att rutnaten ligger i fas (alltid med snappningen).
+const innehaller = (e, o) => e.dtg === o.dtg && e.v === o.v && e.s <= o.s && o.s % e.s === 0 && (o.y0 - e.y0) % e.s === 0 && (o.x0 - e.x0) % e.s === 0 &&
+  e.y0 <= o.y0 && e.y1 >= o.y1 && e.x0 <= o.x0 && e.x1 >= o.x1;
 
 // ---------- Omrade ----------
 // Omradet lasas till ett fast rutnat (index delbara med steget), sa att ett mindre omrade
@@ -254,7 +258,7 @@ const innehaller = (e, o) => e.dtg === o.dtg && e.v === o.v && e.s === o.s && e.
 // NYTT 20/11: "Sverige" = den forhamtade Sverigerutan (GitHub, se forhamta.py SV) - samma rektangel for alla
 // 20/11: utokad till hela Ostersjon (soderut till ca 54° N, Finska viken). Rutan tas fran GitHubs index.json
 // nar den finns (gamla korningar har den mindre rutan), annars SV_RUTA.
-const SV_RUTA = { y0: 0, y1: 856, x0: 312, x1: 800 };   // 20/11 kvall: till MEPS sydkant (~51° N), hela Finland, Baltikum
+const SV_RUTA = { y0: 0, y1: 856, x0: 280, x1: 800 };   // 20/11 sen kvall: x0 312 -> 280 (ca 80 km vasterut, Skagen/Skagerrak)   // 20/11 kvall: till MEPS sydkant (~51° N), hela Finland, Baltikum
 function svRektangel(s, B) { B = B || (SVIDX && SVIDX.y0 !== undefined ? SVIDX : SV_RUTA);
   return { y0: B.y0, y1: B.y0 + Math.floor((B.y1 - B.y0) / s) * s, x0: B.x0, x1: B.x0 + Math.floor((B.x1 - B.x0) / s) * s }; }
 function berakna() {
@@ -918,6 +922,15 @@ async function probVisa() {
     g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
       preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   }
+  // NYTT 20/11 kvall: medlem 0:s linje for troskeln ovanpa sannolikheten (bla) - ligger den langt fran de roda
+  // omradena skiljer sig medlem 0 fran ensemblen
+  if (visaM0Linje && visa === "sannolikhet" && isFinite(trosk)) for (const r of vis) {
+    const n = r.o.ny * r.o.nx, f0 = r.agg.subarray(0, n); if (!f0.some(isFinite)) continue;
+    const d = isoSegment(f0, r.o, trosk); if (!d) continue;
+    g.appendChild(el("path", { d, fill: "none", stroke: "#ffffff", "stroke-width": 5, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.8 }));
+    g.appendChild(el("path", { d, fill: "none", stroke: "#1d4ed8", "stroke-width": 2.6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+    isoEtiketter(g, d, "m0");
+  }
   // NYTT 20/11 kvall: kalla for siffrorna pa kartan (sannolikhet i %, annars vardet)
   P.siffKalla = vis.map(r => ({ o: r.o, d: visa === "sannolikhet" ? r.prob : r.val, proc: visa === "sannolikhet", lagre: visa !== "sannolikhet" && pa.villkor === "<", enh: visa === "sannolikhet" ? "%" : pa.enhet }));
   setTimeout(ritaSiffror, 0);
@@ -988,6 +1001,7 @@ function ritaIsoForkl(f) {
 }
 function ritaPForklaring() {
   const f = $("pForkl"); f.textContent = ""; ritaIsoForkl(f);
+  if (visaM0Linje && visaLage() === "sannolikhet") { const sp = document.createElement("span"); sp.innerHTML = '<svg width="26" height="10" style="vertical-align:middle;margin-right:4px"><line x1="1" x2="25" y1="5" y2="5" stroke="#1d4ed8" stroke-width="2.6"/></svg>medlem 0 vid tröskeln'; f.append(sp); }
   if (visaLage() !== "sannolikhet") {
     const v = $("pParam").value, pa = PPARAM[v], K = VKLASS[v], lv = pa.villkor === "<";
     const ft = w => w.toLocaleString("sv-SE");
@@ -1113,7 +1127,8 @@ function ritaMeteogram() {
   const steg = (() => { const r = spann / 5, e = 10 ** Math.floor(Math.log10(r)); for (const f of [1, 2, 2.5, 5, 10]) if (f * e >= r) return f * e; })();
   ymax = Math.ceil((tak || Math.max(1, ymax * 1.05)) / steg) * steg; ymin = Math.floor(ymin * 1.05 / steg) * steg;
   const nSteg = Math.round((ymax - ymin) / steg);
-  const harVind = M0.v === "by" && M0.u && M0.w, KOL = 14, VM = 46, H = 210, TOPP = 10, UNDER = 34 + (harVind ? 22 : 0), B = nt * KOL, W = VM + B + 8;
+  const harObsVind = M0.v === "by" && M0.obs && M0.obs.some(o => isFinite(o.dd));
+  const harVind = M0.v === "by" && M0.u && M0.w, KOL = 14, VM = 46, H = 210, TOPP = 10, UNDER = 34 + (harVind ? 22 : 0) + (harObsVind ? 16 : 0), B = nt * KOL, W = VM + B + 8;
   meteoGeo = { KOL, VM, nt, TOPP, H };
   const y = w => TOPP + H - (Math.max(ymin, Math.min(w, ymax)) - ymin) / (ymax - ymin) * H;
   const svg = $("pMeteoSvg"); svg.textContent = ""; svg.setAttribute("width", W); svg.setAttribute("height", TOPP + H + UNDER);
@@ -1196,6 +1211,19 @@ function ritaMeteogram() {
       svg.appendChild(gp);
     }
   }
+  // 20/11 kvall: observerad vindriktning ur METAR (rod pil, raden under modellens), for passerade timmar
+  if (harObsVind) {
+    const yo = TOPP + H + 34 + (harVind ? 22 : 0) + 6;
+    g("text", { x: 4, y: yo + 4, "font-size": 9.5, fill: "#b91c1c" }, "METAR");
+    for (const o of M0.obs) {
+      if (!isFinite(o.dd)) continue; const h = (o.t - bas) / 3600e3; if (h < -0.5 || h > nt - 0.5) continue;
+      const x = VM + (h + 0.5) * KOL, gp = el("g", { transform: "translate(" + x + " " + yo + ") rotate(" + (o.dd + 180) + ")" });
+      gp.appendChild(el("line", { x1: 0, y1: 5, x2: 0, y2: -5, stroke: "#b91c1c", "stroke-width": 1.5 }));
+      gp.appendChild(el("path", { d: "M -2.8 -2 L 0 -6 L 2.8 -2 Z", fill: "#b91c1c" }));
+      const ti = el("title"); ti.textContent = "METAR " + M0.icao + " " + p2(new Date(o.t).getUTCHours()) + ":" + p2(new Date(o.t).getUTCMinutes()) + "Z: vind från " + String(o.dd).padStart(3, "0") + "° " + o.ff + (isFinite(o.gg) ? "G" + o.gg : "") + " kt"; gp.appendChild(ti);
+      svg.appendChild(gp);
+    }
+  }
   // startlinjen for ackumulering (dras med mus/finger; handtaget har touch-action: none)
   if (lage === "ack") {
     const xs = VM + start * KOL + KOL / 2;
@@ -1215,7 +1243,7 @@ function ritaMeteogram() {
     (lage === "h3" || lage === "h6" ? " Varje stapel = summan i blocket (fasta UTC-block, ofullständigt första block hoppas över)." : "") +
     (METEO_TAK[M0.v] ? " Skalan slutar vid " + METEO_TAK[M0.v].toLocaleString("sv-SE") + " " + pa.enhet + "." : "") +
     (obsAntal ? " Svarta prickar = METAR " + M0.icao + (M0.v === "by" ? " (ihålig = medelvind, ingen by rapporterad)" : M0.v === "bas" ? " (lägsta SCT/BKN/OVC/VV)" : "") + "." : "") +
-    (harVind ? " Pilarna = vindriktning 10 m (ensemblens medel), blekare = medlemmarna oense." : "") +
+    (harVind ? " Pilarna = vindriktning 10 m (ensemblens medel), blekare = medlemmarna oense." : "") + (harObsVind ? " Röda pilar = observerad vindriktning (METAR)." : "") +
     (medlemmar().length < ENS_MEDL ? " Bara " + ($("pMedl").value === "nya" ? "de 15 nya medlemmarna (0–14)" : "de 15 gamla medlemmarna (15–29, förra körningen)") + "." : "");
   ruta_.hidden = false;
 }
@@ -1464,6 +1492,8 @@ function bytLage(nytt) {
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
   $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f"));
   favKnappar(); $("pTrosk").addEventListener("input", favMarkera);
+  $("m0Linje").setAttribute("aria-pressed", String(visaM0Linje));
+  $("m0Linje").addEventListener("click", e => { visaM0Linje = !visaM0Linje; lagra("mt:m0Linje", visaM0Linje ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaM0Linje)); probVisa(); });
   sattSiffKnapp(); $("siffror").addEventListener("click", () => { siffLage = (siffLage + 1) % 3; lagra("mt:siffror", String(siffLage)); sattSiffKnapp(); ritaSiffror(); });
   try { await laddaIndex(); } catch (e) {}
   // 20/11 kvall: nya besokare (inget sparat val) borjar i Favoriter

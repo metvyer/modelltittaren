@@ -277,7 +277,7 @@ def varv_tq(ut):
 #  Matt 20/11 (del L): Sverige 5 km byvind 13 h x 15 medl. = 12 s, 41 MB fran thredds, gzip 0,7 MB/timme.
 # ===================================================================
 ENS_FILN = lambda dtg: "meps_lagged_6_h_subset_2_5km_" + dtg + ".ncml"
-SV = {"y0": 0, "y1": 856, "x0": 312, "x1": 800, "s": 2}   # 20/11 kvall: MEPS sydkant (~51 N), hela Finland, Baltikum (ca 1,4x)
+SV = {"y0": 0, "y1": 856, "x0": 280, "x1": 800, "s": 2}   # 20/11 sen kvall: x0 280 (ca 80 km vasterut, Skagen/Skagerrak)
 SV_TIDER = list(range(0, 37))
 SV_BLOCK = [(0, 12), (13, 25), (26, 36)]
 ENS_MEDL, ENS_NYA = 30, 15

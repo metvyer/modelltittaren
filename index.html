@@ -237,7 +237,8 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <button class="sek liten" id="zHem" title="Visa hela MEPS-området">Hela</button>
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
-    <button class="sek liten baraTH" id="m0Falt" aria-pressed="false" title="Kartfält ur medlem 0 (det-körningen, samma som tid-höjd): nederbörd, medelvind, byvind eller molnbas för en vald timme, 600 × 600 km runt punkten, 5 km. Ett litet anrop per timme.">Kartfält m0</button>
+    <button class="sek liten baraTH" id="m0Falt" aria-pressed="false" title="Kartfält ur medlem 0 (det-körningen, samma som tid-höjd) för en vald timme över hela den förhämtade rutan (Sverige, Östersjön, Finland, Baltikum), 5 km. Ett anrop per timme.">Kartfält m0</button>
+    <button class="sek liten baraP" id="m0Linje" aria-pressed="false" title="Medlem 0:s linje för tröskeln (blå) ovanpå sannolikheten – ligger den långt från de röda områdena skiljer sig medlem 0 från ensemblen. Inga extra hämtningar.">m0-linje</button>
     <button class="sek liten" id="siffror" aria-pressed="false" title="Värdena som siffror på kartan: av → på (ovanpå färgerna) → bara siffror. Inzoomat syns varje punkt, längre ut blockens högsta (lägsta för sikt/molnbas) värde.">Siffror: av</button>
     <button class="sek liten baraP" id="visaSnabb" aria-pressed="true" title="Gröna rutor = områden som redan finns i mellanserverns cache (någon har hämtat dem) – de hämtas på en sekund utan att fråga met.no">Snabba</button>
     <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
@@ -1001,8 +1002,8 @@ function tolkaMetar(raw) {
   // temperatur: TT/TdTd (M = minus)
   const tt = raw.match(/\s(M?\d{2})\/(M?\d{2})?(?=\s)/), tc = tt ? parseInt(tt[1].replace("M", "-"), 10) : NaN;
   // 20/11 kvall: vind dddffGggKT (kt) for meteogrammet
-  const vd = raw.match(/\b(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?KT\b/), ff = vd ? +vd[2] : NaN, gg = vd && vd[3] ? +vd[3] : NaN;
-  return { lager, vv, inga: cavok || nsc, sikt, tc, ff, gg };
+  const vd = raw.match(/\b(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?KT\b/), ff = vd ? +vd[2] : NaN, gg = vd && vd[3] ? +vd[3] : NaN, dd = vd && vd[1] !== "VRB" && +vd[2] > 0 ? +vd[1] : NaN;
+  return { lager, vv, inga: cavok || nsc, sikt, tc, ff, gg, dd };
 }
 async function hamtaMetar(icao, timmar) {
   const k = icao + ":" + timmar, c = metarCache.get(k); if (c && Date.now() - c.t < METAR_TTL) return c.obs;
@@ -1311,6 +1312,11 @@ let M0F = { pa: lasa("mt:m0Falt") === "ja", v: M0P[lasa("mt:m0Param")] ? lasa("m
 const m0Cache = new Map();
 const m0Farger = v => M0_FARG.slice(M0_FARG.length - M0P[v].klass.length);
 function m0Omrade() {
+  // 20/11 sen kvall: hela den forhamtade rutan (samma som Sannolikhet/Favoriter), var 5 km, om den ar kand
+  if (typeof SVIDX !== "undefined" && SVIDX && SVIDX.y0 !== undefined) {
+    const s = M0_S, y1 = SVIDX.y0 + Math.floor((SVIDX.y1 - SVIDX.y0) / s) * s, x1 = SVIDX.x0 + Math.floor((SVIDX.x1 - SVIDX.x0) / s) * s;
+    return { y0: SVIDX.y0, y1, x0: SVIDX.x0, x1, s, ny: (y1 - SVIDX.y0) / s + 1, nx: (x1 - SVIDX.x0) / s + 1 };
+  }
   if (!M || !isFinite(M.iy)) return null;
   const sn = v => Math.round(v / 8) * 8, cy = sn(M.iy), cx = sn(M.ix);
   const y0 = Math.max(0, cy - M0_HALV), y1 = Math.min(KY - 1 - ((Math.min(KY - 1, cy + M0_HALV) - y0) % M0_S), cy + M0_HALV);
@@ -1326,6 +1332,7 @@ async function m0Uppdatera() {
   if (!M || !M.dtg || !M.stat) { g.textContent = ""; st.textContent = "Välj och hämta en punkt först."; $("m0Tid").textContent = ""; return; }
   if (M0F.t === null) { const nu = Math.round((Date.now() - (M.t0 || Date.now())) / 3600e3); M0F.t = Math.max(0, Math.min(M.nt - 1, nu)); }
   M0F.t = Math.max(0, Math.min(M.nt - 1, M0F.t)); $("m0Tid").textContent = m0TidText(M0F.t);
+  if (typeof svIndex === "function" && typeof SVIDX !== "undefined" && !SVIDX) { try { await svIndex(); } catch (e) {} }
   const o = m0Omrade(); if (!o) return;
   const pa = M0P[M0F.v], nyckel = [M.dtg, M0F.v, M0F.t, o.y0, o.y1, o.x0, o.x1].join(":");
   m0Forklaring();
@@ -1334,9 +1341,12 @@ async function m0Uppdatera() {
   if (M0F.hamtar) return; M0F.hamtar = true; st.textContent = "Hämtar " + pa.namn.toLowerCase() + " …";
   try {
     const t0 = pa.diff ? Math.max(0, M0F.t - 1) : M0F.t, rum = "[" + o.y0 + ":" + o.s + ":" + o.y1 + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]";
-    const res = await hamta(BAS + FIL(M.dtg) + ".ascii?" + enc(pa.var + "[" + t0 + ":1:" + M0F.t + "][0]" + rum));
-    if (res.st !== 200) throw new Error("svar " + res.st);
-    const raa = tolka(res.txt)[pa.var], n = o.ny * o.nx; if (!raa || raa.length < n) throw new Error("oväntat svar");
+    // binart (.dods) - hela rutan ar ca 100 000 punkter; faller tillbaka pa text om det inte gar
+    const n = o.ny * o.nx, fraga = enc(pa.var + "[" + t0 + ":1:" + M0F.t + "][0]" + rum);
+    let raa = null, res = await hamta(BAS + FIL(M.dtg) + ".dods?" + fraga, true, true);
+    if (res.st === 200 && res.buf && typeof lasDods === "function") raa = lasDods(res.buf, n);
+    if (!raa) { res = await hamta(BAS + FIL(M.dtg) + ".ascii?" + fraga); if (res.st !== 200) throw new Error("svar " + res.st); raa = tolka(res.txt)[pa.var]; }
+    if (!raa || raa.length < n) throw new Error("oväntat svar");
     const d = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       if (pa.diff) { const a = raa[i], b = raa[raa.length > n ? n + i : i]; d[i] = M0F.t === 0 ? 0 : isFinite(a) && isFinite(b) ? Math.max(0, b - a) : NaN; }
@@ -2437,6 +2447,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261120-2220"></script>
+<script src="sannolikhet.js?v=20261120-2240"></script>
 </body>
 </html>
