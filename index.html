@@ -1316,7 +1316,20 @@ async function riskHamta() {
   finally { riskHamtar = false; }
   if (M && M.stat) rita();
 }
-const RISK_FARG = p => p < 0.1 ? "#cbd5e1" : p < 0.3 ? "#facc15" : p < 0.5 ? "#fb923c" : p < 0.7 ? "#ef4444" : "#991b1b";
+// 20/11: sex steg, morkast forst over 90 %
+const RISK_STEG = [[0.1, "#cbd5e1"], [0.3, "#facc15"], [0.5, "#fb923c"], [0.7, "#ef4444"], [0.9, "#b91c1c"], [1.01, "#5c0a14"]];
+const RISK_FARG = p => RISK_STEG.find(([g]) => p < g)[1];
+// Forklaring per rad (tipsruta over gransen i diagrammet och i installningarna)
+const RISK_INFO = {
+  sv: "Sidvind i byar: för varje medlem byvind × |sin(vinkeln mellan vindriktningen 10 m och banans sanna riktning)|. Byvinden har ingen egen riktning, så medelvindens riktning används. Stapeln = andel medlemmar med sidvind över gränsen. Bästa = minsta sidvinden över punktens banor, dvs. risken att ingen bana klarar gränsen.",
+  by: "Byvind 10 m (wind_speed_of_gust) i knop. Stapeln = andel medlemmar med byvind över gränsen den timmen.",
+  dimma: "Modellens dimandel i rutan (fog_area_fraction, 0–100 %). Stapeln = andel medlemmar där dimandelen är minst gränsen. Modellens eget mått – inte samma sak som sikt.",
+  lag: "Modellens låga molnslag (low_type_cloud_area_fraction) i oktas, ungefär upp till 2–2,5 km (modellens definition, ej bekräftad). Stapeln = andel medlemmar med minst så många oktas.",
+  sikt: "Sikt (visibility_in_air) i meter. Stapeln = andel medlemmar med sikt under gränsen. Medlem 0 tas ur det-filen om den saknas i ensemblen.",
+  bas: "Molnbas (cloud_base_altitude) i fot över marken. Stapeln = andel medlemmar med bas under gränsen. Inga moln = ingen bas = räknas inte som under.",
+  t2: "Temperatur 2 m i °C. Stapeln = andel medlemmar med temperatur under gränsen.",
+};
+const RISK_SKALA = "Färg: grå <10 %, gul 10–30, orange 30–50, röd 50–70, mörkröd 70–90, mörkast ≥90 %.";
 function ritaRisk(svg, ax, y0, nt, t0, c) {
   const box = $("riskInst"), pk = M.lat + "," + M.lon;
   if (box && RISK.pa && box.dataset.p !== pk) ritaRiskInst();     // ny punkt -> banorna i installningarna
@@ -1335,9 +1348,12 @@ function ritaRisk(svg, ax, y0, nt, t0, c) {
     svg.appendChild(el("line", { x1: 0, y1: yB, x2: nt * COL, y2: yB, stroke: c("--grid"), "stroke-width": 0.6 }));
     svg.appendChild(el("line", { x1: 0, y1: yB - hMax / 2, x2: nt * COL, y2: yB - hMax / 2, stroke: c("--grid"), "stroke-width": 0.5, "stroke-dasharray": "3 3" }));
     const lab = el("text", { x: 4, y: yT + 11, "font-size": 9.5, fill: c("--fg") }, r.kort); const tt = el("title"); tt.textContent = r.namn + " " + r.villkor + " " + r.gr + " " + r.enhet; lab.appendChild(tt); ax.appendChild(lab);
-    ax.appendChild(el("text", { x: 4, y: yT + 23, "font-size": 9, fill: c("--dim") }, r.villkor + String(r.gr).replace(".", ",") + " " + r.enhet));
+    { const gt = el("text", { x: 4, y: yT + 23, "font-size": 9, fill: c("--dim"), style: "cursor:help" }, r.villkor + String(r.gr).replace(".", ",") + " " + r.enhet);
+      const ti = el("title"); ti.textContent = r.namn + " " + r.villkor + " " + r.gr + " " + r.enhet + "\n\n" + RISK_INFO[r.k] + "\n\n" + RISK_SKALA + "\nÄndra gränsen under diagrammet."; gt.appendChild(ti); ax.appendChild(gt); }
     if (saknas || r.tom) return;
     const D = RISKD.d, NM = ENS_MEDL;
+    // Molnbas: saknat varde hos en medlem som annars har data = inga moln -> raknas (som "inte under"), inte bort
+    const harData = r.k === "bas" ? Array.from({ length: NM }, (_, m) => { for (let q = 0; q < ENS_TIDER; q++) if (isFinite(D.bas[q * NM + m])) return true; return false; }) : null;
     for (let t = 0; t < nt; t++) {
       const te = t - offs; if (te < 0 || te >= ENS_TIDER) continue;
       let n = 0, j = 0;
@@ -1348,7 +1364,8 @@ function ritaRisk(svg, ax, y0, nt, t0, c) {
           const ue = u * cs + w * sn, ve = -u * sn + w * cs, dir = Math.atan2(-ue, -ve) * 180 / Math.PI;
           v = Math.min(...r.bana.map(b => g * Math.abs(Math.sin((dir - b.sann) * Math.PI / 180))));
         } else v = D[RISK_RADER[r.k][5][0]][te * NM + m];
-        if (!isFinite(v)) continue; n++;
+        if (!isFinite(v)) { if (harData && harData[m]) n++; continue; }
+        n++;
         if (r.villkor === "<" ? v < r.gr : v >= r.gr) j++;
       }
       if (n < 10) continue;
@@ -1369,7 +1386,7 @@ function ritaRiskInst() {
   for (const k in RISK_RADER) {
     const [namn, , villkor, , enhet] = RISK_RADER[k], r = RISK.rad[k], rad = document.createElement("div"); rad.className = "rrad";
     const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = r.pa; cb.id = "risk_" + k;
-    const lb = document.createElement("label"); lb.htmlFor = cb.id; lb.textContent = namn + " " + villkor;
+    const lb = document.createElement("label"); lb.htmlFor = cb.id; lb.textContent = namn + " " + villkor; lb.title = RISK_INFO[k] + "\n\n" + RISK_SKALA; rad.title = lb.title;
     const nr = document.createElement("input"); nr.type = "number"; nr.step = "any"; nr.value = r.gr;
     const en = document.createElement("span"); en.textContent = enhet;
     cb.addEventListener("change", () => { r.pa = cb.checked; sparaRisk(); RISKD.fel = ""; if (M && M.stat) rita(); });
