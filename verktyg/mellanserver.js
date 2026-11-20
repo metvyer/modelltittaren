@@ -75,7 +75,8 @@ async function loggaHamtning(db, typ, vad, status, byte, ms) {
   try {
     await db.batch([
       db.prepare("INSERT INTO dag (datum, typ, metno, byte, fel) VALUES (?, ?, 1, ?, ?) ON CONFLICT(datum, typ) DO UPDATE SET metno = metno + 1, byte = byte + excluded.byte, fel = fel + excluded.fel")
-        .bind(idag(), typ, byte, status === 200 ? 0 : 1),
+        // 20/11: 404 i "koll" (nasta korning finns inte an) och 204 (METAR: ingen observation) ar inte fel
+        .bind(idag(), typ, byte, status === 200 || status === 204 || (typ === "koll" && status === 404) ? 0 : 1),
       db.prepare("INSERT INTO senaste (tid, typ, vad, status, byte, ms) VALUES (?, ?, ?, ?, ?, ?)")
         .bind(new Date().toISOString(), typ, vad, status, byte, ms),
     ]);

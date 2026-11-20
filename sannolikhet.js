@@ -28,8 +28,21 @@ const PPARAM = {
   sikt: { namn: "Sikt", var: "visibility_in_air", enhet: "m", konv: v => v, villkor: "<", agg: "min", std: 1500, snabb: [10000, 5000, 3000, 2000, 1500, 1000, 800, 500, 300, 100], bitar: 8,
           tabell: trappSkala([[0, 200, 10], [225, 500, 25], [550, 1000, 50], [1100, 5000, 100], [5200, 10000, 200], [11000, 75000, 1000]]) },
   bas:  { namn: "Molnbas", var: "cloud_base_altitude", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 1000, snabb: [1500, 1000, 500, 400, 300, 200, 100], bitar: 8,
-          tabell: trappSkala([[0, 200, 10], [250, 1000, 50], [1100, 5000, 100], [5500, 20000, 500], [25000, 25000, 1]]) }   // 25000 = "over 20 000 ft"
+          tabell: trappSkala([[0, 200, 10], [250, 1000, 50], [1100, 5000, 100], [5500, 20000, 500], [25000, 25000, 1]]) },   // 25000 = "over 20 000 ft"
+  // NYTT 20/11: fler falt ur ensemblefilen (meps_lagged_6_h_subset). Molnmangd i oktas (andel 0-1 -> x 8; skulle
+  // met.no leverera procent raknas det om). Laga/medel/hoga = modellens egna molnslag (AROME-definition, ej kontrollerad).
+  lag:   { namn: "Låga moln (modellens låga molnslag)", var: "low_type_cloud_area_fraction", enhet: "/8", konv: oktas, villkor: "≥", agg: "max", std: 5, snabb: [1, 3, 5, 7, 8], bitar: 8, steg: 0.1 },
+  medel: { namn: "Medelhöga moln", var: "medium_type_cloud_area_fraction", enhet: "/8", konv: oktas, villkor: "≥", agg: "max", std: 5, snabb: [1, 3, 5, 7, 8], bitar: 8, steg: 0.1 },
+  hog:   { namn: "Höga moln", var: "high_type_cloud_area_fraction", enhet: "/8", konv: oktas, villkor: "≥", agg: "max", std: 5, snabb: [1, 3, 5, 7, 8], bitar: 8, steg: 0.1 },
+  tot:   { namn: "Total molnmängd", var: "cloud_area_fraction", enhet: "/8", konv: oktas, villkor: "≥", agg: "max", std: 7, snabb: [1, 3, 5, 7, 8], bitar: 8, steg: 0.1 },
+  dimma: { namn: "Dimma (modellens dimandel)", var: "fog_area_fraction", enhet: "%", konv: v => Math.min(100, (v > 1.5 ? v : v * 100)), villkor: "≥", agg: "max", std: 50, snabb: [10, 30, 50, 70, 90], bitar: 8, steg: 1 },
+  noll:  { namn: "0-gradersnivå", var: "altitude_of_0_degree_isotherm", enhet: "ft", konv: v => v * FOT, villkor: "<", agg: "min", std: 2000, snabb: [5000, 3000, 2000, 1000, 500], bitar: 8,
+           tabell: trappSkala([[0, 1000, 50], [1100, 5000, 100], [5500, 15000, 500], [16000, 20000, 1000]]) },
+  sno:   { namn: "Snöfall, summa i perioden (vatten)", var: "snowfall_amount_acc", enhet: "mm", konv: v => v, villkor: "≥", agg: "summa", std: 2, snabb: [0.5, 1, 2, 5, 10], bitar: 16, steg: 0.1 },
+  t2:    { namn: "Temperatur 2 m", var: "air_temperature_2m", enhet: "°C", konv: v => v - 273.15, villkor: "<", agg: "min", std: 0, snabb: [5, 2, 0, -5, -10, -20], bitar: 8,
+           tabell: trappSkala([[-50, 40, 1]]) }
 };
+function oktas(v) { return Math.min(8, (v > 1.5 ? v / 100 : v) * 8); }
 // Olinjar skala for 1 byte (Jakobs forslag 16/11): fint steg dar trosklarna finns, grovt dar det inte spelar roll.
 // [fran, till, steg] -> lista med alla tillatna varden. Koden ar platsen i listan.
 function trappSkala(delar) { const ut = []; for (const [a, b, s] of delar) for (let v = a; v <= b + 1e-9; v += s) ut.push(Math.round(v)); return ut; }
@@ -58,6 +71,11 @@ const VKLASS = {
   nb:   [0.1, 0.5, 1, 5, 10, 20, 40],
   sikt: [10000, 5000, 3000, 1500, 800, 300],
   bas:  [1500, 1000, 500, 300, 200, 100],
+  lag: [1, 3, 5, 7], medel: [1, 3, 5, 7], hog: [1, 3, 5, 7], tot: [1, 3, 5, 7],
+  dimma: [10, 30, 50, 70, 90],
+  noll: [5000, 3000, 2000, 1000, 500],
+  sno: [0.1, 0.5, 1, 2, 5, 10],
+  t2: [5, 2, 0, -5, -10, -20],
 };
 const VFARG_ALLA = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
 const vfarg = v => VFARG_ALLA.slice(VFARG_ALLA.length - VKLASS[v].length);   // farger for parameterns klasser (de morkaste sist)
@@ -228,6 +246,11 @@ function ritaOmrade() {
     for (const rr of regOmr(P.dtg, o.v, o.s)) { const k = [rr.y0, rr.y1, rr.x0, rr.x1].join(":"); if (sett.has(k)) continue; sett.add(k);
       const t = el("rect", { x: rr.x0 - rr.s / 2, y: KY - 1 - rr.y1 - rr.s / 2, width: rr.x1 - rr.x0 + rr.s, height: rr.y1 - rr.y0 + rr.s, fill: "var(--mkhamt)", "fill-opacity": 0.13, stroke: "var(--mkhamt)", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke" });
       const tt = el("title"); tt.textContent = "Snabbhämtat: finns i mellanserverns cache (" + PPARAM[o.v].namn.split(",")[0].toLowerCase() + ", " + (o.s * 2.5).toLocaleString("sv-SE") + " km)"; t.appendChild(tt); g.appendChild(t); } }
+  // NYTT 20/11: Sverigeoversikten pa GitHub = alltid snabbt (gront) for byvind/sikt/molnbas, 5/10/20 km, +0..+36
+  if (visaSnabb && P.dtg && SVIDX && SVIDX.dtg === P.dtg && SVIDX.v.includes(o.v) && o.s % SVIDX.s === 0) {
+    const t = el("rect", { x: SVIDX.x0 - SVIDX.s / 2, y: KY - 1 - SVIDX.y1 - SVIDX.s / 2, width: SVIDX.x1 - SVIDX.x0 + SVIDX.s, height: SVIDX.y1 - SVIDX.y0 + SVIDX.s,
+      fill: "var(--mkhamt)", "fill-opacity": 0.07, stroke: "var(--mkhamt)", "stroke-width": 1.5, "stroke-dasharray": "8 4", "vector-effect": "non-scaling-stroke" });
+    const tt = el("title"); tt.textContent = "Förhämtat (GitHub): " + PPARAM[o.v].namn.split(",")[0].toLowerCase() + ", +0 till +" + Math.max(...SVIDX.tider) + " h, 5/10/20 km – laddas direkt utan met.no"; t.appendChild(tt); g.appendChild(t); }
   // sparade omraden for samma parameter och korning (tunt, prickat)
   if (visaOmr) for (const e of P.index) if (P.dtg && e.dtg === P.dtg && e.v === o.v) r(e, "stroke:var(--dim);stroke-width:1;stroke-dasharray:2 3");
   r(o, "stroke:var(--acc);stroke-width:2;stroke-dasharray:6 4");
@@ -486,6 +509,25 @@ async function svFas(o, sakn) {
   e.anv = Date.now(); await DB.put("index", P.index); await stadaLager(e);
   return { antal, kb };
 }
+// NYTT 20/11: autoladdning fran Sverigeoversikten (GitHub) nar kartan ar tom for vald period - inget fran met.no.
+// Provas en gang per kombination (korning, parameter, omrade, upplosning, period).
+let svAutoSenast = "", svAutoPagar = false;
+async function svAuto() {
+  if (lage !== "p" || P.upptagen || svAutoPagar) return;
+  svAutoPagar = true;
+  try {
+    const idx = await svIndex(); if (!idx || !idx.v.includes($("pParam").value)) return;
+    // nytt fonster/inkognito: ingen korning kand an -> leta senaste (ett litet anrop), sa Sverigeoversikten kan visas direkt
+    if (!P.dtg && $("pKorningVal").value === "senaste") { try { await aktivKorning(); } catch (e) { return; } }
+    if (!P.dtg || idx.dtg !== P.dtg) return;
+    const o0 = berakna(); if (!o0) return;
+    const o = { ...o0, dtg: P.dtg }, { lista } = periodTimmar(), nyckel = [o.dtg, o.v, o.s, o.y0, o.y1, o.x0, o.x1, lista.join(",")].join(":");
+    if (nyckel === svAutoSenast) return; svAutoSenast = nyckel;
+    const sakn = saknadeTimmar(o, lista); if (!sakn.length) return;
+    const r = await svFas(o, sakn);
+    if (r.antal) { await probVisa(); ritaOmrade(); status("Hämtat från Sverigeöversikten (GitHub) – " + r.antal + " timmar, " + Math.round(r.kb || 0) + " kB, inget från met.no.", ""); }
+  } catch (e) {} finally { svAutoPagar = false; }
+}
 const ENS_SNAPP = 8, ENS_TBLOCK = 12;
 async function probHamta(auto, utanSnabb) {
   auto = auto === true; utanSnabb = utanSnabb === true;
@@ -733,7 +775,7 @@ async function probVisa() {
   // meteogrammet foljer med: annan parameter/korning -> hamta om, annars rita om (period, troskel)
   if (P.meteo) { if (P.meteo.v !== $("pParam").value || P.meteo.dtg !== P.dtg) visaMeteogram(); else ritaMeteogram(); }
   const rensa = () => { g.textContent = ""; P.varden = null; $("pSam").textContent = ""; };
-  if (lage !== "p" || !P.dtg) { rensa(); return; }
+  if (lage !== "p" || !P.dtg) { rensa(); if (lage === "p") svAuto(); return; }
   const v = $("pParam").value, pa = PPARAM[v], { a, b, fran, lista, dt } = periodTimmar(), trosk = parseFloat($("pTrosk").value.replace(",", "."));
   if (!isFinite(trosk)) { rensa(); return; }
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === v).sort((x, y) => y.s - x.s);
@@ -783,7 +825,7 @@ async function probVisa() {
   }
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa, visa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
-  if (!vis.length) { if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
+  if (!vis.length) { svAuto(); if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
   const utan = [...new Set(vis.flatMap(r => r.utan || []))].sort((x, y) => x - y);
   const utanText = utan.length ? " " + (utan.length === 1 ? "Medlem " + utan[0] + " saknar" : "Medlemmarna " + utan.join(", ") + " saknar") + " " + pa.namn.split(",")[0].toLowerCase() + " i datat och räknas inte (" + (ENS_MEDL - utan.length) + " medlemmar)." : "";
   if (/^m\d+$/.test(visa) && utan.includes(+visa.slice(1))) {
@@ -870,7 +912,7 @@ function probTips(e) {
 // En liten fraga (30 x 62 varden) -> sparas i minnet och via mellanserverns cache. Ritar per timme en lada
 // (bred 25-75 %, smal 10-90 % av medlemmarna), median, streck min-max, medlem 0 som linje, troskeln och vald period skuggad.
 // Nederbord visas ackumulerad fran +0.
-const METEO_TAK = { by: null, nb: null, sikt: 10000, bas: 5000 };   // y-axelns tak (m / ft) for sikt och bas
+const METEO_TAK = { by: null, nb: null, sikt: 10000, bas: 5000, lag: 8, medel: 8, hog: 8, tot: 8, dimma: 100, noll: 10000 };   // y-axelns tak (m / ft) for sikt och bas
 const meteoCache = new Map();
 async function meteoHamta(dtg, v, iy, ix) {
   const k = [dtg, v, iy, ix].join(":"); if (meteoCache.has(k)) return meteoCache.get(k);
@@ -933,17 +975,18 @@ function ritaMeteogram() {
       poster.push({ t0: t - N + 1, t1: t, v: Float32Array.from({ length: nm }, (_, m) => Math.max(0, raa(t, m) - raa(t - N, m))) });
   }
   const tak = METEO_TAK[M0.v];
-  let ymax = 0; for (const p of poster) for (const w of p.v) if (isFinite(w)) ymax = Math.max(ymax, tak ? Math.min(w, tak) : w);
+  let ymax = 0, ymin = 0; for (const p of poster) for (const w of p.v) if (isFinite(w)) { ymax = Math.max(ymax, tak ? Math.min(w, tak) : w); ymin = Math.min(ymin, w); }
   const trosk = parseFloat($("pTrosk").value.replace(",", "."));
   const visaTrosk = isFinite(trosk) && !nb;
-  if (visaTrosk) ymax = Math.max(ymax, trosk);
-  // jamna steg pa y-axeln (1, 2, 2,5 eller 5 x 10^n)
-  const steg = (() => { const r = (tak || Math.max(1, ymax * 1.05)) / 5, e = 10 ** Math.floor(Math.log10(r)); for (const f of [1, 2, 2.5, 5, 10]) if (f * e >= r) return f * e; })();
-  ymax = Math.ceil((tak || Math.max(1, ymax * 1.05)) / steg) * steg;
-  const nSteg = Math.round(ymax / steg);
+  if (visaTrosk) { ymax = Math.max(ymax, trosk); ymin = Math.min(ymin, trosk); }
+  // jamna steg pa y-axeln (1, 2, 2,5 eller 5 x 10^n). NYTT 20/11: negativa varden (temperatur) -> axeln borjar under 0
+  const spann = (tak || Math.max(1, ymax * 1.05)) - ymin * 1.05;
+  const steg = (() => { const r = spann / 5, e = 10 ** Math.floor(Math.log10(r)); for (const f of [1, 2, 2.5, 5, 10]) if (f * e >= r) return f * e; })();
+  ymax = Math.ceil((tak || Math.max(1, ymax * 1.05)) / steg) * steg; ymin = Math.floor(ymin * 1.05 / steg) * steg;
+  const nSteg = Math.round((ymax - ymin) / steg);
   const KOL = 14, VM = 46, H = 210, TOPP = 10, UNDER = 34, B = nt * KOL, W = VM + B + 8;
   meteoGeo = { KOL, VM, nt, TOPP, H };
-  const y = w => TOPP + H - Math.min(w, ymax) / ymax * H;
+  const y = w => TOPP + H - (Math.max(ymin, Math.min(w, ymax)) - ymin) / (ymax - ymin) * H;
   const svg = $("pMeteoSvg"); svg.textContent = ""; svg.setAttribute("width", W); svg.setAttribute("height", TOPP + H + UNDER);
   const g = (n, a, t) => svg.appendChild(el(n, a, t));
   // vald period
@@ -952,7 +995,7 @@ function ritaMeteogram() {
   // ackumulerat: gratt fore starten
   if (lage === "ack" && start > 0) g("rect", { x: VM, y: TOPP, width: start * KOL, height: H, fill: c("--dim"), opacity: 0.15 });
   // y-axel med 5 steg
-  for (let i = 0; i <= nSteg; i++) { const w = steg * i, yy = y(w);
+  for (let i = 0; i <= nSteg; i++) { const w = ymin + steg * i, yy = y(w);
     g("line", { x1: VM, x2: VM + B, y1: yy, y2: yy, stroke: c("--line"), "stroke-width": 0.7 });
     g("text", { x: VM - 4, y: yy + 3, "font-size": 9.5, "text-anchor": "end", fill: c("--dim") }, (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(w) : +w.toFixed(1)).toLocaleString("sv-SE")); }
   g("text", { x: 4, y: TOPP + 8, "font-size": 9.5, fill: c("--dim") }, pa.enhet);
@@ -1070,7 +1113,7 @@ function bytLage(nytt) {
   $("underrubrik").textContent = nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
   lagra("mt:lageVy", nytt); $("kTips").hidden = true;
   ritaMarkorer(); ritaOmrade(); probVisa();
-  if (nytt === "p") hamtaRegister().then(ritaOmrade);
+  if (nytt === "p") { hamtaRegister().then(ritaOmrade); svIndex().then(() => { ritaOmrade(); probVisa(); }); }
 }
 (async function startaP() {
   const sel = $("pParam");
