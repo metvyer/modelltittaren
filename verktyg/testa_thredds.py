@@ -414,6 +414,25 @@ def skewTid(iy, ix):
     skriv()
 
 
+def remsaMot(iy, ix):
+    """O (20/11 kvall): kostar en smal remsa mindre an hela omradet? Samma timmar (+0..+12) och alla 30
+    medlemmar, molnbas, .dods som sidan. 600 km-omrade (var 5 km) mitt i Finland mot en 60 km-remsa i ostkanten.
+    Ordning hel-remsa-remsa-hel sa att eventuell cache/uppvarmning syns."""
+    skriv("## O. Remsa mot helt område (molnbas, +0..+12, 30 medlemmar, var 5 km)")
+    dtg = senaste_ens()
+    if not dtg: skriv("Ingen körning."); return
+    hel = (385, 625, 529, 769)       # y0, y1, x0, x1 (600 x 600 km, mitt 62.2N 25.9E)
+    remsa = (385, 625, 745, 769)     # ostligaste ~60 km
+    skriv(f"Körning {dtg}.  Helt = 121 x 121 punkter, remsa = 121 x 13 punkter.")
+    skriv("| försök | yta | svar | sekunder | MB |"); skriv("|---|---|---|---|---|")
+    for nr, (namn, (y0, y1, x0, x1)) in enumerate([("helt", hel), ("remsa", remsa), ("remsa", remsa), ("helt", hel)], 1):
+        fr = f"cloud_base_altitude[0:1:12][0][0:1:29][{y0}:2:{y1}][{x0}:2:{x1}]"
+        st, data, sek, by = hamta(BAS + ENS_FIL(dtg) + ".dods?" + urllib.parse.quote(fr, safe=""), tidsgrans=300, binart=True)
+        skriv(f"| {nr} | {namn} | {st} | {sek:.1f} | {by / 1048576:.1f} |")
+        time.sleep(3)
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -441,6 +460,8 @@ def main():
         nyaFalt(iy, ix)
     if "N" in delar:
         skewTid(iy, ix)
+    if "O" in delar:
+        remsaMot(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
