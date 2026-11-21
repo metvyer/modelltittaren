@@ -50,7 +50,9 @@ const PPARAM = {
   sst:   { namn: "Havsytans temperatur", var: "SFX_SST", enhet: "°C", konv: v => v - 273.15, villkor: "≥", agg: "max", std: 6, snabb: [0, 2, 4, 6, 8, 10], bitar: 8,
            tabell: trappSkala([[-5, 35, 1]]) },
   t2:    { namn: "Temperatur 2 m", var: "air_temperature_2m", enhet: "°C", konv: v => v - 273.15, villkor: "<", agg: "min", std: 0, snabb: [5, 2, 0, -5, -10, -20], bitar: 8,
-           tabell: trappSkala([[-50, 40, 1]]) }
+           tabell: trappSkala([[-50, 40, 1]]) },
+  // 21/11 (matprov S): relativ fukt 2 m finns for alla 30 medlemmar - anvands for daggpunkten (rimfrost) i kombinationerna
+  rh:    { namn: "Relativ fukt 2 m", var: "relative_humidity_2m", enhet: "%", konv: v => Math.min(100, v > 1.5 ? v : v * 100), villkor: "≥", agg: "max", std: 95, snabb: [70, 80, 90, 95, 100], bitar: 8, steg: 1 }
 };
 function oktas(v) { return Math.min(8, (v > 1.5 ? v / 100 : v) * 8); }
 // Olinjar skala for 1 byte (Jakobs forslag 16/11): fint steg dar trosklarna finns, grovt dar det inte spelar roll.
@@ -265,7 +267,7 @@ function berakna() {
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
   if ($("pStorlek").value === "sv") {
     const s = Math.max(2, +$("pUppl").value), r = svRektangel(s);
-    return { v: $("pParam").value, s, ...r, ny: (r.y1 - r.y0) / s + 1, nx: (r.x1 - r.x0) / s + 1, lat: isFinite(lat) ? lat : 62, lon: isFinite(lon) ? lon : 16 };
+    return { v: P.vOverride || $("pParam").value, s, ...r, ny: (r.y1 - r.y0) / s + 1, nx: (r.x1 - r.x0) / s + 1, lat: isFinite(lat) ? lat : 62, lon: isFinite(lon) ? lon : 16 };
   }
   if (!isFinite(lat) || !isFinite(lon)) return null;
   const f = rutaF(lat, lon), s = +$("pUppl").value, halv = +$("pStorlek").value / 2 / 2.5;
@@ -273,7 +275,7 @@ function berakna() {
     while (b > max) b -= s; if (b - a < 2 * halv - s) a = Math.max(0, b - Math.ceil(2 * halv / s) * s); return [a, b]; };
   const [y0, y1] = fyll(f.fy, LCC.ny - 1), [x0, x1] = fyll(f.fx, LCC.nx - 1);
   if (y1 < y0 || x1 < x0) return null;
-  return { v: $("pParam").value, s, y0, y1, x0, x1, ny: (y1 - y0) / s + 1, nx: (x1 - x0) / s + 1, lat, lon };
+  return { v: P.vOverride || $("pParam").value, s, y0, y1, x0, x1, ny: (y1 - y0) / s + 1, nx: (x1 - x0) / s + 1, lat, lon };
 }
 function ritaOmrade() {
   const g = $("kOmr"); g.textContent = ""; if (lage !== "p") return;
@@ -384,6 +386,7 @@ function saknadeTimmar(o, lista) {
 // (00, 03, 06 ... UTC relativt korningen). Nederbord (summa) behover bara start och slut.
 function periodTimmar() {
   let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
+  if (P.listaOverride) return { a, b, fran: a, lista: P.listaOverride, dt: +$("pDt").value };   // 21/11: kombinationer (kombo.js)
   const pa = PPARAM[$("pParam").value], dt = +$("pDt").value;
   const fran = pa.agg === "summa" && a > 0 ? a - 1 : a;   // nederbord: summan = ack(b) - ack(a-1)
   let lista;
@@ -602,7 +605,7 @@ function ritaSiffror() {
   const g = $("kSiff"); if (!g) return; g.textContent = ""; if (!siffLage) return;
   let kallor = [];
   if (lage === "p") kallor = P.siffKalla || [];
-  else if (typeof M0F !== "undefined" && M0F.pa && M0F.o && M0F.data) kallor = [{ o: M0F.o, d: M0F.data, proc: false, lagre: !!M0P[M0F.v].lagre, enh: M0P[M0F.v].enh }];
+  else if (lage === "m0" && typeof M0F !== "undefined" && M0F.o && M0F.data) kallor = [{ o: M0F.o, d: M0F.data, proc: false, lagre: !!M0P[M0F.v].lagre, enh: M0P[M0F.v].enh }];
   const rekt = $("karta").getBoundingClientRect(); if (!rekt.width) return;
   const ppu = rekt.width / vb.w, fs = 10.5 / ppu; let antal = 0;
   const fmt = (v, k) => k.proc ? String(Math.round(v * 100)) : (k.enh === "ft" || k.enh === "m" || Math.abs(v) >= 10) ? String(Math.round(v)) : v.toFixed(1).replace(".", ",");
@@ -898,6 +901,7 @@ async function probVisa() {
   if (P.meteo) { if (P.meteo.v !== $("pParam").value || P.meteo.dtg !== P.dtg) visaMeteogram(); else ritaMeteogram(); }
   const rensa = () => { g.textContent = ""; P.varden = null; $("pSam").textContent = ""; };
   if (lage !== "p" || !P.dtg) { rensa(); if (lage === "p") svAuto(); return; }
+  if (typeof komboAktiv === "function" && komboAktiv()) return komboVisa(g, rensa);   // 21/11: kombinerad sannolikhet
   const v = $("pParam").value, pa = PPARAM[v], { a, b, fran, lista, dt } = periodTimmar(), trosk = parseFloat($("pTrosk").value.replace(",", "."));
   if (!isFinite(trosk)) { rensa(); return; }
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === v).sort((x, y) => y.s - x.s);
@@ -1034,6 +1038,7 @@ function mmmHtml(mn, md, mx, rund, enhet) {
 function median(a) { const s = [...a].sort((x, y) => x - y); return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2; }
 function probTips(e) {
   const V = P.varden; if (!V) { $("kTips").hidden = true; return; }
+  if (V.kombo) return komboTips(e);
   const p = kartPunkt(e), fy = KY - 1 - p.y;
   for (const r of V.vis) {
     const o = r.o, y = Math.round((fy - o.y0) / o.s), x = Math.round((p.x - o.x0) / o.s);
@@ -1113,6 +1118,15 @@ async function visaMeteogram() {
 const NB_LAGE_NAMN = { ack: "Ackumulerat från start", h1: "Per timme", h3: "Per 3 h (00, 03, 06 … UTC)", h6: "Per 6 h (00, 06, 12, 18 UTC)" };
 let nbLage = NB_LAGE_NAMN[lasa("mt:meteoNb")] ? lasa("mt:meteoNb") : "ack";
 let meteoGeo = null;   // senaste ritningens matt (for att dra startlinjen)
+function meteoAxelFlytta() { const ax = $("meteoAxel"), sk = document.querySelector(".meteoskroll"); if (ax && sk) ax.setAttribute("transform", "translate(" + sk.scrollLeft + ",0)"); }
+// 21/11: Expandera - meteogrammet flyttas under allt annat, hela sidans bredd (och tillbaka)
+function meteoExpandera() {
+  const r = $("pMeteoRuta"), stor = !r.classList.contains("meteoStor"), k = $("pMeteoStor");
+  if (stor) $("meteoNedre").appendChild(r); else document.querySelector("#vyP .meteo").appendChild(r);
+  r.classList.toggle("meteoStor", stor); k.textContent = stor ? "⤡ Tillbaka" : "⤢ Expandera"; lagra("mt:meteoStor", stor ? "ja" : "nej");
+  if (stor) r.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  ritaMeteogram();
+}
 function ritaMeteogram() {
   const M0 = P.meteo, ruta_ = $("pMeteoRuta"); if (!M0) { ruta_.hidden = true; return; }
   const css = getComputedStyle(document.documentElement), c = n => css.getPropertyValue(n).trim();
@@ -1157,6 +1171,13 @@ function ritaMeteogram() {
     g("line", { x1: VM, x2: VM + B, y1: yy, y2: yy, stroke: c("--line"), "stroke-width": 0.7 });
     g("text", { x: VM - 4, y: yy + 3, "font-size": 9.5, "text-anchor": "end", fill: c("--dim") }, (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(w) : +w.toFixed(1)).toLocaleString("sv-SE")); }
   g("text", { x: 4, y: TOPP + 8, "font-size": 9.5, fill: c("--dim") }, pa.enhet);
+  // 21/11: fast y-axel - en kopia av skalan som foljer med nar man skrollar i sidled (laggs overst nar ritningen ar klar)
+  { const ax = el("g", { id: "meteoAxel" });
+    ax.appendChild(el("rect", { x: 0, y: 0, width: VM - 1, height: TOPP + H + 4, fill: c("--panel") || "#fff", opacity: 0.94 }));
+    for (let i = 0; i <= nSteg; i++) { const w = ymin + steg * i; ax.appendChild(el("text", { x: VM - 4, y: y(w) + 3, "font-size": 9.5, "text-anchor": "end", fill: c("--dim") }, (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(w) : +w.toFixed(1)).toLocaleString("sv-SE"))); }
+    ax.appendChild(el("text", { x: 4, y: TOPP + 8, "font-size": 9.5, fill: c("--dim") }, pa.enhet));
+    ax.appendChild(el("line", { x1: VM - 1, x2: VM - 1, y1: TOPP, y2: TOPP + H, stroke: c("--line") }));
+    setTimeout(() => { svg.appendChild(ax); meteoAxelFlytta(); }, 0); }
   // tidsaxel: dygnsgranser och var 6:e timme
   for (let t = 0; t < nt; t++) { const dd = new Date(bas + t * 3600e3), h = dd.getUTCHours(), x = VM + t * KOL;
     if (h === 0 && t > 0) g("line", { x1: x, x2: x, y1: TOPP, y2: TOPP + H + 4, stroke: c("--dim"), "stroke-width": 0.8 });
@@ -1289,6 +1310,7 @@ function autoHamta() {
   clearTimeout(autoTimer); P.autoVantar = true;
   autoTimer = setTimeout(() => {
     if (P.upptagen) { P.autoIgen = true; return; }
+    if (typeof komboAktiv === "function" && komboAktiv()) { P.autoVantar = false; komboHamta(true); return; }
     const o0 = berakna(); if (!o0 || !P.dtg) { P.autoVantar = false; probVisa(); return; }
     if (!saknadeTimmar({ ...o0, dtg: P.dtg }, periodTimmar().lista).length) { P.autoVantar = false; probVisa(); return; }
     probHamta(true);
@@ -1345,8 +1367,18 @@ function probOmradeAndrat() { P.fragar = false; ritaOmrade(); probVisa().then(()
 // Sannolikhetsvyns egna val sparas nar man gar in och aterstalls nar man gar ut.
 const FAV_KNAPPAR = { by: [27, 32, 45], sikt: [5000, 3000, 2000, 1000], bas: [1200, 500, 400, 300, 200] };
 let fav = false, favSpar = null;
-const FAV_FALT = ["pKorningVal", "pParam", "pVisa", "pTrosk", "pStorlek", "pUppl", "pDt", "pFran", "pTill", "pSteg"];
+const FAV_FALT = ["pKorningVal", "pParam", "pVisa", "pTrosk", "pStorlek", "pUppl", "pDt", "pFran", "pTill", "pSteg", "pKombo", "pKomboA", "pKomboB"];
+// 21/11: vintergruppen - kombinerad sannolikhet, hamtas fran met.no nar man trycker (inte forhamtat)
+const FAV_VINTER = [["snofok", "Snöfok"], ["ishalka", "Ishalka"], ["rimfrost", "Rimfrost/frost"]];
+function favVinter(k) {
+  komboVal(k); document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", "false"));
+  document.querySelectorAll("#favVinter button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === k)));
+  ritaOmrade(); probVisa().then(() => { if (!P.varden) komboHamta(false); });
+}
 function favKnappar() {
+  const vb_ = $("favVinter"); vb_.textContent = "";
+  for (const [k, n] of FAV_VINTER) { const b = document.createElement("button"); b.className = "sek liten"; b.dataset.k = k; b.textContent = n;
+    setTimeout(() => { if (typeof KOMBO !== "undefined" && KOMBO[k]) b.title = KOMBO[k].text(KOMBO[k].A ? KOMBO[k].A.std : 0, KOMBO[k].B.std) + " – hämtas från met.no när du trycker"; }, 0); b.addEventListener("click", () => favVinter(k)); vb_.appendChild(b); }
   for (const [v, id] of [["by", "favBy"], ["sikt", "favSikt"], ["bas", "favBas"]]) {
     const box = $(id); box.textContent = "";
     for (const g of FAV_KNAPPAR[v]) { const b = document.createElement("button"); b.className = "sek liten"; b.dataset.v = v; b.dataset.g = g;
@@ -1355,6 +1387,7 @@ function favKnappar() {
 }
 function favMarkera() { document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === $("pParam").value && +b.dataset.g === parseFloat($("pTrosk").value.replace(",", "."))))); }
 function favVal(v, g) {
+  if (typeof komboVal === "function" && $("pKombo").value) komboVal("");   // 21/11: vanlig favorit = ingen kombination
   const sel = $("pParam"); if (sel.value !== v) { sel.value = v; sel.dispatchEvent(new Event("change")); }
   $("pTrosk").value = g; lagra("mt:pTrosk:" + v, String(g)); lagra("mt:favVal", v + ":" + g); sattParam(true); favMarkera(); probVisa();
 }
@@ -1384,18 +1417,19 @@ function favUt() {
 function favUtInre() {
   $("pKorningVal").value = favSpar.pKorningVal; const kv = $("pKorningVal").value; bytKorning(kv === "senaste" ? P.senast : kv);
   for (const id of FAV_FALT) if (favSpar[id] !== undefined) $(id).value = favSpar[id];   // efter korningsbytet (som annars flyttar perioden)
-  favSpar = null; sattParam(true);
+  favSpar = null; sattParam(true); if (typeof komboSynka === "function") komboSynka();
 }
 function bytLage(nytt) {
   if (nytt !== (fav ? "f" : lage) && typeof visaTestskylt === "function") visaTestskylt();   // testskylt vid flikbyte (19/11 kvall)
   const varFav = fav; fav = nytt === "f"; if (fav) nytt = "p";
   if (varFav && !fav) favUt();
-  lage = nytt; document.body.classList.toggle("p", nytt === "p"); document.body.classList.toggle("fav", fav); document.body.classList.toggle("taf", nytt === "taf");
+  lage = nytt; document.body.classList.toggle("p", nytt === "p"); document.body.classList.toggle("fav", fav); document.body.classList.toggle("taf", nytt === "taf"); document.body.classList.toggle("m0", nytt === "m0");
   $("flikTH").setAttribute("aria-selected", String(nytt === "th")); $("flikP").setAttribute("aria-selected", String(nytt === "p" && !fav)); $("flikF").setAttribute("aria-selected", String(fav));
-  $("flikTAF").setAttribute("aria-selected", String(nytt === "taf"));
-  $("vyTH").hidden = nytt !== "th"; $("vyP").hidden = nytt !== "p"; $("vyTAF").hidden = nytt !== "taf";
-  $("underrubrik").textContent = nytt === "taf" ? "TAF-bevakning · grön/gul/röd per timme, METAR och larm" : fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
+  $("flikTAF").setAttribute("aria-selected", String(nytt === "taf")); $("flikM0").setAttribute("aria-selected", String(nytt === "m0"));
+  $("vyTH").hidden = nytt !== "th"; $("vyP").hidden = nytt !== "p"; $("vyTAF").hidden = nytt !== "taf"; $("vyM0").hidden = nytt !== "m0";
+  $("underrubrik").textContent = nytt === "m0" ? "Karta m0 · AROME 2,5 km (MEPS medlem 0), fält i färg + linjer" : nytt === "taf" ? "TAF-bevakning · grön/gul/röd per timme, METAR och larm" : fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
   if (nytt === "taf" && typeof tafIn === "function") setTimeout(tafIn, 0);
+  if (typeof m0Rita === "function") { if (nytt === "m0") setTimeout(m0In, 0); else $("kM0").textContent = ""; }
   lagra("mt:lageVy", fav ? "f" : nytt); $("kTips").hidden = true;
   if (fav && !varFav) favIn();
   setTimeout(ritaSiffror, 50);
@@ -1431,6 +1465,9 @@ function bytLage(nytt) {
   nbs.value = nbLage;
   nbs.addEventListener("change", () => { nbLage = nbs.value; lagra("mt:meteoNb", nbLage); if (P.meteo) ritaMeteogram(); });
   meteoDragInit();
+  document.querySelector(".meteoskroll").addEventListener("scroll", meteoAxelFlytta);
+  $("pMeteoStor").addEventListener("click", meteoExpandera);
+  if (lasa("mt:meteoStor") === "ja") setTimeout(meteoExpandera, 0);
   $("pMeteoStang").addEventListener("click", () => { P.meteo = null; $("pMeteoRuta").hidden = true; $("pMeteoInfo").textContent = ""; });
   sattParam(); const st = lasa("mt:pTrosk:" + sel.value); if (st) { $("pTrosk").value = st; sattParam(true); }
   $("pStorlek").value = lasa("mt:pStorlek") || "150"; $("pUppl").value = lasa("mt:pUppl") || "2";
@@ -1495,7 +1532,7 @@ function bytLage(nytt) {
   ["pStorlek", "pUppl"].forEach(id => $(id).addEventListener("change", () => { sparrUppl(); lagra("mt:" + id, $(id).value); probOmradeAndrat(); }));
   ["lat", "lon", "klistra"].forEach(id => $(id).addEventListener("input", () => { if (lage === "p") probOmradeAndrat(); }));
   $("punkt").addEventListener("change", () => { if (lage === "p") probOmradeAndrat(); });
-  $("pHamta").addEventListener("click", probHamta);
+  $("pHamta").addEventListener("click", () => (typeof komboAktiv === "function" && komboAktiv()) ? komboHamta(false) : probHamta());
   $("visaOmr").setAttribute("aria-pressed", String(visaOmr));
   $("visaIso").setAttribute("aria-pressed", String(visaIso));
   $("visaIso").addEventListener("click", e => { visaIso = !visaIso; lagra("mt:visaIso", visaIso ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaIso)); probVisa(); });
@@ -1506,7 +1543,7 @@ function bytLage(nytt) {
   setInterval(() => { if (lage === "p" && visaSnabb && !document.hidden) hamtaRegister().then(ritaOmrade); }, 60e3);
   $("visaOmr").addEventListener("click", e => { visaOmr = !visaOmr; lagra("mt:visaOmr", visaOmr ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaOmr)); ritaOmrade(); });
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
-  $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f")); $("flikTAF").addEventListener("click", () => bytLage("taf"));
+  $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f")); $("flikTAF").addEventListener("click", () => bytLage("taf")); $("flikM0").addEventListener("click", () => bytLage("m0"));
   favKnappar(); $("pTrosk").addEventListener("input", favMarkera);
   $("m0Linje").setAttribute("aria-pressed", String(visaM0Linje));
   $("m0Linje").addEventListener("click", e => { visaM0Linje = !visaM0Linje; lagra("mt:m0Linje", visaM0Linje ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaM0Linje)); probVisa(); });
@@ -1514,5 +1551,5 @@ function bytLage(nytt) {
   try { await laddaIndex(); } catch (e) {}
   // 20/11 kvall: nya besokare (inget sparat val) borjar i Favoriter
   const forst = lasa("mt:lageVy");
-  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "f" || !forst) bytLage("f");
+  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "m0") bytLage("m0"); else if (forst === "f" || !forst) bytLage("f");
 })();

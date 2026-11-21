@@ -95,7 +95,12 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 .flikar button { background: transparent; color: var(--dim); border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 14px; font-weight: 600; }
 .flikar button[aria-selected="true"] { color: var(--acc); border-bottom-color: var(--acc); }
 body.p .baraTH { display: none; }
-body.p #kM0 { display: none; }
+body:not(.m0) #kM0 { display: none; }
+body.m0 .baraTH, body.m0 .baraP, body.m0 .ejTaf { display: none !important; }
+body.m0 .arbete { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); }
+body.m0 #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
+.m0tidrad { align-items: center; } .m0tidmitt { flex: 1; min-width: 180px; } .m0tidmitt input { width: 100%; }
+.m0forkl { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; margin: 6px 0; } .m0forkl i { display: inline-block; width: 14px; height: 10px; margin-right: 4px; border: 1px solid var(--line); }
 #karta.baraSiffror #kProb image, #karta.baraSiffror #kM0 image { visibility: hidden; }
 .m0rad { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
 .m0rad[hidden] { display: none; }
@@ -145,6 +150,7 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .ritrad { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 5px 8px;
   background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--acc); border-radius: 6px; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
 .ritrad[hidden] { display: none; }
+body.kombo .ejKombo { display: none; }
 .flikar .delaknapp { margin-left: auto; color: var(--acc); }
 .flikar .delaknapp[aria-pressed="true"] { color: #dc2626; }
 .delarad { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 6px 0 8px; padding: 6px 10px; border: 1px solid var(--acc); border-radius: 6px; font-size: 13px; }
@@ -153,6 +159,7 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .delarad.foljer { background: #dcfce7; border-color: #16a34a; color: #14532d; }
 .delarad.pausad { background: #ffedd5; border-color: #ea580c; color: #7c2d12; }
 @media (prefers-color-scheme: dark) { .delarad.foljer { background: #0f3d22; color: #bbf7d0; } .delarad.pausad { background: #4a2408; color: #fed7aa; } }
+.delarad[hidden] { display: none; }
 .delarad .delanamn { font-weight: 700; }
 .delarad.styr { position: sticky; top: 0; z-index: 50; font-weight: 500; box-shadow: 0 2px 6px rgba(0,0,0,.15); background: #dbeafe; border-color: #2563eb; color: #1e3a8a; }
 @media (prefers-color-scheme: dark) { .delarad.styr { background: #172554; color: #bfdbfe; } }
@@ -197,7 +204,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .tidsetiketter span { position: absolute; top: 0; white-space: nowrap; transform: translateX(2px); }
 .tidsforkl { font-size: 11px; color: var(--dim); display: flex; gap: 12px; flex-wrap: wrap; }
 .tidsforkl i { display: inline-block; width: 12px; height: 10px; margin-right: 4px; vertical-align: -1px; border-radius: 2px; }
-@media (max-width: 860px) { body.p .arbete { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 860px) { body.p .arbete, body.m0 .arbete { grid-template-columns: minmax(0, 1fr); } }
 #vyP[hidden], #vyTH[hidden] { display: none; }
 .pkontroller { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
 .pkontroller .rad { display: flex; gap: 6px; align-items: center; }
@@ -242,6 +249,8 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 #pMeteoRuta { margin-top: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .meteohuvud { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 13px; }
 .meteoskroll { overflow-x: auto; }
+#pMeteoRuta.meteoStor { margin: 10px 0; }
+body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
 .testrad { background: #b91c1c; color: #fff; font-size: 12px; font-weight: 700; text-align: center; padding: 3px 6px; letter-spacing: .03em; }
 .testskylt { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
 .testskylt[hidden] { display: none; }
@@ -274,7 +283,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Dela det du tittar på: ger en länk som kollegor kan öppna. När du ändrar följer deras sida med (inom några sekunder).">Dela</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme">Karta m0</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Dela det du tittar på: ger en länk som kollegor kan öppna. När du ändrar följer deras sida med (inom några sekunder).">Dela</button>
 </div>
 
 <div class="nykorning" id="nyKorning" hidden role="status"></div>
@@ -299,7 +308,6 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <button class="sek liten" id="zHem" title="Visa hela MEPS-området">Hela</button>
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
-    <button class="sek liten baraTH" id="m0Falt" aria-pressed="false" title="Kartfält ur medlem 0 (det-körningen, samma som tid-höjd) för en vald timme över hela den förhämtade rutan (Sverige, Östersjön, Finland, Baltikum), 5 km. Ett anrop per timme.">Kartfält m0</button>
     <button class="sek liten baraP" id="m0Linje" aria-pressed="false" title="Medlem 0:s linje för tröskeln (blå) ovanpå sannolikheten – ligger den långt från de röda områdena skiljer sig medlem 0 från ensemblen. Inga extra hämtningar.">m0-linje</button>
     <button class="sek liten" id="siffror" aria-pressed="false" title="Värdena som siffror på kartan: av → på (ovanpå färgerna) → bara siffror. Inzoomat syns varje punkt, längre ut blockens högsta (lägsta för sikt/molnbas) värde.">Siffror: av</button>
     <button class="sek liten baraP" id="visaSnabb" aria-pressed="true" title="Gröna rutor = områden som redan finns i mellanserverns cache (någon har hämtat dem) – de hämtas på en sekund utan att fråga met.no">Snabba</button>
@@ -316,11 +324,6 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   </div>
-  <div class="baraTH m0rad" id="m0Rad" hidden>
-    <select id="m0Param"></select>
-    <button class="sek liten" id="m0Bak" title="En timme bakåt">◀</button><span id="m0Tid" class="m0tid"></span><button class="sek liten" id="m0Fram" title="En timme framåt">▶</button>
-    <span id="m0Forkl" class="m0forkl"></span><span id="m0Status" class="lagetips"></span>
-  </div>
   <div class="baraP tidsrad">
     <button class="sek" id="tBak" title="Bakåt (vänsterpil)">◀</button>
     <div class="tidsmitt"><div class="tidsvald" id="tidsVald"></div><div class="tidslinje" id="tidslinje" title="Klicka på en timme för att flytta perioden dit"></div><div class="tidsetiketter" id="tidsEtiketter"></div></div>
@@ -330,7 +333,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   <div class="kartforklaring baraTH">
     <span><i class="mk tom"></i>ej hämtad</span><span><i class="mk halv"></i>påbörjad</span><span><i class="mk full"></i>hämtad</span><span><i class="mk vald"></i>vald</span>
   </div>
-  <p class="karttips">Klicka på kartan för att hämta en punkt, eller på en markering. Håll muspekaren över en markering för namn. Skift-klick eller <b>Fri punkt</b> = ny punkt precis där du klickar. Hjul eller nyp = zooma, dra = flytta.</p>
+  <p class="karttips baraTH">Klicka på kartan för att hämta en punkt, eller på en markering. Håll muspekaren över en markering för namn. Skift-klick eller <b>Fri punkt</b> = ny punkt precis där du klickar. Hjul eller nyp = zooma, dra = flytta.</p>
 </section>
 
 <section class="hoger">
@@ -340,14 +343,18 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <div class="favrad"><b>Byvind ≥</b><span id="favBy"></span></div>
     <div class="favrad"><b>Sikt &lt;</b><span id="favSikt"></span></div>
     <div class="favrad"><b>Molnbas &lt;</b><span id="favBas"></span></div>
+    <div class="favrad" title="Kombinerad sannolikhet (per medlem och timme). Inte förhämtat – hämtas från met.no när du trycker (kan ta en stund första gången, sedan ur mellanserverns cache)."><b>Vinter</b><span id="favVinter"></span></div>
   </div>
   <div class="pkontroller">
     <div class="falt ejFav"><label for="pKorningVal">Körning</label><select id="pKorningVal"></select></div>
     <div class="falt ejFav"><label for="pParam">Parameter</label><select id="pParam"></select></div>
+    <div class="falt ejFav"><label for="pKombo">Kombinera</label><select id="pKombo" title="Kombinerad sannolikhet: villkoren räknas per medlem och timme – en medlem räknas om allt är uppfyllt samtidigt någon gång i perioden"></select></div>
+    <div class="falt" id="pKomboAFalt" hidden><label for="pKomboA" id="pKomboAEt">A</label><input id="pKomboA" class="koord" inputmode="decimal"></div>
+    <div class="falt" id="pKomboBFalt" hidden><label for="pKomboB" id="pKomboBEt">B</label><input id="pKomboB" class="koord" inputmode="decimal"></div>
     <div class="falt"><label for="pMedl">Medlemmar</label><select id="pMedl" title="Vilka ensemblemedlemmar som räknas. 0–14 är den senaste körningen, 15–29 är samma medlemmar ur körningen 3 h tidigare. Skiljer sig nya och gamla mycket har modellen hoppat mellan körningarna. Med 15 medlemmar går sannolikheten i steg om ca 7 %."><option value="alla">Alla 30</option><option value="nya">15 nya (0–14)</option><option value="gamla">15 gamla (15–29, förra körningen)</option></select></div>
     <div class="falt"><label for="pVisa">Visa</label><select id="pVisa" title="Sannolikhet över tröskeln, eller värdet självt: medel/högsta/lägsta av medlemmarna eller en enskild medlem"></select></div>
-    <div class="falt"><label for="pTrosk" id="pTroskEtikett">Tröskel</label><div class="rad"><input id="pTrosk" class="koord" inputmode="decimal"><span id="pEnhet" class="enhet"></span></div></div>
-    <div class="falt ejFav"><label>Snabbval</label><div class="chips" id="pChips"></div></div>
+    <div class="falt ejKombo"><label for="pTrosk" id="pTroskEtikett">Tröskel</label><div class="rad"><input id="pTrosk" class="koord" inputmode="decimal"><span id="pEnhet" class="enhet"></span></div></div>
+    <div class="falt ejFav ejKombo"><label>Snabbval</label><div class="chips" id="pChips"></div></div>
     <div class="falt" id="pIsoProbFalt"><label>Isolinjer %</label><div class="chips" id="pIsoProb" title="Tänd eller släck sannolikhetens isolinjer (alla, ingen, en eller några). Tunn streckad = lägst, tjock hel = högst."></div></div>
   </div>
   <div class="pkontroller">
@@ -372,13 +379,27 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   <div class="meteo">
     <button class="sek liten" id="pMeteo" title="Hela körningen (+0 till +61 h) för vald parameter i den valda punkten">Meteogram här</button>
     <span id="pMeteoInfo" class="dim"></span>
-    <div id="pMeteoRuta" hidden><div class="meteohuvud"><b id="pMeteoTitel"></b><button class="sek liten" id="pMeteoStang" title="Stäng meteogrammet">✕</button></div>
+    <div id="pMeteoRuta" hidden><div class="meteohuvud"><b id="pMeteoTitel"></b><span><button class="sek liten" id="pMeteoStor" title="Lägg meteogrammet under allt annat, över hela sidans bredd – då syns hela körningen">⤢ Expandera</button> <button class="sek liten" id="pMeteoStang" title="Stäng meteogrammet">✕</button></span></div>
       <div class="meteonb" id="pMeteoNbRad" hidden><label for="pMeteoNb">Nederbörd:</label> <select id="pMeteoNb"></select></div>
       <div class="meteoskroll"><svg id="pMeteoSvg"></svg></div>
       <div class="dim" id="pMeteoForkl"></div></div>
   </div>
   <p class="karttips">Varje färgad ruta är en hämtad punkt. Sannolikheten = andel av de 30 medlemmarna som når tröskeln någon gång under perioden (nederbörd: summan över perioden). Håll muspekaren över kartan för medlemmarnas värden.</p>
   <p class="karttips" id="pLager"></p>
+</div>
+<div id="vyM0" hidden>
+  <div class="pkontroller">
+    <div class="falt"><label for="m0Param">Fält i färg</label><select id="m0Param"></select></div>
+    <div class="falt"><label for="m0Linjer">Linjer ovanpå</label><select id="m0Linjer"></select></div>
+  </div>
+  <div class="pkontroller m0tidrad">
+    <button class="sek" id="m0Bak" title="En timme bakåt (vänsterpil)">◀</button>
+    <div class="m0tidmitt"><div id="m0Tid" class="tidsvald"></div><input type="range" id="m0Reglage" min="0" max="66" value="0" title="Dra för att välja timme"></div>
+    <button class="sek" id="m0Fram" title="En timme framåt (högerpil)">▶</button><button class="sek liten" id="m0Nu" title="Hoppa till aktuell timme">Nu</button>
+  </div>
+  <div class="m0forkl" id="m0Forkl"></div>
+  <dl class="info"><dt>Körning</dt><dd id="m0Korn">–</dd><dt>Status</dt><dd id="m0Status"></dd></dl>
+  <p class="karttips">Fälten gäller medlem 0 (det-körningen, samma som tid-höjd) för hela den förhämtade rutan, var 5:e km. Håll muspekaren över kartan för värdena. Ett anrop per fält och timme – nästa timme hämtas i förväg. Nederbörd, regn och snö = mängd senaste timmen.</p>
 </div>
 <div id="vyTAF" hidden>
   <div class="tafinst">
@@ -472,6 +493,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 </div>
 </section>
 </div>
+<div id="meteoNedre"></div>
 <div class="tips" id="tips" hidden></div>
 <div class="tips ktips" id="kTips" hidden></div>
 <div class="vagval"><label for="vagVal">Hämta MEPS via mellanservern (Cloudflare):</label>
@@ -1380,7 +1402,6 @@ function rita() {
     }
   }
   ritaRisk(svg, ax, sk.botten + 8 + EXTRA + RADER.length * RAD_H + 6, nt, t0, c);
-  if (M0F.pa) setTimeout(m0Uppdatera, 0);
   // info
   const d0 = new Date(t0);
   $("iRuta").textContent = isFinite(M.glat) ? M.glat.toFixed(3) + "N " + M.glon.toFixed(3) + "E, " + avstand(M.lat, M.lon, M.glat, M.glon).toFixed(1) + " km från punkten, modellens markhöjd " + Math.round(M.terr) + " m (ruta y=" + M.iy + " x=" + M.ix + ")" : "–";
@@ -1389,103 +1410,7 @@ function rita() {
   if (M.vald) { kt.insertAdjacentHTML("beforeend", ' <span class="vald">– vald körning</span>'); }
   else if (M.ny) { kt.insertAdjacentHTML("beforeend", ' <span class="ny">– NY KÖRNING</span>'); }
 }
-// ===================================================================
-//  KARTFALT MEDLEM 0 (NYTT 20/11 kvall) - i tid-hojd: ett falt ur det-korningen for en vald timme,
-//  600 x 600 km runt punkten var 5:e km (rutan snappas till 8-rutorsgrid sa att Cloudflare-cachen traffar).
-// ===================================================================
-const M0P = {
-  nb:   { namn: "Nederbörd", var: "precipitation_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, konv: v => v },
-  vind: { namn: "Medelvind 10 m", var: "wind_speed", enh: "kt", klass: [10, 15, 20, 25, 30, 40], konv: v => v * KT },
-  by:   { namn: "Byvind", var: "wind_speed_of_gust", enh: "kt", klass: [20, 25, 32, 40, 50], konv: v => v * KT },
-  bas:  { namn: "Molnbas", var: "cloud_base_altitude", enh: "ft", klass: [1500, 1000, 500, 300, 200], lagre: true, konv: v => v * FOT },
-  // 20/11 kvall: yttemperatur och havsytans temperatur (SFX_SST finns bara i det-filen)
-  t0:   { namn: "Yttemperatur 0 m", var: "air_temperature_0m", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10], konv: v => v - 273.15 },
-  sst:  { namn: "Havsytans temperatur", var: "SFX_SST", enh: "°C", klass: [0, 2, 4, 6, 8, 10, 12, 15], konv: v => v - 273.15 },
-};
-const M0_FARG = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
-const M0_HALV = 120, M0_S = 2;   // 120 rutor at varje hall (300 km), var 2:a ruta (5 km)
-let M0F = { pa: lasa("mt:m0Falt") === "ja", v: M0P[lasa("mt:m0Param")] ? lasa("mt:m0Param") : "nb", t: null, nyckel: "", data: null, o: null, hamtar: false };
-const m0Cache = new Map();
-const m0Farger = v => M0_FARG.slice(M0_FARG.length - M0P[v].klass.length);
-function m0Omrade() {
-  // 20/11 sen kvall: hela den forhamtade rutan (samma som Sannolikhet/Favoriter), var 5 km, om den ar kand
-  if (typeof SVIDX !== "undefined" && SVIDX && SVIDX.y0 !== undefined) {
-    const s = M0_S, y1 = SVIDX.y0 + Math.floor((SVIDX.y1 - SVIDX.y0) / s) * s, x1 = SVIDX.x0 + Math.floor((SVIDX.x1 - SVIDX.x0) / s) * s;
-    return { y0: SVIDX.y0, y1, x0: SVIDX.x0, x1, s, ny: (y1 - SVIDX.y0) / s + 1, nx: (x1 - SVIDX.x0) / s + 1 };
-  }
-  if (!M || !isFinite(M.iy)) return null;
-  const sn = v => Math.round(v / 8) * 8, cy = sn(M.iy), cx = sn(M.ix);
-  const y0 = Math.max(0, cy - M0_HALV), y1 = Math.min(KY - 1 - ((Math.min(KY - 1, cy + M0_HALV) - y0) % M0_S), cy + M0_HALV);
-  const x0 = Math.max(0, cx - M0_HALV), x1 = Math.min(KX - 1 - ((Math.min(KX - 1, cx + M0_HALV) - x0) % M0_S), cx + M0_HALV);
-  const yy1 = y0 + Math.floor((y1 - y0) / M0_S) * M0_S, xx1 = x0 + Math.floor((x1 - x0) / M0_S) * M0_S;
-  return { y0, y1: yy1, x0, x1: xx1, s: M0_S, ny: (yy1 - y0) / M0_S + 1, nx: (xx1 - x0) / M0_S + 1 };
-}
-function m0TidText(t) { if (!M || !M.t0) return "+" + t; const d = new Date(M.t0 + t * 3600e3); return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z (+" + t + ")"; }
-async function m0Uppdatera() {
-  const g = $("kM0"), rad = $("m0Rad");
-  rad.hidden = !M0F.pa; if (!M0F.pa) { g.textContent = ""; if (typeof ritaSiffror === "function") ritaSiffror(); return; }
-  const st = $("m0Status");
-  if (!M || !M.dtg || !M.stat) { g.textContent = ""; st.textContent = "Välj och hämta en punkt först."; $("m0Tid").textContent = ""; return; }
-  if (M0F.t === null) { const nu = Math.round((Date.now() - (M.t0 || Date.now())) / 3600e3); M0F.t = Math.max(0, Math.min(M.nt - 1, nu)); }
-  M0F.t = Math.max(0, Math.min(M.nt - 1, M0F.t)); $("m0Tid").textContent = m0TidText(M0F.t);
-  if (typeof svIndex === "function" && typeof SVIDX !== "undefined" && !SVIDX) { try { await svIndex(); } catch (e) {} }
-  const o = m0Omrade(); if (!o) return;
-  const pa = M0P[M0F.v], nyckel = [M.dtg, M0F.v, M0F.t, o.y0, o.y1, o.x0, o.x1].join(":");
-  m0Forklaring();
-  if (nyckel === M0F.nyckel && M0F.data) { m0Rita(); return; }
-  if (m0Cache.has(nyckel)) { M0F.nyckel = nyckel; M0F.data = m0Cache.get(nyckel); M0F.o = o; m0Rita(); st.textContent = ""; return; }
-  if (M0F.hamtar) return; M0F.hamtar = true; st.textContent = "Hämtar " + pa.namn.toLowerCase() + " …";
-  try {
-    const t0 = pa.diff ? Math.max(0, M0F.t - 1) : M0F.t, rum = "[" + o.y0 + ":" + o.s + ":" + o.y1 + "][" + o.x0 + ":" + o.s + ":" + o.x1 + "]";
-    // binart (.dods) - hela rutan ar ca 100 000 punkter; faller tillbaka pa text om det inte gar
-    const n = o.ny * o.nx, fraga = enc(pa.var + "[" + t0 + ":1:" + M0F.t + "][0]" + rum);
-    let raa = null, res = await hamta(BAS + FIL(M.dtg) + ".dods?" + fraga, true, true);
-    if (res.st === 200 && res.buf && typeof lasDods === "function") raa = lasDods(res.buf, n);
-    if (!raa) { res = await hamta(BAS + FIL(M.dtg) + ".ascii?" + fraga); if (res.st !== 200) throw new Error("svar " + res.st); raa = tolka(res.txt)[pa.var]; }
-    if (!raa || raa.length < n) throw new Error("oväntat svar");
-    const d = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      if (pa.diff) { const a = raa[i], b = raa[raa.length > n ? n + i : i]; d[i] = M0F.t === 0 ? 0 : isFinite(a) && isFinite(b) ? Math.max(0, b - a) : NaN; }
-      else d[i] = isFinite(raa[i]) ? pa.konv(raa[i]) : NaN;
-    }
-    m0Cache.set(nyckel, d); if (m0Cache.size > 40) m0Cache.delete(m0Cache.keys().next().value);
-    M0F.nyckel = nyckel; M0F.data = d; M0F.o = o; st.textContent = "";
-  } catch (e) { st.textContent = "Kunde inte hämta (" + e.message + ")."; }
-  finally { M0F.hamtar = false; }
-  m0Rita();
-  // har anvandaren hunnit stega under hamtningen: ta den nya timmen
-  const o2 = m0Omrade(); if (o2 && [M.dtg, M0F.v, M0F.t, o2.y0, o2.y1, o2.x0, o2.x1].join(":") !== M0F.nyckel) m0Uppdatera();
-}
-function m0Rita() {
-  const g = $("kM0"); g.textContent = ""; const o = M0F.o, d = M0F.data; if (!M0F.pa || !o || !d) return;
-  const pa = M0P[M0F.v], K = pa.klass, F = m0Farger(M0F.v).map(c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
-  const cv = document.createElement("canvas"); cv.width = o.nx; cv.height = o.ny;
-  const cx = cv.getContext("2d"), img = cx.createImageData(o.nx, o.ny), px = img.data;
-  for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
-    const w = d[y * o.nx + x]; if (!isFinite(w)) continue; let k = -1;
-    for (let i = 0; i < K.length; i++) if (pa.lagre ? w < K[i] : w >= K[i]) k = i;
-    if (k < 0) continue;
-    const i = ((o.ny - 1 - y) * o.nx + x) * 4; px[i] = F[k][0]; px[i + 1] = F[k][1]; px[i + 2] = F[k][2]; px[i + 3] = 215;
-  }
-  cx.putImageData(img, 0, 0);
-  g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
-    preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
-  if (typeof ritaSiffror === "function") setTimeout(ritaSiffror, 0);
-  g.appendChild(el("rect", { x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s, fill: "none", stroke: "var(--dim)", "stroke-width": 1, "stroke-dasharray": "4 3", "vector-effect": "non-scaling-stroke" }));
-}
-function m0Forklaring() {
-  const f = $("m0Forkl"), pa = M0P[M0F.v], fa = m0Farger(M0F.v); f.textContent = "";
-  pa.klass.forEach((k, i) => { const sp = document.createElement("span"), ii = document.createElement("i"); ii.style.background = fa[i];
-    sp.append(ii, (pa.lagre ? "< " : "≥ ") + k.toLocaleString("sv-SE") + " " + pa.enh); f.appendChild(sp); });
-}
-function m0Tips(e) {
-  const o = M0F.o, d = M0F.data; if (!o || !d) return false;
-  const p = kartPunkt(e), fy = KY - 1 - p.y, y = Math.round((fy - o.y0) / o.s), x = Math.round((p.x - o.x0) / o.s);
-  if (y < 0 || y >= o.ny || x < 0 || x >= o.nx) return false;
-  const w = d[y * o.nx + x], pa = M0P[M0F.v];
-  visaKTips(pa.namn + " (medlem 0) " + m0TidText(M0F.t) + ": " + (isFinite(w) ? (pa.enh === "ft" ? Math.round(w) : w.toFixed(1).replace(".", ",")) + " " + pa.enh : M0F.v === "bas" ? "inga moln" : "–"), e.clientX + 14, e.clientY + 14);
-  return true;
-}
+// 21/11: kartfalten for medlem 0 ligger nu i en egen flik - se m0karta.js
 
 
 // ===================================================================
@@ -1757,7 +1682,7 @@ async function oppnaSkewT(t, rullaTill) {
   if (!M || !M.stat) return;
   const nyOppnad = $("skewRuta").hidden;
   if (SKZ.M !== M) { SKZ.M = M; SKZ.pB = 0; }   // ny punkt/korning -> utgangslaget
-  skewT = Math.max(0, Math.min(M.nt - 1, t)); $("skewRuta").hidden = false; if (M0F.pa) M0F.t = skewT; rita();
+  skewT = Math.max(0, Math.min(M.nt - 1, t)); $("skewRuta").hidden = false; rita();
   if (nyOppnad || rullaTill) setTimeout(() => $("skewRuta").scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
   ritaSkewT();                                  // det som finns direkt
   const m = M, tt = skewT;
@@ -2417,7 +2342,7 @@ function visaKTips(text, x, y, html) {   // html = true: texten ar HTML (bara eg
 function kartTips(e) {
   const mk = e.target && e.target.closest ? e.target.closest(".mk") : null;
   if (!mk && lage === "p" && e.pointerType !== "touch") { probTips(e); return; }
-  if (!mk && lage === "th" && M0F.pa && e.pointerType !== "touch" && !friPunkt && m0Tips(e)) return;
+  if (!mk && lage === "m0" && e.pointerType !== "touch" && !friPunkt && m0Tips(e)) return;
   if (!mk || friPunkt || e.shiftKey || e.pointerType === "touch") { $("kTips").hidden = true; return; }
   visaKTips(mk.dataset.tips, e.clientX + 14, e.clientY + 14);
 }
@@ -2443,7 +2368,7 @@ function kartKlick(e, mal) {
     $("lat").value = ll.lat.toFixed(4); $("lon").value = ll.lon.toFixed(4); sel.value = "egen";
   }
   lagra("mt:punkt", sel.value);
-  if (lage === "p") { ritaMarkorer(); probOmradeAndrat(); } else valjOchHamta();
+  if (lage === "p") { ritaMarkorer(); probOmradeAndrat(); } else if (lage === "m0") ritaMarkorer(); else valjOchHamta();
 }
 
 // ===================================================================
@@ -2484,14 +2409,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("lMoln").addEventListener("click", () => satLage(false)); $("lVind").addEventListener("click", () => satLage(true));
   $("lNiv").setAttribute("aria-pressed", String(visaNiv));
   $("lIso").setAttribute("aria-pressed", String(visaIsoT));
-  // NYTT 20/11 kvall: kartfalt medlem 0
-  for (const k in M0P) $("m0Param").add(new Option(M0P[k].namn + " (" + M0P[k].enh + ")", k));
-  $("m0Param").value = M0F.v; $("m0Falt").setAttribute("aria-pressed", String(M0F.pa));
-  $("m0Falt").addEventListener("click", e => { M0F.pa = !M0F.pa; lagra("mt:m0Falt", M0F.pa ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(M0F.pa)); m0Uppdatera(); });
-  $("m0Param").addEventListener("change", () => { M0F.v = $("m0Param").value; lagra("mt:m0Param", M0F.v); m0Uppdatera(); });
-  $("m0Bak").addEventListener("click", () => { if (M0F.t !== null) M0F.t--; m0Uppdatera(); });
-  $("m0Fram").addEventListener("click", () => { if (M0F.t !== null) M0F.t++; m0Uppdatera(); });
-  m0Uppdatera();
   // NYTT 20/11: riskpanel
   $("lRisk").setAttribute("aria-pressed", String(RISK.pa)); ritaRiskInst();
   $("lRisk").addEventListener("click", e => { RISK.pa = !RISK.pa; sparaRisk(); e.currentTarget.setAttribute("aria-pressed", String(RISK.pa)); RISKD.fel = ""; ritaRiskInst(); if (M && M.stat) rita(); });
@@ -2554,9 +2471,11 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261121-1110"></script>
+<script src="sannolikhet.js?v=20261121-1330"></script>
+<script src="kombo.js?v=20261121-1330"></script>
+<script src="m0karta.js?v=20261121-1330"></script>
 <script src="taf.js?v=20261121-1100"></script>
 <script src="rita.js?v=20261121-1300"></script>
-<script src="dela.js?v=20261121-1130"></script>
+<script src="dela.js?v=20261121-1330"></script>
 </body>
 </html>

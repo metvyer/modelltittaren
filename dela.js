@@ -34,10 +34,14 @@ function vyFanga() {
   if (lage === "p") {
     Object.assign(v, { dtg: P.dtg, pp: $("pParam").value, pv: $("pVisa").value, pm: $("pMedl").value, tr: $("pTrosk").value,
       fr: $("pFran").value, ti: $("pTill").value, st: $("pStorlek").value, up: $("pUppl").value, dt: $("pDt").value,
-      iso: visaIso, isoP: isoProbVal(), isoV: isoValen($("pParam").value), m0l: visaM0Linje });
+      iso: visaIso, isoP: isoProbVal(), isoV: isoValen($("pParam").value), m0l: visaM0Linje,
+      // 21/11: meteogrammet (oppet + punkten) och kombinerad sannolikhet foljer med
+      met: P.meteo ? [+P.meteo.lat.toFixed(4), +P.meteo.lon.toFixed(4)] : null, kb: $("pKombo") ? $("pKombo").value : "", kA: $("pKomboA") ? $("pKomboA").value : "", kB: $("pKomboB") ? $("pKomboB").value : "" });
   } else if (lage === "th") {
-    Object.assign(v, { dtg: M && M.dtg || null, topp: $("topp").value, vind: vindLage, m0: M0F.pa, m0v: M0F.v, m0t: M0F.t,
+    Object.assign(v, { dtg: M && M.dtg || null, topp: $("topp").value, vind: vindLage,
       skew: skewT !== null && !$("skewRuta").hidden ? skewT : null });
+  } else if (lage === "m0") {   // 21/11: fliken Karta m0
+    Object.assign(v, { dtg: M0F.dtg, m0v: M0F.v, m0l: M0F.v2, m0t: M0F.t });
   }
   return v;
 }
@@ -84,25 +88,33 @@ async function vyTillampa(v) {
       if (v.isoV) lagra("mt:isoVal:" + $("pParam").value, JSON.stringify(v.isoV));
       visaIso = !!v.iso; knapp("visaIso", visaIso); visaM0Linje = !!v.m0l; knapp("m0Linje", visaM0Linje);
       $("pFran").value = v.fr; $("pTill").value = v.ti;
+      if (typeof komboVal === "function" && v.kb !== undefined && (v.kb !== $("pKombo").value || v.kA !== $("pKomboA").value || v.kB !== $("pKomboB").value)) komboVal(v.kb, v.kA, v.kB);
       sattParam(true); ritaIsoProbKnappar(); if (typeof favMarkera === "function") favMarkera();
       ritaMarkorer(); ritaOmrade(); await probVisa();
       // data som saknas: hamta (forsta forsoket gar mot mellanserverns cache - delaren har just hamtat samma sak)
-      if (!fav && !P.varden && !P.upptagen) probHamta(true);
+      if (!fav && !P.varden && !P.upptagen) { if (typeof komboAktiv === "function" && komboAktiv()) komboHamta(true); else probHamta(true); }
+      // 21/11: meteogrammet - oppna/flytta/stang som hos delaren (parameter och korning foljer probVisa)
+      if (v.met) { const ny = !P.meteo || Math.abs(P.meteo.lat - v.met[0]) > 1e-3 || Math.abs(P.meteo.lon - v.met[1]) > 1e-3;
+        if (ny) { const la = $("lat").value, lo = $("lon").value; $("lat").value = v.met[0]; $("lon").value = v.met[1]; await visaMeteogram(); $("lat").value = la; $("lon").value = lo; } }
+      else if (v.met === null && P.meteo) $("pMeteoStang").click();
     } else if (lage === "th") {
       valj("topp", v.topp);
       if (v.vind !== undefined && v.vind !== vindLage) $(v.vind ? "lVind" : "lMoln").click();
       const nyKorning = v.dtg && (!M || M.dtg !== v.dtg);
       if (nyKorning) { $("korning").value = v.dtg; if ($("korning").value !== v.dtg) $("korning").value = "senaste"; }
-      if (v.m0 !== undefined) { M0F.pa = !!v.m0; M0F.v = v.m0v || M0F.v; $("m0Param").value = M0F.v; knapp("m0Falt", M0F.pa); if (v.m0t !== null && v.m0t !== undefined) M0F.t = v.m0t; }
       ritaMarkorer();
       const efter = () => {   // kartfalt och skew-T nar punkten finns (kors inte om en nyare vy hunnit komma)
         if (gen !== delaGen) return;
-        m0Uppdatera();
         if (v.skew !== null && v.skew !== undefined && M && M.stat) { if (skewT !== v.skew || $("skewRuta").hidden) oppnaSkewT(v.skew); }
         else if (skewT !== null && !$("skewRuta").hidden) $("skewStang").click();
       };
       // 21/11: vanta INTE ut hamtningen har (da kom delarens nasta byte forst nar den var klar) - gor resten efterat
       if (nyPunkt || nyKorning || !M || !M.stat) { valjOchHamta(); vantaTH().then(efter); } else efter();
+    } else if (lage === "m0") {
+      if (v.m0v && M0P[v.m0v]) M0F.v = v.m0v; M0F.v2 = v.m0l && M0P[v.m0l] ? v.m0l : "";
+      if (v.m0t !== null && v.m0t !== undefined) M0F.t = v.m0t;
+      if (v.dtg && $("korning")) { $("korning").value = v.dtg; if ($("korning").value !== v.dtg) $("korning").value = "senaste"; M0F.koll = 0; }
+      ritaMarkorer(); m0Uppdatera();
     }
     // zoomen: bara nar delaren sjalv zoomat om (annars far tittaren behalla sin egen zoom)
     const vbT = JSON.stringify(v.vb || null);
