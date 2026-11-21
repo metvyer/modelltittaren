@@ -1,5 +1,5 @@
 // Modelltittaren - RITLINJER PÅ KARTAN (NYTT 21/11)
-// "✏ Rita": klicka punkt för punkt på kartan (dra = flytta kartan som vanligt), Enter / dubbelklick / Klar = färdig,
+// "✏ Rita": klicka punkt för punkt på kartan (dra = flytta kartan som vanligt), Enter / dubbelklick / högerklick / Klar = färdig,
 // Esc = avbryt. Linjen får en kort text (t.ex. "Norr om denna: snö"), färg och heldragen/streckad.
 // Klicka på en linje för att ändra eller ta bort den. Linjerna sparas som lat/lon (följer kartan vid zoom),
 // syns i alla kartflikar, sparas i webbläsaren (mt:ritlinjer) och följer med i Dela.
@@ -87,7 +87,7 @@ function ritRad(info) {
   const s = text => { const e = document.createElement("span"); e.textContent = text; rad.appendChild(e); return e; };
   if (info) s(info + " ");
   if (!L) { b("OK", () => ritRad(), "", true); return; }
-  s(RIT.ritar ? "✏ Klicka punkter på kartan (" + L.p.length + "). Dubbelklick, Enter eller Klar = färdig, Esc = avbryt." : "Vald linje:");
+  s(RIT.ritar ? "✏ Klicka punkter på kartan (" + L.p.length + "). Högerklick, dubbelklick, Enter eller Klar = färdig, Esc = avbryt." : "Vald linje:");
   const fs = document.createElement("select"); for (const [k, n] of [["rod", "röd"], ["bla", "blå"], ["svart", "svart"], ["lila", "lila"]]) fs.add(new Option(n, k)); fs.value = L.farg;
   fs.addEventListener("change", () => { L.farg = fs.value; RIT.farg = fs.value; lagra("mt:ritFarg", fs.value); if (!RIT.ritar) ritSpara(); ritRita(); }); rad.appendChild(fs);
   const sb = b(L.streck ? "streckad" : "heldragen", () => { L.streck = !L.streck; RIT.streck = L.streck; lagra("mt:ritStreck", L.streck ? "ja" : "nej"); if (!RIT.ritar) ritSpara(); ritRita(); sb.textContent = L.streck ? "streckad" : "heldragen"; }, "Byt mellan heldragen och streckad", true);
@@ -104,6 +104,8 @@ function ritRad(info) {
 (function ritInit() {
   $("ritKnapp").addEventListener("click", () => { if (RIT.ritar) ritKlar(); else ritBorja(); });
   $("karta").addEventListener("dblclick", e => { if (RIT.ritar) { e.preventDefault(); ritKlar(); } });
+  // 21/11: hogerklick = klar (ingen meny medan man ritar)
+  $("karta").addEventListener("contextmenu", e => { if (RIT.ritar) { e.preventDefault(); ritKlar(); } });
   document.addEventListener("keydown", e => {
     if (!RIT.ritar) return;
     if (e.key === "Escape") { e.preventDefault(); ritAvbryt(); }

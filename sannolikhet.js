@@ -13,7 +13,7 @@ const ENS_MEDL = 30, ENS_TIDER = 62, ENS_BIT = 13;
 // hamtas darfor bara 0-14 (+ de medlemmar dar forra filen saknade data) och resten kopieras, forskjutet 3 h.
 const ENS_NYA = 15, ENS_LAGG_H = 3;
 const DET_FIL = dtg => "meps_det_2_5km_" + dtg + ".ncml";   // medlem 0:s sikt/molnbas (saknas i ensemblefilen)   // hogst 13 timmar per anrop (t.ex. +0 till +12) = 390 kartfalt
-const ENS_GRANS_MB = 150;                            // hard grans per hamtning (18/11: ingen "Hamta anda" langre)
+const ENS_GRANS_MB = 200;                            // hard grans per hamtning (21/11: 150 -> 200, hela forhamtade rutan behover ca 175)
 const MAX_KM_25 = 400;                               // 2,5 km bara for omraden upp till 400 x 400 km
 const AUTO_MAX_MB = 100;                             // automatisk hamtning vid stegning bara under detta
 const ENS_MAX_MB_ANROP = { txt: 40, bin: 150 };      // hogst per anrop (thredds: text ca 50 MB, binart ca 500 MB)

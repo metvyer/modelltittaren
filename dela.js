@@ -44,9 +44,16 @@ const valj = (id, varde, handelse) => {   // satt ett val och lat sidans egen ko
 };
 const knapp = (id, pa) => $(id).setAttribute("aria-pressed", String(!!pa));
 
+let delaGen = 0;   // okar vid varje ny vy - pagaende "efterarbete" for en aldre vy slutar
 async function vyTillampa(v) {
-  DELA.tillampar = true;
+  DELA.tillampar = true; const gen = ++delaGen;
   try {
+    // 21/11: delaren har bytt till nagot annat -> avbryt tittarens pagaende hamtning direkt (vanta inte ut den)
+    const flikNu = fav ? "f" : lage, byterFlik = (v.l === "f" ? "f" : v.l) !== flikNu;
+    if (typeof upptagen !== "undefined" && upptagen && (byterFlik || $("lat").value !== v.lat || $("lon").value !== v.lon || (v.dtg && M && M.dtg !== v.dtg))) {
+      koad = false; stoppad = true; if (avbryt) avbryt.abort(); }
+    if (P.upptagen && (byterFlik || v.pp !== $("pParam").value || v.st !== $("pStorlek").value || v.up !== $("pUppl").value || v.fr !== $("pFran").value || v.ti !== $("pTill").value || $("lat").value !== v.lat || $("lon").value !== v.lon)) {
+      stoppad = true; if (avbryt) avbryt.abort(); await new Promise(r => setTimeout(r, 300)); }
     const flik = v.l === "f" ? "f" : v.l;
     if (flik !== (fav ? "f" : lage)) {
       bytLage(flik);
@@ -82,10 +89,14 @@ async function vyTillampa(v) {
       if (nyKorning) { $("korning").value = v.dtg; if ($("korning").value !== v.dtg) $("korning").value = "senaste"; }
       if (v.m0 !== undefined) { M0F.pa = !!v.m0; M0F.v = v.m0v || M0F.v; $("m0Param").value = M0F.v; knapp("m0Falt", M0F.pa); if (v.m0t !== null && v.m0t !== undefined) M0F.t = v.m0t; }
       ritaMarkorer();
-      if (nyPunkt || nyKorning || !M || !M.stat) { valjOchHamta(); await vantaTH(); }
-      m0Uppdatera();
-      if (v.skew !== null && v.skew !== undefined && M && M.stat) { if (skewT !== v.skew || $("skewRuta").hidden) oppnaSkewT(v.skew); }
-      else if (skewT !== null && !$("skewRuta").hidden) $("skewStang").click();
+      const efter = () => {   // kartfalt och skew-T nar punkten finns (kors inte om en nyare vy hunnit komma)
+        if (gen !== delaGen) return;
+        m0Uppdatera();
+        if (v.skew !== null && v.skew !== undefined && M && M.stat) { if (skewT !== v.skew || $("skewRuta").hidden) oppnaSkewT(v.skew); }
+        else if (skewT !== null && !$("skewRuta").hidden) $("skewStang").click();
+      };
+      // 21/11: vanta INTE ut hamtningen har (da kom delarens nasta byte forst nar den var klar) - gor resten efterat
+      if (nyPunkt || nyKorning || !M || !M.stat) { valjOchHamta(); vantaTH().then(efter); } else efter();
     }
     // zoomen: bara nar delaren sjalv zoomat om (annars far tittaren behalla sin egen zoom)
     const vbT = JSON.stringify(v.vb || null);
