@@ -84,7 +84,7 @@ async function mellan() {
   // senaste
   let s = '<tr><th class="v">Tid (lokal)</th><th class="v">Typ</th><th class="v">Vad</th><th>Status</th><th>MB</th><th>Sek</th></tr>';
   for (const r of d.senaste) s += `<tr><td class="v">${lokal(r.tid)}</td><td class="v">${TYP[r.typ] || esc(r.typ)}</td><td class="vad">${esc(r.vad)}</td><td class="${r.status === 200 ? "" : "fel"}">${r.status}</td><td>${mb(r.byte)}</td><td>${(r.ms / 1000).toFixed(1)}</td></tr>`;
-  if (!d.detaljer) s = '<tr><td class="v">' + (d.felnyckel ? '<span class="fel">Fel nyckel.</span>' : 'Ange nyckeln ovan för att se listan.') + '</td></tr>';
+  if (!d.detaljer) s = '<tr><td class="v">' + (d.ingenNyckel ? '<span class="fel">Mellanservern har ingen nyckel inlagd (STAT_NYCKEL saknas).</span>' : d.felnyckel ? '<span class="fel">Fel nyckel.</span>' : 'Ange nyckeln ovan för att se listan.') + '</td></tr>';
   else if (!d.senaste.length) s += '<tr><td class="v" colspan="6">Inga hämtningar registrerade än.</td></tr>';
   $("nyckelGlom").hidden = !nyckel; $("nyckel").hidden = $("nyckelOk").hidden = !!d.detaljer;
   $("nyckelInfo").textContent = d.detaljer ? "Nyckeln är sparad i den här webbläsaren." : "";
