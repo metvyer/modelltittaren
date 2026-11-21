@@ -567,6 +567,25 @@ def detFalt():
     skriv()
 
 
+def nowcastKoll():
+    """U (21/11): finns MetCoOp Nowcast (MNWC) / FMI:s nowcast att na? FMI:s oppna WFS-lista och thredds-katalogen."""
+    skriv("## U. Nowcast (MNWC) – FMI open data och thredds")
+    st, txt, sek, by = hamta("https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=listStoredQueries", tidsgrans=60)
+    ids = sorted(set(re.findall(r'id="([^"]+)"', txt))) if st == 200 else []
+    skriv(f"FMI WFS: svar {st}, {len(ids)} stored queries. Med nowcast/mnwc/harmonie/meps i namnet:")
+    for i in ids:
+        if re.search(r"nowcast|mnwc|harmonie|meps|smartmet", i, re.I): skriv(f"- `{i}`")
+    for kat in ["https://thredds.met.no/thredds/catalog.html", "https://thredds.met.no/thredds/catalog/catalog.html"]:
+        st, txt, sek, by = hamta(kat, tidsgrans=60)
+        hit = sorted(set(re.findall(r"href=['\"]([^'\"]*(?:nowcast|mnwc|metpp|met_nordic|nwc)[^'\"]*)['\"]", txt, re.I))) if st == 200 else []
+        skriv(f"thredds {kat}: svar {st}; länkar med nowcast/mnwc/metpp/nordic: " + (", ".join(hit[:20]) or "inga"))
+    for kat in ["https://thredds.met.no/thredds/catalog/mepslatest/catalog.html", "https://thredds.met.no/thredds/catalog/metpplatest/catalog.html"]:
+        st, txt, sek, by = hamta(kat, tidsgrans=60)
+        namn = sorted(set(re.sub(r"_\d{8}T\d{2}Z", "_<DTG>", n) for n in re.findall(r"dataset=[^'\"]*/([^/'\"]+\.nc)", txt))) if st == 200 else []
+        skriv(f"{kat}: svar {st}; filtyper: " + (", ".join(namn[:40]) or "–"))
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -606,6 +625,8 @@ def main():
         fukt(iy, ix)
     if "T" in delar:
         detFalt()
+    if "U" in delar:
+        nowcastKoll()
     if not set(delar) & set("BCDE"):
         return spara(0)
 
