@@ -45,6 +45,10 @@ jobs:
         if: contains(inputs.delar, 'V')
         run: python3 verktyg/testa_kallor.py
 
+      - name: Testa polska TAF
+        if: contains(inputs.delar, 'W')
+        run: python3 verktyg/testa_taf_pl.py
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,4 +58,5 @@ jobs:
             testresultat.md
             das_ensemble.txt
             kallor.md
+            taf_pl.md
           if-no-files-found: ignore
