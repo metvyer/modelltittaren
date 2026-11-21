@@ -3,6 +3,10 @@
 // Släpper bara igenom läsning (GET) av MEPS-filer i katalogen mepslatest och METAR, och bara från vår sida.
 // Ingen nyckel, inget lösenord. Data från MET Norway (CC BY 4.0) och NOAA aviationweather.gov.
 //
+// NYTT 21/11: DELA VY (/dela). Sidan sparar en liten beskrivning av vad man tittar på (flik, parameter, tröskel, tid,
+// område, zoom, körning - inga data, inga namn) i D1-tabellen "delning". Kollegor öppnar länken …/#v=<id> och
+// följer med när ägaren ändrar (sidan frågar var 15:e sekund). Bara den som har ägarnyckeln kan ändra vyn.
+// Vyer som inte ändrats på DELA_DAGAR dagar raderas.
 // NYTT 19/11: statistik i D1-databasen "modelltittaren-statistik" (binding DB): varje anrop räknas per dag och typ,
 // och varje verklig hämtning från met.no/aviationweather (cachemiss) sparas med storlek. Visas via /statistik
 // (sidan statistik.html). Inga IP-adresser eller personuppgifter sparas - bara vad som hämtades, när och hur stort.
@@ -24,6 +28,8 @@ const THREDDS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
 const TILLATEN_FIL = /^\/mepslatest\/(meps_[A-Za-z0-9_]+\.(?:ncml|nc)\.(?:ascii|dods))$/;
 // METAR: /metar?ids=ESSA,ESGG&hours=6 -> aviationweather.gov, bara 1-20 ICAO-koder och 1-24 timmar
 const AWC = "https://aviationweather.gov/api/data/";   // + metar / taf
+const DELA_MAX = 4000, DELA_DAGAR = 30;
+const slump = (n, tecken) => { const b = crypto.getRandomValues(new Uint8Array(n)); return [...b].map(x => tecken[x % tecken.length]).join(""); };
 const UA = { "User-Agent": "Modelltittaren-mellanserver (github.com/metvyer/modelltittaren)" };
 
 // Hur länge ett svar får ligga i cachen (sekunder)
@@ -157,11 +163,39 @@ export default {
                    "Access-Control-Expose-Headers": "Cf-Cache-Status" };
 
     if (req.method === "OPTIONS")
-      return new Response(null, { headers: { ...cors, "Access-Control-Allow-Methods": "GET", "Access-Control-Max-Age": "86400" } });
+      return new Response(null, { headers: { ...cors, "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400" } });
 
     // Testsida: öppna adressen i webbläsaren för att se att mellanservern nås
     if (url.pathname === "/" || url.pathname === "")
       return new Response("Modelltittaren mellanserver OK (med cache)", { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
+
+    // NYTT 21/11: delad vy. GET /dela?id=X -> {vy, andrad}. POST /dela (text {vy}) -> ny {id, nyckel, andrad}.
+    // POST /dela?id=X&nyckel=Y (text {vy}) -> uppdatera (bara med rätt nyckel).
+    if (url.pathname === "/dela") {
+      const json = (o, st) => new Response(JSON.stringify(o), { status: st || 200, headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+      if (!env.DB) return json({ fel: "ingen databas" }, 500);
+      const id = url.searchParams.get("id") || "";
+      if (req.method === "GET") {
+        if (!/^[a-z0-9]{6,12}$/.test(id)) return json({ fel: "fel id" }, 400);
+        const r = await env.DB.prepare("SELECT vy, andrad, skapad FROM delning WHERE id = ?").bind(id).first();
+        return r ? json({ vy: JSON.parse(r.vy), andrad: r.andrad, skapad: r.skapad }) : json({ fel: "finns inte" }, 404);
+      }
+      if (req.method !== "POST") return json({ fel: "fel metod" }, 405);
+      if (!ok) return json({ fel: "Bara från metvyer.github.io" }, 403);
+      const text = await req.text();
+      if (text.length > DELA_MAX) return json({ fel: "för stor" }, 413);
+      let vy; try { vy = JSON.parse(text).vy; } catch (e) { return json({ fel: "fel format" }, 400); }
+      if (!vy || typeof vy !== "object") return json({ fel: "fel format" }, 400);
+      const nu = Date.now(), vyText = JSON.stringify(vy);
+      if (!id) {
+        const nyId = slump(7, "abcdefghijkmnpqrstuvwxyz23456789"), nyckel = slump(24, "abcdefghijklmnopqrstuvwxyz0123456789");
+        await env.DB.prepare("INSERT INTO delning (id, nyckel, vy, skapad, andrad) VALUES (?, ?, ?, ?, ?)").bind(nyId, nyckel, vyText, nu, nu).run();
+        ctx.waitUntil(env.DB.prepare("DELETE FROM delning WHERE andrad < ?").bind(nu - DELA_DAGAR * 864e5).run());
+        return json({ id: nyId, nyckel, andrad: nu });
+      }
+      const r = await env.DB.prepare("UPDATE delning SET vy = ?, andrad = ? WHERE id = ? AND nyckel = ?").bind(vyText, nu, id, url.searchParams.get("nyckel") || "").run();
+      return r.meta && r.meta.changes ? json({ id, andrad: nu }) : json({ fel: "fel id eller nyckel" }, 403);
+    }
 
     if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
 

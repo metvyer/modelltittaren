@@ -13,7 +13,10 @@
 
 const TAF_STD = ["ESIB", "ESCF", "ESCM", "ESDF", "ESMV", "ESSA", "ESGG", "ESMS", "ESSV", "ESPA", "ESPE"];   // de 11 forhamtade
 const TAF_FARG = { gron: "#16a34a", gul: "#eab308", rod: "#dc2626", ingen: "#cbd5e1" };
-const TAF_GRANS_STD = { gulSikt: 5000, gulBas: 1500, rodSikt: 1500, rodBas: 500, gulSv: 15, rodSv: 25 };
+// 21/11 (Jakob): standard gul 500 ft / 3 km, rod 200 ft / 1 km. Sparade granser som ar exakt de gamla standardvardena
+// (5 km/1500 ft, 1,5 km/500 ft) byts till de nya (se TAFS.gr nedan).
+const TAF_GRANS_STD = { gulSikt: 3000, gulBas: 500, rodSikt: 1000, rodBas: 200, gulSv: 15, rodSv: 25 };
+const TAF_GRANS_GAMMAL = { gulSikt: 5000, gulBas: 1500, rodSikt: 1500, rodBas: 500 };
 const TAF_METAR_GAMMAL_MIN = 40, TAF_UTE_MIN = 10;   // 21/11: utgangen TAF visas som "TAF ute" i 10 min, sedan bort
 // Giltig TAF just nu (null om ingen eller om den gick ut for mer an 10 min sedan); .ute = gick nyss ut
 function tafNu(icao) { const T = TAFS.data[icao]; if (!T) return null; const nu = Date.now(); if (nu >= T.till + TAF_UTE_MIN * 60e3) return null; T.ute = nu >= T.till; return T; }   // 21/11: aldre METAR -> svart prick
@@ -26,7 +29,9 @@ const TAF_AWC = "https://aviationweather.gov/api/data/", TAF_MS = "https://model
 
 let TAFS = {
   lista: (() => { try { const a = JSON.parse(lasa("mt:tafLista") || "null"); if (Array.isArray(a) && a.length) return a; } catch (e) {} return TAF_STD.slice(); })(),
-  gr: (() => { try { return { ...TAF_GRANS_STD, ...(JSON.parse(lasa("mt:tafGrans") || "{}")) }; } catch (e) { return { ...TAF_GRANS_STD }; } })(),
+  gr: (() => { try { const g = JSON.parse(lasa("mt:tafGrans") || "{}");
+    if (Object.keys(TAF_GRANS_GAMMAL).every(k => g[k] === TAF_GRANS_GAMMAL[k])) for (const k in TAF_GRANS_GAMMAL) delete g[k];
+    return { ...TAF_GRANS_STD, ...g }; } catch (e) { return { ...TAF_GRANS_STD }; } })(),
   vind: lasa("mt:tafVind") === "ja", icao: lasa("mt:tafIcao") === "ja", ljud: lasa("mt:tafLjud") === "ja", avis: lasa("mt:tafAvis") === "ja",
   data: {}, metar: {}, sett: (() => { try { return JSON.parse(lasa("mt:tafSett") || "{}"); } catch (e) { return {}; } })(),
   larm: {}, hamtad: 0, pagar: false

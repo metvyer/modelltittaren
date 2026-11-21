@@ -140,6 +140,12 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .taftab .ute { color: #6b7280; font-weight: 700; border: 1px dashed #6b7280; border-radius: 3px; padding: 0 3px; font-size: 10.5px; }
 .taftab .tafx { border: 0; background: none; cursor: pointer; color: var(--dim); font-size: 14px; padding: 0 3px; }
 .taftab .dim { color: var(--dim); }
+.flikar .delaknapp { margin-left: auto; color: var(--acc); }
+.flikar .delaknapp[aria-pressed="true"] { color: #dc2626; }
+.delarad { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 6px 0 8px; padding: 6px 10px; border: 1px solid var(--acc); border-radius: 6px; font-size: 13px; }
+.delarad .delalank { width: 300px; max-width: 100%; font-size: 12px; }
+.delarad .delasand { color: #dc2626; }
+.delarad .delafel { color: #b45309; }
 .nykorning { margin: 6px 0 8px; padding: 6px 10px; border: 1px solid #f59e0b; background: #fffbeb; color: #78350f; border-radius: 6px; font-size: 13px; }
 @media (prefers-color-scheme: dark) { .nykorning { background: #3a2a07; color: #fde68a; } }
 body.p .arbete { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); }
@@ -246,10 +252,11 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Dela det du tittar på: ger en länk som kollegor kan öppna. När du ändrar följer deras sida med (inom ca 15 s).">Dela</button>
 </div>
 
 <div class="nykorning" id="nyKorning" hidden role="status"></div>
+<div class="delarad" id="delaRad" hidden role="status"></div>
 <div class="kontroller ejTaf">
   <div class="falt"><label for="punkt">Punkt</label><select id="punkt"></select></div>
   <div class="falt"><label for="lat">Lat</label><input id="lat" class="koord" inputmode="decimal"></div>
@@ -351,8 +358,8 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 </div>
 <div id="vyTAF" hidden>
   <div class="tafinst">
-    <span class="grp"><span class="gul">Gul</span> sikt &lt; <input type="number" id="tafGulSikt" step="0.1" min="0"> km eller bas &lt; <input type="number" id="tafGulBas" step="100"> ft</span>
-    <span class="grp"><span class="rod">Röd</span> sikt &lt; <input type="number" id="tafRodSikt" step="0.1" min="0"> km eller bas &lt; <input type="number" id="tafRodBas" step="100"> ft</span>
+    <span class="grp"><span class="gul">Gul</span> bas &lt; <input type="number" id="tafGulBas" step="100"> ft eller sikt &lt; <input type="number" id="tafGulSikt" step="0.1" min="0"> km</span>
+    <span class="grp"><span class="rod">Röd</span> bas &lt; <input type="number" id="tafRodBas" step="100"> ft eller sikt &lt; <input type="number" id="tafRodSikt" step="0.1" min="0"> km</span>
     <span class="grp" title="Molnbas = lägsta BKN, OVC eller VV. Varje timme får den sämsta färgen som TAF:en tillåter (grund, BECMG, TEMPO, PROB, FM)."></span>
   </div>
   <div class="tafinst">
@@ -2520,6 +2527,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 })();
 </script>
 <script src="sannolikhet.js?v=20261121-0840"></script>
-<script src="taf.js?v=20261121-0820"></script>
+<script src="taf.js?v=20261121-1010"></script>
+<script src="dela.js?v=20261121-1010"></script>
 </body>
 </html>
