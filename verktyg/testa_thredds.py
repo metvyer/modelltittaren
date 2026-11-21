@@ -465,6 +465,37 @@ def ytTemp(iy, ix):
     skriv()
 
 
+def flerPunkter(iy, ix):
+    """Q (21/11): kostar flera punkter i SAMMA fraga mindre an en fraga per punkt? Samma variabler som
+    forhamtningens varv 1 (tid-hojd), +0..+23, det-filen. 1 punkt, 3 punkter i en fraga, 3 fragor."""
+    skriv("## Q. Flera punkter i en fråga (varv 1-variabler, +0..+23)")
+    nu = datetime.now(timezone.utc); d = nu - timedelta(hours=nu.hour % 3 + 6); dtg = d.strftime("%Y%m%dT%HZ")
+    pkt = [F.ruta(59.8973, 17.5886), F.ruta(59.6519, 17.9186), F.ruta(58.4264, 12.7144)]   # ESCM, ESSA, ESIB
+    ks = 20
+    def vlista(py, px):
+        yx = f"[{py}][{px}]"; tt, t3 = "[0:23]", f"[0:{F.VIND_DT}:23]"
+        v = [n + tt + "[0]" + yx for n in F.YTA] + ["cloud_base_altitude" + tt + "[0]" + yx, "cloud_area_fraction_ml" + tt + f"[{ks}:{F.NIV - 1}]" + yx,
+             "geopotential_pl" + tt + f"[0:{F.NTRYCK - 1}]" + yx, "icing_index" + tt + f"[0:{F.NIS - 1}]" + yx]
+        v += [n + t3 + f"[{ks}:{F.VIND_DK}:{F.NIV - 1}]" + yx for n in ("x_wind_ml", "y_wind_ml")]
+        v += [n + t3 + f"[0:{F.NTRYCK - 1}]" + yx for n in ("x_wind_pl", "y_wind_pl")]
+        return v
+    def kor(namn, v):
+        st, txt, sek, by = hamta(BAS + "meps_det_2_5km_" + dtg + ".ncml.ascii?" + urllib.parse.quote(",".join(v), safe=""), tidsgrans=300)
+        skriv(f"| {namn} | {st} | {sek:.1f} | {by / 1024:.0f} |" + (f" {txt[:120]!r}" if st != 200 else ""))
+        time.sleep(3)
+        return sek
+    skriv(f"Körning {dtg}."); skriv("| försök | svar | sekunder | kB |"); skriv("|---|---|---|---|")
+    kor("1 punkt (ESCM)", vlista(*pkt[0]))
+    kor("3 punkter i EN fråga", sum((vlista(*p) for p in pkt), []))
+    tot = sum(kor(f"punkt {i + 1} av 3 separat", vlista(*p)) for i, p in enumerate(pkt))
+    skriv(f"\n3 separata frågor tillsammans: {tot:.1f} s")
+    # bara molnen (tyngsta variabeln) for att se om dubbletter av samma variabel packas upp en eller flera ganger
+    mol = lambda p: f"cloud_area_fraction_ml[0:23][{ks}:{F.NIV - 1}][{p[0]}][{p[1]}]"
+    kor("bara moln, 1 punkt", [mol(pkt[0])])
+    kor("bara moln, 3 punkter i en fråga", [mol(p) for p in pkt])
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -496,6 +527,8 @@ def main():
         remsaMot(iy, ix)
     if "P" in delar:
         ytTemp(iy, ix)
+    if "Q" in delar:
+        flerPunkter(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
