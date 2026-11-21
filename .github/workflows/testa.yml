@@ -124,6 +124,11 @@ jobs:
           curl -s -H "Origin: https://metvyer.github.io" -H "X-Mt-Nyckel: fel-test" $S | python3 -c "import json,sys; d=json.load(sys.stdin); print({k: (v if not isinstance(v, list) else len(v)) for k, v in d.items()})"
           curl -s -H "Origin: https://metvyer.github.io" $S | python3 -c "import json,sys; d=json.load(sys.stdin); print({k: (v if not isinstance(v, list) else len(v)) for k, v in d.items()})"
           curl -s -i -X OPTIONS -H "Origin: https://metvyer.github.io" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: x-mt-nyckel" $S | head -12
+          R=https://modelltittaren.metvyer.workers.dev/radar/smhi
+          echo "samla: $(curl -s -H 'Origin: https://metvyer.github.io' $R/samla)"
+          L=$(curl -s -H 'Origin: https://metvyer.github.io' $R/lista); echo "lista: $L"
+          T=$(echo "$L" | python3 -c "import json,sys; l=json.load(sys.stdin); print(l[-1] if l else '')")
+          [ -n "$T" ] && curl -s -o /dev/null -w "bild %{http_code} %{size_download} %{content_type}\n" -H 'Origin: https://metvyer.github.io' $R/$T.png || true
 
       - name: Spara resultatet
         if: always()
