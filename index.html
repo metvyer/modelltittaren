@@ -226,6 +226,13 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .karttid:empty { display: none; }
 .tidsetiketter span.tim { color: color-mix(in srgb, var(--dim) 70%, transparent); font-size: 10px; }
 .tidslinje span.dygn { border-left: 2px solid var(--fg); }
+/* 21/11 natt: perioden dras i tidslinjen - handtag i periodens kanter */
+.doldfalt { display: none !important; }
+.tidslinje { touch-action: none; user-select: none; }
+.tidslinje span.ka, .tidslinje span.kb { position: relative; }
+.tidslinje span.ka::before, .tidslinje span.kb::after { content: ""; position: absolute; top: -3px; bottom: -3px; width: 5px; background: var(--fg); border-radius: 2px; cursor: ew-resize; }
+.tidslinje span.ka::before { left: -2px; } .tidslinje span.kb::after { right: -2px; }
+.troskrad { margin-top: 6px; } .hamtval { margin-left: 2px; }
 .tidslinje span:hover { outline: 2px solid var(--fg); outline-offset: -2px; }
 .tidsetiketter { position: relative; height: 14px; font-size: 11px; color: var(--dim); }
 .tidsetiketter span { position: absolute; top: 0; white-space: nowrap; transform: translateX(2px); }
@@ -360,6 +367,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <div class="tidsmitt"><div class="tidsvald" id="tidsVald"></div><div class="tidslinje" id="tidslinje" title="Klicka på en timme för att flytta perioden dit"></div><div class="tidsetiketter" id="tidsEtiketter"></div></div>
     <button class="sek" id="tFram" title="Framåt (högerpil)">▶</button>
   </div>
+  <div class="baraP pkontroller troskrad" id="troskRad"></div>
   <div class="baraP tidsforkl"><span><i style="background:var(--acc)"></i>hämtad för området</span><span><i style="background:repeating-linear-gradient(45deg, color-mix(in srgb, var(--grid) 60%, transparent) 0 3px, transparent 3px 6px);border:1px solid var(--line)"></i>ej hämtad</span><span><i style="box-shadow:inset 0 3px 0 var(--fg),inset 0 -3px 0 var(--fg)"></i>vald period</span><span>← → stegar</span></div>
   <div class="kartforklaring baraTH">
     <span><i class="mk tom"></i>ej hämtad</span><span><i class="mk halv"></i>påbörjad</span><span><i class="mk full"></i>hämtad</span><span><i class="mk vald"></i>vald</span>
@@ -389,15 +397,15 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <div class="falt" id="pIsoProbFalt"><label>Isolinjer %</label><div class="chips" id="pIsoProb" title="Tänd eller släck sannolikhetens isolinjer (alla, ingen, en eller några). Tunn streckad = lägst, tjock hel = högst."></div></div>
   </div>
   <div class="pkontroller">
-    <div class="falt"><label for="pFran">Från</label><select id="pFran"></select></div>
-    <div class="falt"><label for="pTill">Till</label><div class="rad"><select id="pTill"></select><button class="sek liten" id="pEnTimme" title="Sätt Till = Från (en enda timme)">= Från</button></div></div>
-    <div class="falt"><label>Flytta perioden</label><div class="rad"><button class="sek liten" id="pBak" title="Bakåt">◀</button><button class="sek liten" id="pFram" title="Framåt">▶</button></div></div>
+    <div class="falt doldfalt"><label for="pFran">Från</label><select id="pFran"></select></div>
+    <div class="falt doldfalt"><label for="pTill">Till</label><div class="rad"><select id="pTill"></select><button class="sek liten" id="pEnTimme" title="Sätt Till = Från (en enda timme)">= Från</button></div></div>
+    <div class="falt doldfalt"><label>Flytta perioden</label><div class="rad"><button class="sek liten" id="pBak" title="Bakåt">◀</button><button class="sek liten" id="pFram" title="Framåt">▶</button></div></div>
     <div class="falt ejFav"><label>&nbsp;</label><label class="kryss"><input type="checkbox" id="pAuto" checked> Hämta automatiskt när jag stegar</label></div>
-    <div class="falt"><label for="pSteg">Steg</label><select id="pSteg"><option value="1">1 h</option><option value="per">periodens längd</option><option value="3">3 h</option><option value="6">6 h</option><option value="12">12 h</option></select></div>
+    <div class="falt doldfalt"><label for="pSteg">Steg</label><select id="pSteg"><option value="1">1 h</option><option value="per">periodens längd</option><option value="3">3 h</option><option value="6">6 h</option><option value="12">12 h</option></select></div>
     <div class="falt ejFav"><label for="pDt">Timmar att använda</label><select id="pDt"><option value="1">varje timme</option><option value="3">var 3:e timme</option><option value="6">var 6:e timme</option></select></div>
     <div class="falt ejFav"><label for="pStorlek">Område</label><select id="pStorlek"><option value="75">75 km</option><option value="150" selected>150 km</option><option value="300">300 km</option><option value="600">600 km</option><option value="1000">1000 km</option><option value="sv">Hela förhämtade rutan (GitHub)</option></select></div>
     <div class="falt ejFav"><label for="pUppl">Upplösning</label><select id="pUppl"><option value="1">2,5 km</option><option value="2" selected>5 km</option><option value="4">10 km</option><option value="8">20 km</option></select></div>
-    <button id="pHamta" class="ejFav">Hämta fält</button><button id="pRest" class="sek ejFav" hidden title="Hämta hela ditt område från met.no (det som visas nu kom ur mellanserverns cache och täcker inte allt)">Hämta resten</button><button id="pStopp" class="sek ejFav" disabled>Stopp</button>
+    <button id="pHamta" class="ejFav">Hämta fält</button><select id="pHamtVal" class="ejFav hamtval" title="Vad Hämta fält hämtar: den valda perioden, eller fler timmar framåt på en gång (då går det snabbt att stega och dra perioden i tidslinjen). Valet sparas."><option value="per">▾ vald period</option><option value="6">▾ +6 h framåt</option><option value="12">▾ +12 h framåt</option><option value="24">▾ +24 h framåt</option><option value="alla">▾ hela körningen</option></select><button id="pRest" class="sek ejFav" hidden title="Hämta hela ditt område från met.no (det som visas nu kom ur mellanserverns cache och täcker inte allt)">Hämta resten</button><button id="pStopp" class="sek ejFav" disabled>Stopp</button>
   </div>
   <dl class="info">
     <dt>Körning</dt><dd id="pKorning">–</dd>
@@ -2575,7 +2583,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261121-2300"></script>
+<script src="sannolikhet.js?v=20261121-2345"></script>
 <script src="kombo.js?v=20261121-1330"></script>
 <script src="m0karta.js?v=20261121-1830"></script>
 <script src="taf.js?v=20261121-1945"></script>

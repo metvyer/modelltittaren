@@ -379,7 +379,7 @@ function fyllTider() {
   const f = $("pFran"), t = $("pTill"), fv = f.value, tv = t.value;
   f.innerHTML = ""; t.innerHTML = "";
   for (let i = 0; i < ENS_TIDER; i++) { f.add(new Option(tidText(i), i)); t.add(new Option(tidText(i), i)); }
-  f.value = fv || "0"; t.value = tv || "12";
+  f.value = fv || "0"; t.value = tv || f.value;   // 21/11 natt: standard = en timme (perioden dras ut i tidslinjen)
   const k = $("pKorning"); k.textContent = P.dtg ? P.dtg + " (30 medlemmar, +0 till +" + (ENS_TIDER - 1) + " h) " : "–";
   if (P.dtg && $("pKorningVal").value !== "senaste") k.insertAdjacentHTML("beforeend", '<span class="vald">– vald körning</span>');
   else if (P.dtg && P.ny) k.insertAdjacentHTML("beforeend", '<span class="ny">– NY KÖRNING</span>');
@@ -391,6 +391,17 @@ function saknadeTimmar(o, lista) {
 }
 // Timmarna som anvands for perioden. Tidsupplosning 3 eller 6 h: bara timmar delbara med steget
 // (00, 03, 06 ... UTC relativt korningen). Nederbord (summa) behover bara start och slut.
+// 21/11 natt: vad "Hamta falt" hamtar - vald period, eller fler timmar framat fran periodens start (valet pHamtVal).
+// Automatisk hamtning (nar man stegar/drar) hamtar bara det som behovs for perioden.
+function hamtLista(auto) {
+  const per = periodTimmar().lista, v = $("pHamtVal") ? $("pHamtVal").value : "per";
+  if (auto || v === "per" || P.listaOverride) return per;
+  let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
+  const pa = PPARAM[$("pParam").value], dt = +$("pDt").value || 1;
+  const fran = v === "alla" ? 0 : a, till = v === "alla" ? ENS_TIDER - 1 : Math.min(ENS_TIDER - 1, Math.max(b, a + +v));
+  const ut = new Set(per); for (let t = pa.agg === "summa" ? Math.max(0, fran - 1) : fran; t <= till; t++) if (pa.agg === "summa" || t % dt === 0 || t === till) ut.add(t);
+  return [...ut].sort((x, y) => x - y);
+}
 function periodTimmar() {
   let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
   if (P.listaOverride) return { a, b, fran: a, lista: P.listaOverride, dt: +$("pDt").value };   // 21/11: kombinationer (kombo.js)
@@ -645,7 +656,7 @@ async function probHamta(auto, utanSnabb) {
   try {
     if (!await aktivKorning()) throw new Error("Hittade ingen komplett ensemblekörning de senaste 18 timmarna. Senaste försöket: " + varforEj(""));
     const o = { ...o0, dtg: P.dtg }; ritaOmrade(); if (!auto) zoomaTillOmrade(o);
-    const pa = PPARAM[o.v], { lista } = periodTimmar(); let sakn = saknadeTimmar(o, lista);
+    const pa = PPARAM[o.v], lista = hamtLista(auto); let sakn = saknadeTimmar(o, lista);
     // snappat hamtomrade
     const snapp = (a, b, max) => { const g = ENS_SNAPP * o.s, maxA = Math.floor(max / o.s) * o.s;
       let lo = Math.floor(a / g) * g, hi = Math.ceil((b + o.s) / g) * g - o.s; if (hi > maxA) hi = maxA; return [lo, hi]; };
@@ -882,6 +893,7 @@ function ritaTidslinje() {
     const sp = document.createElement("span"); sp.dataset.t = t; sp.title = tidText(t) + (har.has(t) ? " – hämtad" : " – ej hämtad");
     if (har.has(t)) sp.classList.add("har");
     if (t >= a && t <= b) sp.classList.add("per");
+    if (t === a) sp.classList.add("ka"); if (t === b) sp.classList.add("kb");   /* 21/11 natt: handtag */
     if (bas !== null) {
       const d = new Date(bas + t * 3600e3);
       if (t > 0 && d.getUTCHours() === 0) sp.classList.add("dygn");
@@ -896,11 +908,31 @@ function ritaTidslinje() {
     el.append(sp);
   }
 }
-function tidslinjeKlick(ev) {
-  const t = +(ev.target.dataset && ev.target.dataset.t); if (!isFinite(t) || ev.target.dataset.t === undefined) return;
-  const L = Math.abs(+$("pTill").value - +$("pFran").value), na = Math.min(t, ENS_TIDER - 1 - L);
-  $("pFran").value = na; $("pTill").value = na + L; probVisa(); autoHamta();
+// 21/11 natt (Jakob): perioden valjs i tidslinjen. Klick pa en timme = bara den timmen. Dra = perioden dras ut
+// fran timmen man borjade pa (at bada hall). Tar man i periodens kant (handtagen) flyttas bara den kanten.
+let tlDrag = null;
+function tidslinjeTimme(ev) {
+  const el = $("tidslinje"), r = el.getBoundingClientRect();
+  return Math.max(0, Math.min(ENS_TIDER - 1, Math.floor((ev.clientX - r.left) / r.width * ENS_TIDER)));
 }
+function tidslinjeSatt(a, b, klar) {
+  if (b < a) [a, b] = [b, a]; if (+$("pFran").value === a && +$("pTill").value === b && !klar) return;
+  $("pFran").value = a; $("pTill").value = b;
+  if (klar) { probVisa(); autoHamta(); } else { ritaTidslinje(); }
+}
+function tidslinjeNer(ev) {
+  if (ev.button !== undefined && ev.button !== 0) return;
+  const t = tidslinjeTimme(ev); let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
+  // ankaret = den ande som ligger still
+  let ankare;
+  if (a !== b && t === a) ankare = b; else if (a !== b && t === b) ankare = a; else ankare = t;
+  tlDrag = { ankare, start: t, flyttad: false };
+  $("tidslinje").setPointerCapture && $("tidslinje").setPointerCapture(ev.pointerId);
+  if (ankare === t) tidslinjeSatt(t, t, false);
+  ev.preventDefault();
+}
+function tidslinjeDra(ev) { if (!tlDrag) return; const t = tidslinjeTimme(ev); if (t !== tlDrag.start) tlDrag.flyttad = true; tidslinjeSatt(tlDrag.ankare, t, false); }
+function tidslinjeUpp(ev) { if (!tlDrag) return; const t = tidslinjeTimme(ev); const d = tlDrag; tlDrag = null; tidslinjeSatt(d.ankare, d.flyttad || d.ankare !== d.start ? t : d.start, true); }
 
 async function probVisa() {
   const g = $("kProb"); ritaPForklaring(); ritaTidslinje();
@@ -1533,7 +1565,18 @@ function bytLage(nytt) {
   $("pBak").addEventListener("click", () => flytta(-1)); $("pFram").addEventListener("click", () => flytta(1));
   // Tidslinjen och stegknapparna under kartan, piltangenterna (inte nar man skriver i ett falt)
   $("tBak").addEventListener("click", () => flytta(-1)); $("tFram").addEventListener("click", () => flytta(1));
-  $("tidslinje").addEventListener("click", tidslinjeKlick);
+  $("tidslinje").addEventListener("pointerdown", tidslinjeNer);
+  $("tidslinje").addEventListener("pointermove", tidslinjeDra);
+  $("tidslinje").addEventListener("pointerup", tidslinjeUpp);
+  $("tidslinje").addEventListener("pointercancel", () => { if (tlDrag) { tlDrag = null; probVisa(); } });
+  $("tidslinje").title = "Klicka på en timme = bara den timmen. Dra = dra ut en period. Ta i kanterna för att ändra perioden.";
+  // 21/11 natt: troskel och snabbval under kartan (samma falt, flyttade - all kod fungerar som forut)
+  { const rad = $("troskRad"); for (const id of ["pTrosk", "pChips", "pIsoProb"]) { const f = $(id) && $(id).closest(".falt"); if (rad && f) rad.appendChild(f); } }
+  // Hamta: vald period eller fler timmar framat (sparas)
+  $("pHamtVal").value = lasa("mt:pHamtVal") || "per"; if (!$("pHamtVal").value) $("pHamtVal").value = "per";
+  $("pHamtVal").addEventListener("change", () => lagra("mt:pHamtVal", $("pHamtVal").value));
+  // steg 1 h (fältet Steg ar dolt)
+  $("pSteg").value = "1";
   document.addEventListener("keydown", ev => {
     if (lage !== "p" || ev.altKey || ev.ctrlKey || ev.metaKey) return;
     const tag = (document.activeElement && document.activeElement.tagName) || "";
