@@ -201,7 +201,8 @@ function obsVisa() {
   const g = $("kObs"); if (!g) return;
   const r = OBS.ramar[OBS.i]; if (!r || !OBS.lage) { g.textContent = ""; obsPrognosSkylt(null); return; }
   const v = r.bild;
-  $("obsTid").textContent = obsTidTxt(r.t) + (r.prognos ? "  PROGNOS +" + Math.round((r.t - OBS.ramar.filter(x => !x.prognos).pop().t) / 60e3) + " min" : "") + "  ·  " + obsSen(r.t);
+  const sistObs = OBS.ramar.filter(x => !x.prognos).pop(), rel = sistObs ? Math.round((r.t - sistObs.t) / 60e3) : 0;   /* 21/11 kvall: minus-tid for aldre bilder */
+  $("obsTid").textContent = obsTidTxt(r.t) + (r.prognos ? "  PROGNOS +" + rel + " min" : rel < 0 ? "  −" + -rel + " min" : "  senaste") + "  ·  " + obsSen(r.t);
   $("obsTid").classList.toggle("prognos", !!r.prognos);
   obsPrognosSkylt(r);
   $("obsReglage").max = Math.max(0, OBS.ramar.length - 1); $("obsReglage").value = OBS.i;
@@ -211,10 +212,14 @@ function obsVisa() {
   for (const b of [v.under, v, ...lag]) if (b && b.href) g.appendChild(el("image", { href: b.href, x: b.vy.x, y: b.vy.y, width: b.vy.w, height: b.vy.h, preserveAspectRatio: "none" }));
 }
 // 21/11 kvall: rod skylt i kartans hörn + rod ram nar loopen visar met.no:s prognos (fast, foljer inte zoom)
+// Skylten visas for alla bilder: gra med tid och minus-tid (aldre bilder) eller "senaste", rod for prognos.
 function obsPrognosSkylt(r) {
-  const p = !!(r && r.prognos && OBS.lage === "rad"), sk = $("obsPrognosSkylt"); if (!sk) return;
-  sk.hidden = !p; document.querySelector(".kartram").classList.toggle("prognosram", p);
-  if (p) { const sist = OBS.ramar.filter(x => !x.prognos).pop(); sk.textContent = "PROGNOS +" + Math.round((r.t - (sist ? sist.t : r.t)) / 60e3) + " min · " + obsTidTxt(r.t); }
+  const sk = $("obsPrognosSkylt"); if (!sk) return;
+  const p = !!(r && r.prognos && OBS.lage === "rad"); document.querySelector(".kartram").classList.toggle("prognosram", p);
+  if (!r || !OBS.lage) { sk.hidden = true; return; }
+  const sist = OBS.ramar.filter(x => !x.prognos).pop(), rel = sist ? Math.round((r.t - sist.t) / 60e3) : 0;
+  sk.hidden = false; sk.classList.toggle("obs", !p);
+  sk.textContent = (p ? "PROGNOS +" + rel + " min" : rel < 0 ? "−" + -rel + " min" : "Senaste") + " · " + obsTidTxt(r.t);
 }
 const obsSen = t => { const m = Math.round((Date.now() - t) / 60e3); return m < 0 ? "om " + -m + " min" : m < 90 ? m + " min sedan" : Math.round(m / 6) / 10 + " h sedan"; };
 function obsStatus(txt) { const s = $("obsStatus"); if (s) s.textContent = txt; }
