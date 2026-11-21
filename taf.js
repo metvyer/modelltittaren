@@ -8,6 +8,7 @@
 //  Tillval: sidvind i byar per bana (basta banan) som egen rad.
 //  Larm: ljud, systemavisering och markering nar METAR ar samre an TAF:en eller en ny AMD kommer.
 //  Data: aviationweather.gov direkt, annars via mellanservern (/taf, /metar), max 20 flygplatser per anrop.
+//  21/11: polska flygplatser (EP..) i forsta hand fran IMGW:s flyg-API (imgwHamta).
 //  TAF-tolkningen (tafTolka) ar skriven for att aven kunna anvandas av PP-snitt.
 // ===================================================================
 
@@ -140,6 +141,34 @@ function metarKat(o) {
 }
 
 // ---------- Hamtning ----------
+// NYTT 21/11: POLSKA FLYGPLATSER (EP..) fran IMGW:s flyg-API (hittat i awiacja.imgw.pl, CORS *, odokumenterat).
+// En fraga ger senaste TAF resp. METAR for ca 32 polska flygplatser, aven militara (EPMM, EPMI, EPKS ...).
+// Direkt forst, sedan via mellanservern (/imgw, delad cache 4 min). Saknas en flygplats dar -> aviationweather som forut.
+const IMGW_API = "https://aviation-api.imgw.pl/data/last?format=json&count=1&params=", IMGW = { taf: null, metar: null, tid: 0, plats: {} };
+async function imgwHamta() {
+  if (Date.now() - IMGW.tid < 4 * 60e3 && IMGW.taf) return;
+  const en = async typ => {
+    for (const url of [IMGW_API + typ, TAF_MS + "imgw?params=" + typ]) {
+      try { const ctl = new AbortController(), tid = setTimeout(() => ctl.abort(), 15000);
+        const r = await fetch(url, { signal: ctl.signal }); clearTimeout(tid); if (r.ok) return await r.json(); } catch (e) {}
+    }
+    return null;
+  };
+  const [taf, metar] = await Promise.all([en("taf"), en("metar")]);
+  // plocka ut meddelandena: varje flygplats -> alla objekt med "message" som borjar med TAF/METAR/SPECI, senaste forst
+  const plocka = (j, typ) => { const ut = {}; if (!j || typeof j !== "object") return null;
+    for (const icao in j) { const L = [];
+      const ga = o => { if (!o || typeof o !== "object") return; if (Array.isArray(o)) { o.forEach(ga); return; }
+        if (typeof o.message === "string" && (typ === "taf" ? /^TAF/.test(o.message.trim()) : /^(METAR|SPECI)/.test(o.message.trim())))
+          L.push({ raw: o.message.replace(/\s+/g, " ").replace(/\s*=\s*$/, "").trim(), t: o.timestamp ? o.timestamp * 1000 : Date.parse(o.date || "") || 0, ogiltig: !!o.isCanceled });
+        for (const k in o) if (k !== "airport") ga(o[k]); };
+      ga(j[icao]); const a = j[icao] && j[icao].airport;
+      if (a && isFinite(a.latitude)) IMGW.plats[icao] = [(a.name || icao) + (a.isMILITARY ? " (mil)" : ""), a.latitude, a.longitude];
+      L.sort((x, y) => y.t - x.t); if (L.length) ut[icao] = L.find(x => !x.ogiltig) || L[0]; }
+    return ut; };
+  if (taf) IMGW.taf = plocka(taf, "taf"); if (metar) IMGW.metar = plocka(metar, "metar");
+  if (taf || metar) IMGW.tid = Date.now();
+}
 async function tafHamtaJson(typ, ids, extra) {
   for (const bas of [TAF_AWC, TAF_MS]) {
     try {
@@ -154,17 +183,22 @@ async function tafUppdatera(tyst) {
   if (TAFS.pagar) return; TAFS.pagar = true;
   const st = $("tafStatus"); if (st && !tyst) st.textContent = "Hämtar TAF och METAR …";
   try {
+    if (TAFS.lista.some(ic => ic.startsWith("EP"))) await imgwHamta();   // 21/11: polska fran IMGW
     for (let i = 0; i < TAFS.lista.length; i += 20) {
       const ids = TAFS.lista.slice(i, i + 20);
       const [tafs, mets] = await Promise.all([tafHamtaJson("taf", ids), tafHamtaJson("metar", ids, "&hours=2")]);
       for (const icao of ids) {
-        const t = (tafs || []).filter(d => d.icaoId === icao && d.rawTAF).sort((a, b) => (b.issueTime || "").localeCompare(a.issueTime || ""))[0];
+        let t = (tafs || []).filter(d => d.icaoId === icao && d.rawTAF).sort((a, b) => (b.issueTime || "").localeCompare(a.issueTime || ""))[0];
+        const it = IMGW.taf && IMGW.taf[icao];   // IMGW har foretrade for polska (fler flygplatser, aven militara)
+        if (it && (!t || it.t >= Date.parse(t.issueTime || "") - 60e3)) t = { rawTAF: it.raw, kalla: "IMGW" };
         // 21/11: en TAF vars giltighet har gatt ut (t.ex. flygplatsen stangd over helgen) raknas som ingen TAF -
         // da visas bara METAR, ingen linjal
         const T = t ? tafTolka(t.rawTAF) : null;
         if (T && T.till + TAF_UTE_MIN * 60e3 > Date.now()) { T.timmar = tafTimmar(T); TAFS.data[icao] = T; }
         else if (tafs) { TAFS.data[icao] = null; TAFS.gammal = TAFS.gammal || {}; TAFS.gammal[icao] = T ? T.raw : ""; }
-        const m = (mets || []).filter(d => d.icaoId === icao && d.rawOb).sort((a, b) => (b.obsTime || 0) - (a.obsTime || 0))[0];
+        let m = (mets || []).filter(d => d.icaoId === icao && d.rawOb).sort((a, b) => (b.obsTime || 0) - (a.obsTime || 0))[0];
+        const im = IMGW.metar && IMGW.metar[icao];
+        if (im && (!m || im.t >= m.obsTime * 1000)) m = { rawOb: im.raw, obsTime: Math.round(im.t / 1000) };
         if (m) TAFS.metar[icao] = { t: m.obsTime * 1000, raw: m.rawOb, ...tolkaMetar(m.rawOb) }; else if (mets) TAFS.metar[icao] = null;
       }
     }
@@ -205,7 +239,8 @@ function tafKollaLarm() {
 // ---------- Ritning: tabell ----------
 const tafAxel = () => { const nu = Date.now(), t0 = Math.floor(nu / 3600e3) * 3600e3 - TAF_BAK_H * 3600e3; return { t0, n: TAF_BAK_H + TAF_FRAM_H, nu }; };
 const tafBanor = icao => { const p = PUNKTER.find(x => x[1] === icao) || FLYG.find(x => x[0] === icao); return p ? banorFor(icao, p[2] !== undefined ? p[2] : p[2], p[3]).map(b => b.sann) : []; };
-function tafPlats(icao) { const p = PUNKTER.find(x => x[1] === icao); if (p) return [p[0], p[2], p[3]]; const f = FLYG.find(x => x[0] === icao); return f ? [f[1] || icao, f[2], f[3]] : [icao, NaN, NaN]; }
+function tafPlats(icao) { const p = PUNKTER.find(x => x[1] === icao); if (p) return [p[0], p[2], p[3]]; const f = FLYG.find(x => x[0] === icao);
+  return f ? [f[1] || icao, f[2], f[3]] : IMGW.plats[icao] ? IMGW.plats[icao] : [icao, NaN, NaN]; }
 function tafRita() { tafRitaTabell(); tafRitaKarta(); }
 // 21/11: ordning i tabellen (mt:tafOrdning)
 const TAF_ORDNING = [["alfa", "Bokstavsordning (ICAO)"], ["tillagd", "Ordning de lades till"], ["ns", "Norr → söder"], ["sn", "Söder → norr"], ["vo", "Väst → öst"], ["ov", "Öst → väst"], ["samst", "Sämst först (tidigast röd, sedan gul)"]];
@@ -384,9 +419,10 @@ function tafInit() {
   // 21/11: sok pa ICAO eller namn (lista med alla kanda flygplatser); valj -> laggs till och kartan zoomar dit
   // flygplatslistan laddas efter start -> bygg sokningen nar den behovs
   let kandaN = -1, kandaL = [];
-  const kandaF = () => { if (kandaN !== FLYG.length) { kandaN = FLYG.length; kandaL = PUNKTER.map(p => [p[1], p[0]]).concat(FLYG.filter(f => !PUNKTER.some(p => p[1] === f[0])).map(f => [f[0], f[1] || ""]));
+  const kandaF = () => { const nN = FLYG.length + Object.keys(IMGW.plats).length; if (kandaN !== nN) { kandaN = nN; kandaL = PUNKTER.map(p => [p[1], p[0]]).concat(FLYG.filter(f => !PUNKTER.some(p => p[1] === f[0])).map(f => [f[0], f[1] || ""]));
+    for (const ic in IMGW.plats) if (!kandaL.some(([k]) => k === ic)) kandaL.push([ic, IMGW.plats[ic][0]]);   // 21/11: polska fran IMGW
     const dl = $("tafSokLista"); dl.textContent = ""; for (const [ic, n] of kandaL) dl.appendChild(new Option(ic + " – " + n, ic + " – " + n)); } return kandaL; };
-  $("tafNy").addEventListener("focus", kandaF);
+  $("tafNy").addEventListener("focus", () => { kandaF(); if (!IMGW.tid) imgwHamta().then(kandaF).catch(() => {}); });
   kn("tafLjud", "mt:tafLjud", "ljud", () => { if (TAFS.ljud) tafPip(); });
   kn("tafAvis", "mt:tafAvis", "avis", () => { if (TAFS.avis && "Notification" in window && Notification.permission !== "granted") Notification.requestPermission().then(p => { if (p !== "granted") { TAFS.avis = false; lagra("mt:tafAvis", "nej"); $("tafAvis").setAttribute("aria-pressed", "false"); $("tafStatus").textContent = "Webbläsaren tillät inte aviseringar."; } }); });
   // Kand ICAO-kod (eller vald rad "ESSA – Arlanda") -> den; annars namnsok (borjan, sedan var som helst);

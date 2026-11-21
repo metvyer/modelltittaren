@@ -27,7 +27,9 @@ const THREDDS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
 // Tillåtna filnamn: meps_….ncml.ascii / .ncml.dods / .nc.ascii / .nc.dods
 const TILLATEN_FIL = /^\/mepslatest\/(meps_[A-Za-z0-9_]+\.(?:ncml|nc)\.(?:ascii|dods))$/;
 // METAR: /metar?ids=ESSA,ESGG&hours=6 -> aviationweather.gov, bara 1-20 ICAO-koder och 1-24 timmar
-const AWC = "https://aviationweather.gov/api/data/";   // + metar / taf
+const AWC = "https://aviationweather.gov/api/data/";
+// NYTT 21/11: polska TAF/METAR fran IMGW:s flyg-API (/imgw?params=taf|metar|gamet|new_sigmet), cache 4 min
+const IMGW = "https://aviation-api.imgw.pl/data/last?format=json&count=1&params=", CACHE_IMGW = 240;   // + metar / taf
 const DELA_MAX = 20000;   // 21/11: storre (ritlinjer foljer med). Delningar raderas inte automatiskt.
 const slump = (n, tecken) => { const b = crypto.getRandomValues(new Uint8Array(n)); return [...b].map(x => tecken[x % tecken.length]).join(""); };
 const UA = { "User-Agent": "Modelltittaren-mellanserver (github.com/metvyer/modelltittaren)" };
@@ -56,6 +58,7 @@ const SPARA_SENASTE = 2000;   // så många detaljrader behålls (äldre raderas
 function typAv(url) {
   if (url.pathname === "/metar") return "metar";
   if (url.pathname === "/taf") return "taf";
+  if (url.pathname === "/imgw") return "imgw";
   if (url.search === "?time") return "koll";
   if (/meps_det/.test(url.pathname)) return "tidhojd";
   if (/meps_lagged/.test(url.pathname)) return "sannolikhet";
@@ -120,6 +123,8 @@ export class Kalla extends WorkerEntrypoint {
     let kalla, tid;
     if (url.pathname === "/metar" || url.pathname === "/taf") {
       kalla = AWC + url.pathname.slice(1) + url.search; tid = url.pathname === "/taf" ? CACHE_TAF : CACHE_METAR;
+    } else if (url.pathname === "/imgw") {
+      kalla = IMGW + url.searchParams.get("params"); tid = CACHE_IMGW;
     } else {
       const fil = url.pathname.replace(/^\/mepslatest\//, "");
       kalla = THREDDS + fil + url.search; tid = cachetid(fil, url.search);
@@ -301,7 +306,12 @@ export default {
     }
 
     let vidare;
-    if (url.pathname === "/taf") {
+    if (url.pathname === "/imgw") {
+      const pr = url.searchParams.get("params") || "";
+      if (!/^(taf|metar|gamet|new_sigmet)$/.test(pr)) return new Response("Fel params", { status: 400, headers: cors });
+      if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
+      vidare = url.origin + "/imgw?params=" + pr;
+    } else if (url.pathname === "/taf") {
       // TAF: /taf?ids=ESSA (1-20 ICAO-koder), senaste TAF per flygplats
       const ids = (url.searchParams.get("ids") || "").toUpperCase();
       if (!/^[A-Z0-9]{4}(,[A-Z0-9]{4}){0,19}$/.test(ids)) return new Response("Fel ids", { status: 400, headers: cors });
