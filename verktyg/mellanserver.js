@@ -294,7 +294,7 @@ export default {
     // STAT_NYCKEL (hemlighet i Cloudflare), skickad i huvudet X-Mt-Nyckel. Utan nyckel: bara dagssiffror.
     if (url.pathname === "/statistik") {
       const ut = { dagar: [], senaste: [], detaljer: false };
-      const ratt = String(env.STAT_NYCKEL || "").trim(), given = (req.headers.get("X-Mt-Nyckel") || "").trim();   // mellanslag/radbrytning runt nyckeln raknas inte
+      const ren = x => String(x || "").replace(/[^\x21-\x7e]/g, ""), ratt = ren(env.STAT_NYCKEL), given = ren(req.headers.get("X-Mt-Nyckel"));   // mellanslag/radbrytning runt nyckeln raknas inte
       const giltig = !!ratt && given === ratt;
       if (!ratt) ut.ingenNyckel = true;
       if (env.DB) {
