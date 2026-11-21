@@ -140,6 +140,8 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .taftab .ute { color: #6b7280; font-weight: 700; border: 1px dashed #6b7280; border-radius: 3px; padding: 0 3px; font-size: 10.5px; }
 .taftab .tafx { border: 0; background: none; cursor: pointer; color: var(--dim); font-size: 14px; padding: 0 3px; }
 .taftab .dim { color: var(--dim); }
+#karta.ritlage { cursor: crosshair; }
+.ritrad { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; padding: 5px 8px; border: 1px dashed var(--acc); border-radius: 6px; font-size: 13px; }
 .flikar .delaknapp { margin-left: auto; color: var(--acc); }
 .flikar .delaknapp[aria-pressed="true"] { color: #dc2626; }
 .delarad { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 6px 0 8px; padding: 6px 10px; border: 1px solid var(--acc); border-radius: 6px; font-size: 13px; }
@@ -149,6 +151,11 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .delarad.pausad { background: #ffedd5; border-color: #ea580c; color: #7c2d12; }
 @media (prefers-color-scheme: dark) { .delarad.foljer { background: #0f3d22; color: #bbf7d0; } .delarad.pausad { background: #4a2408; color: #fed7aa; } }
 .delarad .delanamn { font-weight: 700; }
+.delarad.panel { flex-direction: column; align-items: stretch; }
+.delarad1 { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.delarad .delavem { width: 150px; font-size: 12px; }
+.delarad .delaok { color: #15803d; }
+.delarad .delaaktiva { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .delarad .delalank { width: 300px; max-width: 100%; font-size: 12px; }
 .delarad .delasand { color: #dc2626; }
 .delarad .delafel { color: #b45309; }
@@ -289,15 +296,17 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <button class="sek liten baraP" id="visaSnabb" aria-pressed="true" title="Gröna rutor = områden som redan finns i mellanserverns cache (någon har hämtat dem) – de hämtas på en sekund utan att fråga met.no">Snabba</button>
     <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
+    <button class="sek liten" id="ritKnapp" title="Rita en linje på kartan med en kort text (t.ex. Norr om denna: snö). Klicka punkt för punkt, dubbelklick eller Enter = klar. Klicka på en linje för att ändra eller ta bort den. Följer med när du delar.">✏ Rita</button>
     <span class="kartpos" id="kartPos"></span>
   </div>
   <div class="kartram">
   <div class="karttid baraP" id="kartTid" aria-live="polite"></div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g><g id="kTaf"></g>
+    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g><g id="kTaf"></g><g id="kRit"></g>
   </svg>
   </div>
+  <div class="ritrad" id="ritRad" hidden></div>
   <div class="baraTH m0rad" id="m0Rad" hidden>
     <select id="m0Param"></select>
     <button class="sek liten" id="m0Bak" title="En timme bakåt">◀</button><span id="m0Tid" class="m0tid"></span><button class="sek liten" id="m0Fram" title="En timme framåt">▶</button>
@@ -2242,6 +2251,7 @@ function satVb(x, y, w) {
   $("karta").setAttribute("viewBox", vb.x + " " + vb.y + " " + vb.w + " " + vb.h); ritaMarkorer(); if (typeof skalaIsoEtiketter === "function") skalaIsoEtiketter();
   if (typeof ritaSiffror === "function") { clearTimeout(satVb.tim); satVb.tim = setTimeout(ritaSiffror, 120); }
   if (typeof tafRitaKarta === "function" && lage === "taf") { clearTimeout(satVb.tim2); satVb.tim2 = setTimeout(tafRitaKarta, 80); }
+  if (typeof ritRita === "function") { clearTimeout(satVb.tim3); satVb.tim3 = setTimeout(ritRita, 60); }
 }
 function zooma(f, cx, cy) {
   if (cx === undefined) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
@@ -2401,6 +2411,7 @@ function kartTips(e) {
   visaKTips(mk.dataset.tips, e.clientX + 14, e.clientY + 14);
 }
 function kartKlick(e, mal) {
+  if (typeof ritKlick === "function" && ritKlick(e, mal)) return;   // 21/11: ritlinjer (rita.js)
   const sel = $("punkt"), fri = friPunkt || e.shiftKey, mk = !fri && mal && mal.closest ? mal.closest(".mk") : null;
   // 21/11: TAF-fliken - klick pa en flygplats laggs till/tas bort i bevakningen
   if (lage === "taf") {
@@ -2533,7 +2544,8 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 })();
 </script>
 <script src="sannolikhet.js?v=20261121-0840"></script>
-<script src="taf.js?v=20261121-1010"></script>
-<script src="dela.js?v=20261121-1025"></script>
+<script src="taf.js?v=20261121-1100"></script>
+<script src="rita.js?v=20261121-1100"></script>
+<script src="dela.js?v=20261121-1100"></script>
 </body>
 </html>

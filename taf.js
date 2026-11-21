@@ -286,14 +286,35 @@ function tafRitaKarta() {
       gi.appendChild(el("text", { x: k.x + px(5), y: k.y - px(4), "font-size": px(8.5), fill: "#374151", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" }, ic));
     }
   }
-  for (const icao of TAFS.lista) {
+  // NYTT 21/11: linjalerna glider isar. Varje flygplats ritas i tabellens ordning; krockar dess linjal (eller etikett/tider)
+  // med en redan placerad - eller med en annan flygplats prick - flyttas den upp/ned till narmaste lediga plats och
+  // en tunn gra linje visar vilken prick den hor till. Gors om vid varje omritning (zoom, ny TAF, AMD ...).
+  const ordning = typeof tafSorterad === "function" ? tafSorterad() : TAFS.lista;
+  const gLinjer = el("g", { "pointer-events": "none" }), gd = el("g", {}); g.appendChild(gLinjer);
+  const lagda = [];
+  for (const ic of ordning) { const [, la, lo] = tafPlats(ic); if (!isFinite(la)) continue; const q = tillKarta(la, lo);
+    lagda.push({ x: q.x - px(6), y: q.y - px(6), w: px(12), h: px(12) }); }
+  const krock = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const placera = (gp, k, x0, y0) => {
+    let bb; try { bb = gp.getBBox(); } catch (e) { return; } if (!bb || !bb.width) return;
+    const m = px(1.5), box = { x: bb.x - m, y: bb.y - m, w: bb.width + 2 * m, h: bb.height + 2 * m }, steg = box.h + px(1);
+    const fri = dy => !lagda.some(o => krock({ ...box, y: box.y + dy }, o));
+    let dy = 0;
+    if (!fri(0)) { dy = null; for (let n = 1; n <= 8 && dy === null; n++) for (const t of [n * steg, -n * steg]) if (fri(t)) { dy = t; break; } if (dy === null) dy = 0; }
+    lagda.push({ ...box, y: box.y + dy });
+    if (dy) { gp.setAttribute("transform", "translate(0," + dy + ")");
+      gLinjer.appendChild(el("line", { x1: k.x + px(4), y1: k.y, x2: x0 - px(1), y2: y0 + dy + px(H / 2), stroke: "#6b7280", "stroke-width": px(0.9), "stroke-dasharray": px(2) + " " + px(1.5) })); }
+  };
+  for (const icao of ordning) {
     const [namn, lat, lon] = tafPlats(icao); if (!isFinite(lat)) continue;
     const T0 = tafNu(icao), T = T0 && !T0.ute ? T0 : null, k = tillKarta(lat, lon), Mo = TAFS.metar[icao], x0 = k.x + px(10), y0 = k.y - px(H / 2);
     const gp = el("g", {}); g.appendChild(gp);
+    do {   // do/while(false): "continue" nedan hoppar hit ut, sedan placeras gruppen
     const tt = el("title"); tt.textContent = icao + " " + namn + (T ? "\n" + tafRader(T.raw) : "\ningen giltig TAF just nu" + (TAFS.gammal && TAFS.gammal[icao] ? " (senaste har gått ut:\n" + tafRader(TAFS.gammal[icao]) + ")" : "")) + (Mo ? "\n\n" + Mo.raw : ""); gp.appendChild(tt);
     // METAR-prick pa flygplatsen: samma granser som TAF:en, svart om aldre an 40 min, vit om ingen METAR
-    const km = metarKat(Mo);
-    gp.appendChild(el("circle", { cx: k.x, cy: k.y, r: px(5.5), fill: km < 0 ? "#fff" : [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod, "#111"][km], stroke: "#111", "stroke-width": px(1.2) }));
+    const km = metarKat(Mo);   // pricken ligger i en egen grupp overst (flyttas aldrig)
+    const prick = el("circle", { cx: k.x, cy: k.y, r: px(5.5), fill: km < 0 ? "#fff" : [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod, "#111"][km], stroke: "#111", "stroke-width": px(1.2) });
+    prick.appendChild(tt.cloneNode(true)); gd.appendChild(prick);
     // 21/11: AMD i rott, COR i gult/brunt pa kartan
     const lab = el("text", { x: x0, y: y0 - px(3), "font-size": px(10), "font-weight": 700, fill: "#111", stroke: "#fff", "stroke-width": px(2.5), "paint-order": "stroke" }, icao);
     if (T && T.amd) lab.appendChild(el("tspan", { fill: "#dc2626" }, " AMD"));
@@ -338,7 +359,10 @@ function tafRitaKarta() {
       const byt = kat[i] !== kat[i - 1] || (svKat.length && svKat[i] !== svKat[i - 1]);
       if (byt && T.timmar[i].t > A.t0 && T.timmar[i].t < A.t0 + A.n * 3600e3) lagg(T.timmar[i].t, false);
     }
+    } while (false);
+    placera(gp, k, x0, y0);
   }
+  g.appendChild(gd);
 }
 function tafVaxla(icao) {
   const i = TAFS.lista.indexOf(icao); if (i >= 0) TAFS.lista.splice(i, 1); else TAFS.lista.push(icao);

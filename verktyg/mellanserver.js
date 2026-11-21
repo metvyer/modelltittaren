@@ -6,7 +6,7 @@
 // NYTT 21/11: DELA VY (/dela). Sidan sparar en liten beskrivning av vad man tittar på (flik, parameter, tröskel, tid,
 // område, zoom, körning - inga data, inga namn) i D1-tabellen "delning". Kollegor öppnar länken …/#v=<id> och
 // följer med när ägaren ändrar (sidan frågar var 15:e sekund). Bara den som har ägarnyckeln kan ändra vyn.
-// Vyer som inte ändrats på DELA_DAGAR dagar raderas.
+// Egna namn (…/#v=metocc). Ingen automatisk radering. Tittare säger "jag är här" var 30:e s (namn de skrivit själva).
 // NYTT 19/11: statistik i D1-databasen "modelltittaren-statistik" (binding DB): varje anrop räknas per dag och typ,
 // och varje verklig hämtning från met.no/aviationweather (cachemiss) sparas med storlek. Visas via /statistik
 // (sidan statistik.html). Inga IP-adresser eller personuppgifter sparas - bara vad som hämtades, när och hur stort.
@@ -28,7 +28,7 @@ const THREDDS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
 const TILLATEN_FIL = /^\/mepslatest\/(meps_[A-Za-z0-9_]+\.(?:ncml|nc)\.(?:ascii|dods))$/;
 // METAR: /metar?ids=ESSA,ESGG&hours=6 -> aviationweather.gov, bara 1-20 ICAO-koder och 1-24 timmar
 const AWC = "https://aviationweather.gov/api/data/";   // + metar / taf
-const DELA_MAX = 4000, DELA_DAGAR = 30;
+const DELA_MAX = 20000;   // 21/11: storre (ritlinjer foljer med). Delningar raderas inte automatiskt.
 const slump = (n, tecken) => { const b = crypto.getRandomValues(new Uint8Array(n)); return [...b].map(x => tecken[x % tecken.length]).join(""); };
 const UA = { "User-Agent": "Modelltittaren-mellanserver (github.com/metvyer/modelltittaren)" };
 
@@ -169,32 +169,72 @@ export default {
     if (url.pathname === "/" || url.pathname === "")
       return new Response("Modelltittaren mellanserver OK (med cache)", { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
 
-    // NYTT 21/11: delad vy. GET /dela?id=X -> {vy, andrad}. POST /dela (text {vy}) -> ny {id, nyckel, andrad}.
-    // POST /dela?id=X&nyckel=Y (text {vy}) -> uppdatera (bara med rätt nyckel).
-    if (url.pathname === "/dela") {
+    // NYTT 21/11: DELAD VY (se overst). Namn = id: eget (a-z, 0-9, bindestreck, 3-20 tecken) eller slump.
+    //  GET  /dela?id=X[&sess=S&namn=N][&nyckel=K] -> {vy, andrad, vem, lista, tittare, agare}
+    //        sess = tittaren sager "jag ar har" (skickas var 30:e s), nyckel = agaren sander (halls levande i listan)
+    //  GET  /dela/aktiva                 -> delningar med "Visa i listan" vars agare sander just nu
+    //  GET  /dela/ledigt?namn=X          -> {ledigt}
+    //  POST /dela  {vy, namn?, lista?, vem?}             -> ny delning {id, nyckel}  (409 om namnet ar upptaget)
+    //  POST /dela?id=X&nyckel=K {vy?, lista?, vem?}      -> andra;  &tabort=1 -> ta bort delningen
+    //  Delningar raderas aldrig automatiskt (bara med tabort). Tittare som inte horts av pa 2 min visas inte.
+    if (url.pathname.startsWith("/dela")) {
       const json = (o, st) => new Response(JSON.stringify(o), { status: st || 200, headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
       if (!env.DB) return json({ fel: "ingen databas" }, 500);
-      const id = url.searchParams.get("id") || "";
+      const nu = Date.now(), DB = env.DB, NAMN = /^[a-z0-9][a-z0-9-]{2,19}$/;
+      const id = (url.searchParams.get("id") || "").toLowerCase(), nyckel = url.searchParams.get("nyckel") || "";
+      const ren = (t, n) => String(t || "").replace(/[<>\u0000-\u001f]/g, "").trim().slice(0, n);
+      const tittare = async i => (await DB.prepare("SELECT namn FROM tittare WHERE id = ? AND sedd > ? ORDER BY sedd DESC LIMIT 50").bind(i, nu - 120000).all()).results.map(r => r.namn || "");
       if (req.method === "GET") {
-        if (!/^[a-z0-9]{6,12}$/.test(id)) return json({ fel: "fel id" }, 400);
-        const r = await env.DB.prepare("SELECT vy, andrad, skapad FROM delning WHERE id = ?").bind(id).first();
-        return r ? json({ vy: JSON.parse(r.vy), andrad: r.andrad, skapad: r.skapad }) : json({ fel: "finns inte" }, 404);
+        if (url.pathname === "/dela/aktiva") {
+          const r = (await DB.prepare("SELECT d.id, d.vem, (SELECT COUNT(*) FROM tittare t WHERE t.id = d.id AND t.sedd > ?) AS antal FROM delning d WHERE d.lista = 1 AND d.levande > ? ORDER BY d.levande DESC LIMIT 30").bind(nu - 120000, nu - 120000).all()).results;
+          return json(r);
+        }
+        if (url.pathname === "/dela/ledigt") {
+          const n = (url.searchParams.get("namn") || "").toLowerCase();
+          if (!NAMN.test(n)) return json({ ledigt: false, fel: "Namnet får bara ha a–z, 0–9 och bindestreck, 3–20 tecken." });
+          return json({ ledigt: !(await DB.prepare("SELECT 1 FROM delning WHERE id = ?").bind(n).first()) });
+        }
+        if (!NAMN.test(id)) return json({ fel: "fel id" }, 400);
+        const r = await DB.prepare("SELECT vy, andrad, skapad, vem, lista, nyckel FROM delning WHERE id = ?").bind(id).first();
+        if (!r) return json({ fel: "finns inte" }, 404);
+        const agare = !!nyckel && nyckel === r.nyckel, sess = url.searchParams.get("sess") || "";
+        if (agare) ctx.waitUntil(DB.prepare("UPDATE delning SET levande = ? WHERE id = ?").bind(nu, id).run());
+        if (/^[a-z0-9]{8,24}$/.test(sess)) {
+          await DB.prepare("INSERT INTO tittare (id, sess, namn, sedd) VALUES (?, ?, ?, ?) ON CONFLICT(id, sess) DO UPDATE SET namn = excluded.namn, sedd = excluded.sedd").bind(id, sess, ren(url.searchParams.get("namn"), 30), nu).run();
+          if (Math.random() < 0.05) ctx.waitUntil(DB.prepare("DELETE FROM tittare WHERE sedd < ?").bind(nu - 600000).run());
+        }
+        return json({ vy: JSON.parse(r.vy), andrad: r.andrad, skapad: r.skapad, vem: r.vem || "", lista: !!r.lista, agare, tittare: await tittare(id) });
       }
       if (req.method !== "POST") return json({ fel: "fel metod" }, 405);
       if (!ok) return json({ fel: "Bara från metvyer.github.io" }, 403);
       const text = await req.text();
       if (text.length > DELA_MAX) return json({ fel: "för stor" }, 413);
-      let vy; try { vy = JSON.parse(text).vy; } catch (e) { return json({ fel: "fel format" }, 400); }
-      if (!vy || typeof vy !== "object") return json({ fel: "fel format" }, 400);
-      const nu = Date.now(), vyText = JSON.stringify(vy);
-      if (!id) {
-        const nyId = slump(7, "abcdefghijkmnpqrstuvwxyz23456789"), nyckel = slump(24, "abcdefghijklmnopqrstuvwxyz0123456789");
-        await env.DB.prepare("INSERT INTO delning (id, nyckel, vy, skapad, andrad) VALUES (?, ?, ?, ?, ?)").bind(nyId, nyckel, vyText, nu, nu).run();
-        ctx.waitUntil(env.DB.prepare("DELETE FROM delning WHERE andrad < ?").bind(nu - DELA_DAGAR * 864e5).run());
-        return json({ id: nyId, nyckel, andrad: nu });
+      let k = {}; if (text) { try { k = JSON.parse(text); } catch (e) { return json({ fel: "fel format" }, 400); } }
+      if (k.vy !== undefined && (!k.vy || typeof k.vy !== "object")) return json({ fel: "fel format" }, 400);
+      if (!id) {   // ny delning
+        if (!k.vy) return json({ fel: "fel format" }, 400);
+        let nyId = (k.namn || "").toLowerCase();
+        if (nyId && !NAMN.test(nyId)) return json({ fel: "Namnet får bara ha a–z, 0–9 och bindestreck, 3–20 tecken." }, 400);
+        if (!nyId) nyId = slump(7, "abcdefghijkmnpqrstuvwxyz23456789");
+        const ny = slump(24, "abcdefghijklmnopqrstuvwxyz0123456789");
+        try { await DB.prepare("INSERT INTO delning (id, nyckel, vy, skapad, andrad, lista, vem, levande) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(nyId, ny, JSON.stringify(k.vy), nu, nu, k.lista ? 1 : 0, ren(k.vem, 30), nu).run(); }
+        catch (e) { return json({ fel: "Namnet är upptaget." }, 409); }
+        return json({ id: nyId, nyckel: ny, andrad: nu });
       }
-      const r = await env.DB.prepare("UPDATE delning SET vy = ?, andrad = ? WHERE id = ? AND nyckel = ?").bind(vyText, nu, id, url.searchParams.get("nyckel") || "").run();
-      return r.meta && r.meta.changes ? json({ id, andrad: nu }) : json({ fel: "fel id eller nyckel" }, 403);
+      const rad = await DB.prepare("SELECT nyckel FROM delning WHERE id = ?").bind(id).first();
+      if (!rad) return json({ fel: "finns inte" }, 404);
+      if (rad.nyckel !== nyckel) return json({ fel: "fel nyckel" }, 403);
+      if (url.searchParams.get("tabort") === "1") {
+        await DB.batch([DB.prepare("DELETE FROM delning WHERE id = ?").bind(id), DB.prepare("DELETE FROM tittare WHERE id = ?").bind(id)]);
+        return json({ id, borttagen: true });
+      }
+      const satt = [], varden = [];
+      if (k.vy) { satt.push("vy = ?", "andrad = ?"); varden.push(JSON.stringify(k.vy), nu); }
+      if (k.lista !== undefined) { satt.push("lista = ?"); varden.push(k.lista ? 1 : 0); }
+      if (k.vem !== undefined) { satt.push("vem = ?"); varden.push(ren(k.vem, 30)); }
+      satt.push("levande = ?"); varden.push(nu);
+      await DB.prepare("UPDATE delning SET " + satt.join(", ") + " WHERE id = ?").bind(...varden, id).run();
+      return json({ id, andrad: nu });
     }
 
     if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
