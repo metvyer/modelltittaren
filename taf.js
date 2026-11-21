@@ -14,6 +14,11 @@
 const TAF_STD = ["ESIB", "ESCF", "ESCM", "ESDF", "ESMV", "ESSA", "ESGG", "ESMS", "ESSV", "ESPA", "ESPE"];   // de 11 forhamtade
 const TAF_FARG = { gron: "#16a34a", gul: "#eab308", rod: "#dc2626", ingen: "#cbd5e1" };
 const TAF_GRANS_STD = { gulSikt: 5000, gulBas: 1500, rodSikt: 1500, rodBas: 500, gulSv: 15, rodSv: 25 };
+const TAF_METAR_GAMMAL_MIN = 40;   // 21/11: aldre METAR -> svart prick
+const kmText = m => !isFinite(m) ? "–" : m >= 9999 ? "≥10 km" : (m / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 }) + " km";
+// 21/11: tid pa kartan - bara HH om den ar i dag eller i morgon (UTC), annars DDHH
+function tafKort(ms) { const d = new Date(ms), i = new Date(); i.setUTCHours(0, 0, 0, 0); const dag = Math.floor((ms - i.getTime()) / 864e5);
+  return (dag === 0 || dag === 1 ? "" : p2(d.getUTCDate())) + p2(d.getUTCHours()); }
 const TAF_INTERVALL_MIN = 5, TAF_FRAM_H = 30, TAF_BAK_H = 2;   // nyhamtning; tidsaxel fran nu-2 h till nu+30 h
 const TAF_AWC = "https://aviationweather.gov/api/data/", TAF_MS = "https://modelltittaren.metvyer.workers.dev/";
 
@@ -121,6 +126,7 @@ function tafSidvind(vindar, banor, icao) {
 }
 function metarKat(o) {
   if (!o) return -1;
+  if (Date.now() - o.t > TAF_METAR_GAMMAL_MIN * 60e3) return 3;   // for gammal -> svart
   const l = o.lager.filter(x => x.kat >= 3).map(x => x.ft); if (o.vv !== null) l.push(o.vv);
   const bas = l.length ? Math.min(...l) : Infinity, sikt = isFinite(o.sikt) ? o.sikt : 9999;
   return tafKat(sikt, bas);
@@ -175,7 +181,7 @@ function tafKollaLarm() {
     if (T && T.amd && T.utg && (!TAFS.sett[icao] || TAFS.sett[icao] < T.utg)) { TAFS.larm[icao] = "Ny AMD"; nya.push(icao + ": ny TAF AMD"); }
     if (T && M_ && T.timmar) {
       const h = T.timmar.find(x => M_.t >= x.t && M_.t < x.t + 3600e3) || T.timmar.find(x => Date.now() >= x.t && Date.now() < x.t + 3600e3);
-      if (h) { const km = metarKat(M_), kt = tafKat(h.sikt, h.bas); if (km > kt) { TAFS.larm[icao] = "METAR sämre än TAF"; if (TAFS.sett[icao + ":m"] !== M_.t) nya.push(icao + ": METAR sämre än TAF"); } }
+      if (h) { const km = metarKat(M_), kt = tafKat(h.sikt, h.bas); if (km <= 2 && km > kt) { TAFS.larm[icao] = "METAR sämre än TAF"; if (TAFS.sett[icao + ":m"] !== M_.t) nya.push(icao + ": METAR sämre än TAF"); } }
     }
   }
   if (nya.length) {
@@ -211,15 +217,15 @@ function tafRitaTabell() {
       } else c1.innerHTML = '<span class="dim">sidvind' + (banor.length ? "" : " (inga banor)") + "</span>";
       tr.appendChild(c1);
       const c2 = document.createElement("td"); c2.className = "met";
-      if (rad === "sv") { const k = metarKat(Mo); c2.innerHTML = Mo ? '<span class="prick" style="background:' + [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod][k] + '"></span>' + p2(new Date(Mo.t).getUTCHours()) + p2(new Date(Mo.t).getUTCMinutes()) + "Z" : '<span class="dim">–</span>';
-        if (Mo) c2.title = Mo.raw; }
+      if (rad === "sv") { const k = metarKat(Mo); c2.innerHTML = Mo ? '<span class="prick" style="background:' + [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod, "#111"][k] + '"></span>' + p2(new Date(Mo.t).getUTCHours()) + p2(new Date(Mo.t).getUTCMinutes()) + "Z" : '<span class="dim">–</span>';
+        if (Mo) c2.title = Mo.raw + (k === 3 ? "\n(äldre än " + TAF_METAR_GAMMAL_MIN + " min – svart)" : "\nFärg efter samma gränser som TAF:en"); }
       tr.appendChild(c2);
       for (let h = 0; h < A.n; h++) {
         const t = A.t0 + h * 3600e3, td = document.createElement("td"); td.className = "cell";
         const x = T && T.timmar ? T.timmar.find(q => q.t === t) : null;
         if (x) {
           let k, txt;
-          if (rad === "sv") { k = tafKat(x.sikt, x.bas); txt = "sikt " + (x.sikt >= 9999 ? "≥10 km" : x.sikt + " m") + ", molnbas " + (isFinite(x.bas) ? x.bas + " ft" : "ingen BKN/OVC"); }
+          if (rad === "sv") { k = tafKat(x.sikt, x.bas); txt = "sikt " + kmText(x.sikt) + ", molnbas " + (isFinite(x.bas) ? x.bas + " ft" : "ingen BKN/OVC"); }
           else { const sv = tafSidvind(x.vind, banor, icao); k = !isFinite(sv) ? -1 : sv >= TAFS.gr.rodSv ? 2 : sv >= TAFS.gr.gulSv ? 1 : 0; txt = isFinite(sv) ? "sidvind i byar högst " + Math.round(sv) + " kt (bästa banan)" : "ingen vind/bana"; }
           td.style.background = k < 0 ? TAF_FARG.ingen : [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod][k];
           const d = new Date(t); td.title = icao + " " + VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z: " + txt + "\n\n" + tafRader(T.raw);
@@ -245,27 +251,42 @@ function tafRitaKarta() {
     const k = tillKarta(lat, lon), T = TAFS.data[icao], Mo = TAFS.metar[icao], x0 = k.x + px(10), y0 = k.y - px(H / 2);
     const gp = el("g", {}); g.appendChild(gp);
     const tt = el("title"); tt.textContent = icao + " " + namn + (T ? "\n" + tafRader(T.raw) : "\ningen giltig TAF") + (Mo ? "\n\n" + Mo.raw : ""); gp.appendChild(tt);
-    // METAR-prick pa flygplatsen
+    // METAR-prick pa flygplatsen: samma granser som TAF:en, svart om aldre an 40 min, vit om ingen METAR
     const km = metarKat(Mo);
-    gp.appendChild(el("circle", { cx: k.x, cy: k.y, r: px(5.5), fill: km < 0 ? "#fff" : [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod][km], stroke: "#111", "stroke-width": px(1.2) }));
+    gp.appendChild(el("circle", { cx: k.x, cy: k.y, r: px(5.5), fill: km < 0 ? "#fff" : [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod, "#111"][km], stroke: "#111", "stroke-width": px(1.2) }));
     gp.appendChild(el("text", { x: x0, y: y0 - px(3), "font-size": px(10), "font-weight": 700, fill: "#111", stroke: "#fff", "stroke-width": px(2.5), "paint-order": "stroke" },
       icao + (T && T.amd ? " AMD" : "") + (T && T.cor ? " COR" : "") + (TAFS.larm[icao] ? " ⚠" : "")));
     if (!T || !T.timmar) continue;
     const kat = T.timmar.map(x => tafKat(x.sikt, x.bas)), helgron = kat.every(x => x === 0);
-    if (helgron) {   // kort gron stump med start- och sluttid
+    const banor = TAFS.vind ? tafBanor(icao) : [], svKat = TAFS.vind ? T.timmar.map(x => { const sv = tafSidvind(x.vind, banor, icao); return !isFinite(sv) ? -1 : sv >= TAFS.gr.rodSv ? 2 : sv >= TAFS.gr.gulSv ? 1 : 0; }) : [];
+    const svHelgron = !svKat.length || svKat.every(x => x <= 0);
+    const tidText = (x, txt, anchor, fet) => gp.appendChild(el("text", { x, y: y0 + px(H + (TAFS.vind ? H / 2 + 1 : 0) + 9), "font-size": px(8.5), "font-weight": fet ? 700 : 400, "text-anchor": anchor, fill: "#111", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" }, txt));
+    if (helgron && svHelgron) {   // kort gron stump, start- och sluttid efter
       gp.appendChild(el("rect", { x: x0, y: y0, width: px(22), height: px(H), fill: TAF_FARG.gron, stroke: "#111", "stroke-width": px(0.8), rx: px(2) }));
-      const a = new Date(T.fran), b = new Date(T.till);
-      gp.appendChild(el("text", { x: x0 + px(25), y: y0 + px(H - 1.5), "font-size": px(8.5), fill: "#111", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" },
-        p2(a.getUTCDate()) + p2(a.getUTCHours()) + "–" + p2(b.getUTCDate()) + p2(b.getUTCHours()) + "Z"));
+      gp.appendChild(el("text", { x: x0 + px(25), y: y0 + px(H - 1.5), "font-size": px(8.5), fill: "#111", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" }, tafKort(T.fran) + "–" + tafKort(T.till)));
       continue;
     }
+    const xAv = t => x0 + px(Math.max(0, Math.min(A.n, (t - A.t0) / 3600e3)) * tim);
     gp.appendChild(el("rect", { x: x0, y: y0, width: px(L), height: px(H), fill: "#ffffff", stroke: "#111", "stroke-width": px(0.8) }));
-    T.timmar.forEach((x, i) => {
-      const h = (x.t - A.t0) / 3600e3; if (h < 0 || h >= A.n) return;
-      gp.appendChild(el("rect", { x: x0 + px(h * tim), y: y0, width: px(tim) + px(0.3), height: px(H), fill: [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod][kat[i]] }));
-    });
-    const hn = (A.nu - A.t0) / 3600e3; gp.appendChild(el("line", { x1: x0 + px(hn * tim), x2: x0 + px(hn * tim), y1: y0 - px(2), y2: y0 + px(H + 2), stroke: "#111", "stroke-width": px(1.4) }));
+    const ritaRad = (kk, yy, hh) => T.timmar.forEach((x, i) => { const h = (x.t - A.t0) / 3600e3; if (h < 0 || h >= A.n || kk[i] < 0) return;
+      gp.appendChild(el("rect", { x: x0 + px(h * tim), y: yy, width: px(tim) + px(0.3), height: px(hh), fill: [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod][kk[i]] })); });
+    ritaRad(kat, y0, H);
+    if (TAFS.vind) {   // 21/11: sidvind som halvtjock linjal under
+      gp.appendChild(el("rect", { x: x0, y: y0 + px(H + 1), width: px(L), height: px(H / 2), fill: "#ffffff", stroke: "#111", "stroke-width": px(0.6) }));
+      ritaRad(svKat, y0 + px(H + 1), H / 2);
+      gp.appendChild(el("rect", { x: x0, y: y0 + px(H + 1), width: px(L), height: px(H / 2), fill: "none", stroke: "#111", "stroke-width": px(0.6) }));
+    }
+    const hn = (A.nu - A.t0) / 3600e3; gp.appendChild(el("line", { x1: x0 + px(hn * tim), x2: x0 + px(hn * tim), y1: y0 - px(2), y2: y0 + px(H + (TAFS.vind ? H / 2 + 1 : 0) + 2), stroke: "#111", "stroke-width": px(1.4) }));
     gp.appendChild(el("rect", { x: x0, y: y0, width: px(L), height: px(H), fill: "none", stroke: "#111", "stroke-width": px(0.8) }));
+    // 21/11: sluttid alltid efter linjalen; starttid och tider for fargbyten under linjalen (hoppar over om de krockar)
+    gp.appendChild(el("text", { x: x0 + px(L + 3), y: y0 + px(H - 1.5), "font-size": px(9), "font-weight": 700, fill: "#111", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" }, tafKort(T.till)));
+    const satta = [];
+    const lagg = (t, fet) => { const x = xAv(t); if (satta.some(q => Math.abs(q - x) < px(15))) return; satta.push(x); tidText(x, tafKort(t), "middle", fet); };
+    if (T.fran >= A.t0) lagg(T.fran, true);
+    for (let i = 1; i < T.timmar.length; i++) {
+      const byt = kat[i] !== kat[i - 1] || (svKat.length && svKat[i] !== svKat[i - 1]);
+      if (byt && T.timmar[i].t > A.t0 && T.timmar[i].t < A.t0 + A.n * 3600e3) lagg(T.timmar[i].t, false);
+    }
   }
 }
 function tafVaxla(icao) {
@@ -276,9 +297,10 @@ function tafVaxla(icao) {
 // ---------- Installningar ----------
 function tafInit() {
   const g = TAFS.gr;
+  // 21/11: sikt anges i km (0,1 = 100 m), sparas i meter
   for (const [id, k] of [["tafGulSikt", "gulSikt"], ["tafGulBas", "gulBas"], ["tafRodSikt", "rodSikt"], ["tafRodBas", "rodBas"], ["tafGulSv", "gulSv"], ["tafRodSv", "rodSv"]]) {
-    const e = $(id); e.value = g[k];
-    e.addEventListener("change", () => { const v = parseFloat(String(e.value).replace(",", ".")); if (isFinite(v)) { TAFS.gr[k] = v; sparaTafs(); for (const ic in TAFS.data) if (TAFS.data[ic]) {} tafKollaLarm(); tafRita(); } });
+    const e = $(id), km = /Sikt$/.test(k); e.value = km ? g[k] / 1000 : g[k];
+    e.addEventListener("change", () => { let v = parseFloat(String(e.value).replace(",", ".")); if (isFinite(v)) { if (km) v = Math.round(v * 1000); TAFS.gr[k] = v; sparaTafs(); for (const ic in TAFS.data) if (TAFS.data[ic]) {} tafKollaLarm(); tafRita(); } });
   }
   const kn = (id, nyck, flagga, efter) => { const b = $(id); b.setAttribute("aria-pressed", String(TAFS[flagga]));
     b.addEventListener("click", () => { TAFS[flagga] = !TAFS[flagga]; lagra(nyck, TAFS[flagga] ? "ja" : "nej"); b.setAttribute("aria-pressed", String(TAFS[flagga])); if (efter) efter(); tafRita(); }); };
