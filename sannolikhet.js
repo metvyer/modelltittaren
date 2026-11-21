@@ -1430,6 +1430,7 @@ function bytLage(nytt) {
   $("underrubrik").textContent = nytt === "m0" ? "Karta m0 · AROME 2,5 km (MEPS medlem 0), fält i färg + linjer" : nytt === "taf" ? "TAF-bevakning · grön/gul/röd per timme, METAR och larm" : fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
   if (nytt === "taf" && typeof tafIn === "function") setTimeout(tafIn, 0);
   if (typeof m0Rita === "function") { if (nytt === "m0") setTimeout(m0In, 0); else $("kM0").textContent = ""; }
+  if (typeof satVb === "function" && typeof vb !== "undefined" && vb) setTimeout(() => satVb(vb.x, vb.y, vb.w), 0);   // 21/11: kartans granser byts (Europa i TAF)
   lagra("mt:lageVy", fav ? "f" : nytt); $("kTips").hidden = true;
   if (fav && !varFav) favIn();
   setTimeout(ritaSiffror, 50);

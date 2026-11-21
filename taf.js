@@ -239,8 +239,33 @@ function tafKollaLarm() {
 // ---------- Ritning: tabell ----------
 const tafAxel = () => { const nu = Date.now(), t0 = Math.floor(nu / 3600e3) * 3600e3 - TAF_BAK_H * 3600e3; return { t0, n: TAF_BAK_H + TAF_FRAM_H, nu }; };
 const tafBanor = icao => { const p = PUNKTER.find(x => x[1] === icao) || FLYG.find(x => x[0] === icao); return p ? banorFor(icao, p[2] !== undefined ? p[2] : p[2], p[3]).map(b => b.sann) : []; };
-function tafPlats(icao) { const p = PUNKTER.find(x => x[1] === icao); if (p) return [p[0], p[2], p[3]]; const f = FLYG.find(x => x[0] === icao);
+function tafPlats(icao) { const p = PUNKTER.find(x => x[1] === icao); if (p) return [p[0], p[2], p[3]]; const f = FLYG.find(x => x[0] === icao) || FLYG_EU.find(x => x[0] === icao);
   return f ? [f[1] || icao, f[2], f[3]] : IMGW.plats[icao] ? IMGW.plats[icao] : [icao, NaN, NaN]; }
+// NYTT 21/11: HELA EUROPA i TAF-fliken. Laddas forsta gangen fliken oppnas: flygplatser_europa.json (ca 1000 st med
+// ICAO-kod, OurAirports), banor_europa.json (sidvind) och karta_europa.json (grovt kartunderlag utanfor MEPS-rutan).
+// Listorna uppdateras var 6:e manad av GitHub (flygplatser.yml).
+let FLYG_EU = [], euLaddad = null;
+function tafLaddaEuropa() {
+  if (euLaddad) return euLaddad;
+  euLaddad = Promise.all([
+    fetch("flygplatser_europa.json").then(r => r.json()).then(f => { FLYG_EU = f; }).catch(() => {}),
+    fetch("banor_europa.json").then(r => r.json()).then(b => { for (const k in b) if (!BANOR[k]) BANOR[k] = b[k]; }).catch(() => {}),
+    fetch("karta_europa.json").then(r => r.json()).then(k => {
+      const g = $("kGeoEU"); g.textContent = "";
+      for (const [n, w, d] of [["land", 0.7], ["sjo", 0.5], ["grans", 1, "5 2"], ["grad", 0.6, "4 4"]]) {
+        const a = { d: k[n], class: n, "vector-effect": "non-scaling-stroke", "stroke-width": w }; if (d) a["stroke-dasharray"] = d; g.appendChild(el("path", a)); }
+      g.appendChild(el("rect", { x: 0, y: 0, width: KX, height: KY, class: "meps", "stroke-width": 1, "stroke-dasharray": "6 4", "vector-effect": "non-scaling-stroke" }));
+      KARTA_EU = { x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1 }; if (lage === "taf") satVb(vb.x, vb.y, vb.w);
+    }).catch(() => {})]).then(() => { if (lage === "taf") tafRita(); });
+  return euLaddad;
+}
+// "Hela" i TAF-fliken: zooma till alla bevakade flygplatser
+function tafHela() {
+  const P_ = TAFS.lista.map(tafPlats).filter(p => isFinite(p[1])).map(p => tillKarta(p[1], p[2])); if (!P_.length) return false;
+  const x0 = Math.min(...P_.map(q => q.x)), x1 = Math.max(...P_.map(q => q.x)), y0 = Math.min(...P_.map(q => q.y)), y1 = Math.max(...P_.map(q => q.y));
+  const a = kartAspekt(), w = Math.max(x1 - x0 + 160, (y1 - y0 + 120) / a, 120);
+  satVb((x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - w * a / 2, w); return true;
+}
 function tafRita() { tafRitaTabell(); tafRitaKarta(); }
 // 21/11: ordning i tabellen (mt:tafOrdning)
 const TAF_ORDNING = [["alfa", "Bokstavsordning (ICAO)"], ["tillagd", "Ordning de lades till"], ["ns", "Norr → söder"], ["sn", "Söder → norr"], ["vo", "Väst → öst"], ["ov", "Öst → väst"], ["samst", "Sämst först (tidigast röd, sedan gul)"]];
@@ -323,7 +348,7 @@ function tafRitaKarta() {
   }
   // NYTT 21/11: linjalerna glider isar. Varje flygplats ritas i tabellens ordning; krockar dess linjal (eller etikett/tider)
   // med en redan placerad - eller med en annan flygplats prick - flyttas den upp/ned till narmaste lediga plats och
-  // en tunn gra linje visar vilken prick den hor till. Gors om vid varje omritning (zoom, ny TAF, AMD ...).
+  // en tunn gra linje visar vilken prick den hor till. Hogst 3 steg bort (annars star den kvar - zooma in). Gors om vid varje omritning.
   const ordning = typeof tafSorterad === "function" ? tafSorterad() : TAFS.lista;
   const gLinjer = el("g", { "pointer-events": "none" }), gd = el("g", {}); g.appendChild(gLinjer);
   const lagda = [];
@@ -335,7 +360,8 @@ function tafRitaKarta() {
     const m = px(1.5), box = { x: bb.x - m, y: bb.y - m, w: bb.width + 2 * m, h: bb.height + 2 * m }, steg = box.h + px(1);
     const fri = dy => !lagda.some(o => krock({ ...box, y: box.y + dy }, o));
     let dy = 0;
-    if (!fri(0)) { dy = null; for (let n = 1; n <= 8 && dy === null; n++) for (const t of [n * steg, -n * steg]) if (fri(t)) { dy = t; break; } if (dy === null) dy = 0; }
+    // utzoomat over Europa (vb.w > MEPS-bredden): ingen flytt - det blir bara rorigt
+    if (!fri(0) && vb.w <= KX * 1.1) { dy = null; for (let n = 1; n <= 3 && dy === null; n++) for (const t of [n * steg, -n * steg]) if (fri(t)) { dy = t; break; } if (dy === null) dy = 0; }
     lagda.push({ ...box, y: box.y + dy });
     if (dy) { gp.setAttribute("transform", "translate(0," + dy + ")");
       gLinjer.appendChild(el("line", { x1: k.x + px(4), y1: k.y, x2: x0 - px(1), y2: y0 + dy + px(H / 2), stroke: "#6b7280", "stroke-width": px(0.9), "stroke-dasharray": px(2) + " " + px(1.5) })); }
@@ -419,10 +445,11 @@ function tafInit() {
   // 21/11: sok pa ICAO eller namn (lista med alla kanda flygplatser); valj -> laggs till och kartan zoomar dit
   // flygplatslistan laddas efter start -> bygg sokningen nar den behovs
   let kandaN = -1, kandaL = [];
-  const kandaF = () => { const nN = FLYG.length + Object.keys(IMGW.plats).length; if (kandaN !== nN) { kandaN = nN; kandaL = PUNKTER.map(p => [p[1], p[0]]).concat(FLYG.filter(f => !PUNKTER.some(p => p[1] === f[0])).map(f => [f[0], f[1] || ""]));
+  const kandaF = () => { const nN = FLYG.length + Object.keys(IMGW.plats).length + FLYG_EU.length; if (kandaN !== nN) { kandaN = nN; kandaL = PUNKTER.map(p => [p[1], p[0]]).concat(FLYG.filter(f => !PUNKTER.some(p => p[1] === f[0])).map(f => [f[0], f[1] || ""]));
     for (const ic in IMGW.plats) if (!kandaL.some(([k]) => k === ic)) kandaL.push([ic, IMGW.plats[ic][0]]);   // 21/11: polska fran IMGW
+    const har = new Set(kandaL.map(([k]) => k)); for (const f of FLYG_EU) if (!har.has(f[0])) kandaL.push([f[0], f[1]]);   // 21/11: hela Europa
     const dl = $("tafSokLista"); dl.textContent = ""; for (const [ic, n] of kandaL) dl.appendChild(new Option(ic + " – " + n, ic + " – " + n)); } return kandaL; };
-  $("tafNy").addEventListener("focus", () => { kandaF(); if (!IMGW.tid) imgwHamta().then(kandaF).catch(() => {}); });
+  $("tafNy").addEventListener("focus", () => { kandaF(); tafLaddaEuropa().then(kandaF); if (!IMGW.tid) imgwHamta().then(kandaF).catch(() => {}); });
   kn("tafLjud", "mt:tafLjud", "ljud", () => { if (TAFS.ljud) tafPip(); });
   kn("tafAvis", "mt:tafAvis", "avis", () => { if (TAFS.avis && "Notification" in window && Notification.permission !== "granted") Notification.requestPermission().then(p => { if (p !== "granted") { TAFS.avis = false; lagra("mt:tafAvis", "nej"); $("tafAvis").setAttribute("aria-pressed", "false"); $("tafStatus").textContent = "Webbläsaren tillät inte aviseringar."; } }); });
   // Kand ICAO-kod (eller vald rad "ESSA – Arlanda") -> den; annars namnsok (borjan, sedan var som helst);
@@ -447,5 +474,5 @@ function tafInit() {
   setInterval(() => { if (lage === "taf") tafRita(); }, 60e3);   // nu-strecket och "TAF ute" foljer klockan
   setInterval(() => { if (Date.now() - TAFS.hamtad >= TAF_INTERVALL_MIN * 60e3 && (lage === "taf" || TAFS.ljud || TAFS.avis)) tafUppdatera(true); }, 30e3);
 }
-function tafIn() { if (Date.now() - TAFS.hamtad > 60e3) tafUppdatera(); else tafRita(); }
+function tafIn() { tafLaddaEuropa(); if (Date.now() - TAFS.hamtad > 60e3) tafUppdatera(); else tafRita(); }
 tafInit();
