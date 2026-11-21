@@ -527,6 +527,26 @@ def parKoll():
     skriv()
 
 
+def fukt(iy, ix):
+    """S (21/11): finns fukt pa 2 m (for daggpunkt/rimfrost) i ensemblefilen, och for vilka medlemmar?
+    Plus snofall och nederbord per medlem (for kombinationerna)."""
+    skriv("## S. Fukt 2 m, snöfall och nederbörd per medlem (ensemblen)")
+    dtg = senaste_ens()
+    if not dtg: skriv("Ingen körning."); return
+    st, dds, _, _ = hamta(BAS + ENS_FIL(dtg) + ".dds", tidsgrans=60)
+    namn = sorted(set(re.findall(r"(\w*(?:humid|dew|snow|precip)\w*)\[", dds)))
+    skriv(f"Körning {dtg}. Variabler i filen med fukt/dagg/snö/nederbörd i namnet: " + (", ".join(namn) if namn else f"inga (svar {st})"))
+    skriv("| variabel | svar | min | max | medlemmar med värden | värden saknas |"); skriv("|---|---|---|---|---|---|")
+    for var in namn:
+        st, txt, sek, by = hamta(BAS + ENS_FIL(dtg) + ".ascii?" + urllib.parse.quote(f"{var}[0:1:12][0][0:29][{iy}][{ix}]", safe=""), tidsgrans=120)
+        v = tolka_grid(txt, var) if st == 200 else []
+        ok = [x for x in v if ok_varde(x)]
+        medl = sorted({i % 30 for i, x in enumerate(v) if ok_varde(x)})
+        mtxt = "alla 30" if len(medl) == 30 else (", ".join(map(str, medl)) if medl else "inga")
+        skriv(f"| {var} | {st} | {min(ok):.4g} | {max(ok):.4g} | {mtxt} | {len(v) - len(ok)} av {len(v)} |" if ok else f"| {var} | {st} | – | – | {mtxt} | {len(v)} värden" + (f" {txt[:100]!r}" if st != 200 else "") + " |")
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -562,6 +582,8 @@ def main():
         flerPunkter(iy, ix)
     if "R" in delar:
         parKoll()
+    if "S" in delar:
+        fukt(iy, ix)
     if not set(delar) & set("BCDE"):
         return spara(0)
 
