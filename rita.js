@@ -80,6 +80,7 @@ function ritAvbryt() { RIT.ritar = null; RIT.vald = -1; $("karta").classList.rem
 // Raden under kartan: ritlage / vald linje
 function ritRad(info) {
   const rad = $("ritRad"); rad.textContent = "";
+  const rk = $("ritKnapp"); rk.setAttribute("aria-pressed", String(!!RIT.ritar)); rk.textContent = RIT.ritar ? "✏ Ritar … (klar)" : "✏ Rita";   // bla nar aktiv
   const L = RIT.ritar || (RIT.vald >= 0 ? RIT.linjer[RIT.vald] : null);
   if (!L && !info) { rad.hidden = true; return; }
   rad.hidden = false;
