@@ -160,6 +160,7 @@ function ritAvbryt() { RIT.ritar = null; RIT.vald = -1; $("karta").classList.rem
 // Raden under kartan: ritlage / vald linje
 function ritRad(info) {
   const rad = $("ritRad"); rad.textContent = "";
+  $("ritRensa").hidden = !RIT.linjer.length || !!RIT.ritar;   // 21/11: "Rensa ritat" syns sa fort det finns nagot ritat
   const rk = $("ritKnapp"); rk.setAttribute("aria-pressed", String(!!RIT.ritar)); rk.textContent = RIT.ritar ? "✏ Ritar … (klar)" : "✏ Rita";   // bla nar aktiv
   const L = RIT.ritar || (RIT.vald >= 0 ? RIT.linjer[RIT.vald] : null);
   if (!L && !info) { rad.hidden = true; return; }
@@ -190,6 +191,10 @@ function ritRad(info) {
 
 (function ritInit() {
   $("ritKnapp").addEventListener("click", () => { if (RIT.ritar) ritKlar(); else ritBorja(); });
+  // 21/11: rensa allt (tva klick: forsta fragar "Säker?" i 4 s)
+  $("ritRensa").addEventListener("click", e => { const k = e.currentTarget;
+    if (k.dataset.saker !== "1") { k.dataset.saker = "1"; k.textContent = "Säker? Klicka igen"; setTimeout(() => { k.dataset.saker = ""; k.textContent = "🗑 Rensa ritat"; }, 4000); return; }
+    k.dataset.saker = ""; k.textContent = "🗑 Rensa ritat"; RIT.linjer = []; RIT.vald = -1; ritSpara(); ritRita(); ritRad(); });
   $("karta").addEventListener("dblclick", e => {
     if (RIT.ritar) { e.preventDefault(); ritKlar(); return; }
     const t = e.target; if (t.classList && t.classList.contains("rittext")) { const L = RIT.linjer[+t.dataset.i]; if (L) { delete L.tp; ritSpara(); ritRita(); } }
@@ -208,5 +213,5 @@ function ritRad(info) {
     else if (e.key === "Enter" && document.activeElement && document.activeElement.id !== "ritText") { e.preventDefault(); ritKlar(); }
   });
   addEventListener("resize", () => setTimeout(ritRita, 100));
-  setTimeout(ritRita, 500);
+  setTimeout(() => { ritRita(); ritRad(); }, 500);
 })();

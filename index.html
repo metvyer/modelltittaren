@@ -305,7 +305,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <button class="sek liten baraP" id="visaSnabb" aria-pressed="true" title="Gröna rutor = områden som redan finns i mellanserverns cache (någon har hämtat dem) – de hämtas på en sekund utan att fråga met.no">Snabba</button>
     <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
-    <button class="sek liten" id="ritKnapp" aria-pressed="false" title="Rita en linje på kartan med en kort text (t.ex. Norr om denna: snö). Klicka punkt för punkt, högerklick, dubbelklick eller Enter = klar. Klicka på en linje för att ändra eller ta bort den. Följer med när du delar.">✏ Rita</button>
+    <button class="sek liten" id="ritKnapp" aria-pressed="false" title="Rita en linje på kartan med en kort text (t.ex. Norr om denna: snö). Klicka punkt för punkt, högerklick, dubbelklick eller Enter = klar. Klicka på en linje för att ändra eller ta bort den. Följer med när du delar.">✏ Rita</button><button class="sek liten" id="ritRensa" hidden title="Ta bort allt du ritat (alla linjer och områden). Klicka två gånger.">🗑 Rensa ritat</button>
     <span class="kartpos" id="kartPos"></span>
   </div>
   <div class="kartram">
@@ -2556,7 +2556,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 </script>
 <script src="sannolikhet.js?v=20261121-1110"></script>
 <script src="taf.js?v=20261121-1100"></script>
-<script src="rita.js?v=20261121-1150"></script>
+<script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261121-1130"></script>
 </body>
 </html>
