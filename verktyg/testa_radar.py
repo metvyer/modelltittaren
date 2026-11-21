@@ -20,6 +20,8 @@ def h(url, n=3000000, tid=60):
         return 0, str(e).encode(), {}
 
 nu = datetime.now(timezone.utc)
+def cors(hd): return {k.lower(): v for k, v in hd.items()}.get('access-control-allow-origin', '-')
+
 skriv("## Prov K: radar och satellit " + nu.strftime("%Y-%m-%d %H:%MZ"))
 
 # ---------- 1 SMHI ----------
@@ -31,7 +33,11 @@ try:
     j = json.loads(d); skriv("lastFiles[0]: " + json.dumps(j.get("lastFiles", [None])[0])[:600])
 except Exception as e:
     skriv(f"tolkning: {e}"); j = {}
-for u in [R + nu.strftime("/%Y/%m/%d.json"), R + nu.strftime("/%Y/%m/%d"), R + nu.strftime("/%Y/%m.json")]:
+st, d, hd = h(R + nu.strftime("/%Y/%m/%d.json"))
+try:
+    dj = json.loads(d); fl = dj.get("files") or []; skriv(f"dagslista: nycklar {list(dj.keys())}, {len(fl)} filer, sista: {json.dumps(fl[-1:])[:800]}")
+except Exception as e: skriv(f"dagslista-fel {e}")
+for u in []:
     st, d, hd = h(u); t = d.decode("utf-8", "replace")
     skriv(f"- `{u}` {st}, {len(d)} B, CORS {hd.get('Access-Control-Allow-Origin', '-')}: {t[:500]}")
 # h5-filen
@@ -100,7 +106,7 @@ E = "https://view.eumetsat.int/geoserver/wms?service=WMS&version=1.3.0&request=G
 tt = (nu.replace(second=0, microsecond=0)).strftime("%Y-%m-%dT%H:") + "%02d:00Z" % (nu.minute // 10 * 10 - 20 if nu.minute >= 20 else 0)
 for lay, fmt in [("mtg_fd:ir105_hrfi", "image/png"), ("mtg_fd:rgb_geocolour", "image/jpeg"), ("mtg_fd:rgb_geocolour", "image/png"), ("mtg_fd:li_afa", "image/png&transparent=true"), ("mtg_fd:h40b", "image/png&transparent=true")]:
     u = E + f"&layers={lay}&format={fmt}&time={tt}"
-    st, d, hd = h(u); skriv(f"- {lay} {fmt} time={tt}: {st}, {len(d)//1024} kB, {hd.get('Content-Type')}, CORS {{k.lower(): v for k, v in hd.items()}.get('access-control-allow-origin','-')} {d[:150] if st != 200 else ''}")
+    st, d, hd = h(u); skriv(f"- {lay} {fmt} time={tt}: {st}, {len(d)//1024} kB, {hd.get('Content-Type')}, CORS {cors(hd)} {d[:150] if st != 200 else ''}")
 # overlager kust/grans?
 st, d, hd = h("https://view.eumetsat.int/geoserver/wms?service=WMS&version=1.3.0&request=GetCapabilities", 8000000)
 t = d.decode("utf-8", "replace")
