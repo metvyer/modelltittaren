@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Modelltittaren</title>
+<link rel="icon" type="image/svg+xml" href="ikon.svg">
 <style>
 /* Verktygssida: kontroller i en rad overst, diagram med fast hojdskala till vanster och vagrat skrollbart diagram till hoger. */
 :root {
@@ -358,7 +359,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <button class="sek liten" id="tafAvis" aria-pressed="false" title="Systemavisering (notis) vid larm – webbläsaren frågar om lov första gången">Avisering</button>
   </div>
   <div class="tafinst">
-    <span class="grp">Sök <input type="search" id="tafNy" size="16" list="tafSokLista" placeholder="ICAO eller namn" autocomplete="off"><datalist id="tafSokLista"></datalist><button class="sek liten" id="tafLagg">Lägg till</button></span>
+    <span class="grp">Sök <input type="search" id="tafNy" size="16" list="tafSokLista" placeholder="ICAO eller namn" autocomplete="off"><datalist id="tafSokLista"></datalist><button class="sek liten" id="tafVisa" title="Visa var flygplatsen ligger (röd ring), utan att lägga till">Visa</button><button class="sek liten" id="tafLagg">Lägg till</button></span>
     <button class="sek liten" id="tafIcao" aria-pressed="false" title="Skriv ICAO-koden vid alla flygplatser på kartan (klicka på en för att lägga till den)">Visa ICAO</button>
     <button class="sek liten" id="tafStd" title="Tillbaka till de 11 förvalda flygplatserna">Förvalda 11</button>
     <span class="grp">Ordna efter <select id="tafOrdning"></select></span>
@@ -2509,6 +2510,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 })();
 </script>
 <script src="sannolikhet.js?v=20261121-0030"></script>
-<script src="taf.js?v=20261121-0805"></script>
+<script src="taf.js?v=20261121-0820"></script>
 </body>
 </html>

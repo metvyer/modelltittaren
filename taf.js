@@ -267,6 +267,10 @@ function tafRitaKarta() {
   const g = $("kTaf"); if (!g) return; g.textContent = ""; if (lage !== "taf") return;
   const rekt = $("karta").getBoundingClientRect(); if (!rekt.width) return;
   const ppu = rekt.width / vb.w, px = v => v / ppu, A = tafAxel(), L = 110, H = 9, tim = L / A.n;
+  // 21/11: sokt flygplats - rod ring och kod i 15 s
+  if (TAFS.markerad && Date.now() - TAFS.markerad.t < 15000) { const [, la, lo] = tafPlats(TAFS.markerad.icao); if (isFinite(la)) { const k = tillKarta(la, lo);
+    g.appendChild(el("circle", { cx: k.x, cy: k.y, r: px(14), fill: "none", stroke: "#dc2626", "stroke-width": px(3) }));
+    g.appendChild(el("text", { x: k.x, y: k.y + px(28), "font-size": px(12), "font-weight": 700, "text-anchor": "middle", fill: "#dc2626", stroke: "#fff", "stroke-width": px(3), "paint-order": "stroke" }, TAFS.markerad.icao)); } }
   // 21/11: "Visa ICAO" - koden bredvid varje flygplats i bilden (inte de bevakade, de har egen etikett)
   if (TAFS.icao) {
     const gi = el("g", { "pointer-events": "none" }); g.appendChild(gi);
@@ -362,11 +366,14 @@ function tafInit() {
     if (/^[A-Za-z]{4}( – |$)/.test(t) && kanda.some(([ic]) => ic === v)) return v;
     const tr = kanda.find(([, n]) => n.toLowerCase().startsWith(lt)) || kanda.find(([, n]) => n.toLowerCase().includes(lt)); if (tr && lt.length >= 3) return tr[0];
     return /^[A-Z]{4}$/.test(t) ? t : null; };
+  // 21/11: sokning visar platsen (ring pa kartan, zoom dit) utan att lagga till; "Lägg till" lagger till
+  const visaPlats = v => { const [, la, lo] = tafPlats(v); if (!isFinite(la)) return; TAFS.markerad = { icao: v, t: Date.now() };
+    const k = tillKarta(la, lo), w = Math.min(vb.w, 160); satVb(k.x - w / 2, k.y - w * kartAspekt() / 2, w); tafRitaKarta(); setTimeout(tafRitaKarta, 15000); };
   $("tafLagg").addEventListener("click", () => { const v = sokIcao(); if (!v) { $("tafStatus").textContent = "Hittar ingen flygplats – skriv ICAO-kod eller början på namnet."; return; }
-    if (!TAFS.lista.includes(v)) tafVaxla(v); $("tafNy").value = "";
-    const [, la, lo] = tafPlats(v); if (isFinite(la)) { const k = tillKarta(la, lo), w = Math.min(vb.w, 160); satVb(k.x - w / 2, k.y - w * kartAspekt() / 2, w); } });
-  $("tafNy").addEventListener("keydown", e => { if (e.key === "Enter") $("tafLagg").click(); });
-  $("tafNy").addEventListener("change", () => { if (/ – /.test($("tafNy").value)) $("tafLagg").click(); });
+    if (!TAFS.lista.includes(v)) tafVaxla(v); $("tafNy").value = ""; visaPlats(v); });
+  $("tafVisa").addEventListener("click", () => { const v = sokIcao(); if (!v) { $("tafStatus").textContent = "Hittar ingen flygplats – skriv ICAO-kod eller början på namnet."; return; } visaPlats(v); });
+  $("tafNy").addEventListener("keydown", e => { if (e.key === "Enter") $("tafVisa").click(); });
+  $("tafNy").addEventListener("input", () => { const t = $("tafNy").value.trim(); if (/^[A-Za-z]{4}$/.test(t) || / – /.test(t)) { const v = sokIcao(); if (v && kandaF().some(([ic]) => ic === v)) visaPlats(v); } });
   $("tafStd").addEventListener("click", () => { TAFS.lista = TAF_STD.slice(); sparaTafs(); tafUppdatera(); });
   $("tafNu").addEventListener("click", () => tafUppdatera());
   const ord = $("tafOrdning"); for (const [v, n] of TAF_ORDNING) ord.add(new Option(n, v)); ord.value = lasa("mt:tafOrdning") || "tillagd";
