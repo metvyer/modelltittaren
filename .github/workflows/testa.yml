@@ -105,6 +105,10 @@ jobs:
           python3 -m pip install -q pillow || python3 -m pip install -q --break-system-packages pillow
           python3 verktyg/testa_obs2.py
 
+      - name: Prov andra modeller (AIFS, MET Nordic, nowcast)
+        if: contains(inputs.delar, 'N')
+        run: python3 verktyg/testa_extra.py
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
