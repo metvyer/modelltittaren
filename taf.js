@@ -202,6 +202,21 @@ const tafAxel = () => { const nu = Date.now(), t0 = Math.floor(nu / 3600e3) * 36
 const tafBanor = icao => { const p = PUNKTER.find(x => x[1] === icao) || FLYG.find(x => x[0] === icao); return p ? banorFor(icao, p[2] !== undefined ? p[2] : p[2], p[3]).map(b => b.sann) : []; };
 function tafPlats(icao) { const p = PUNKTER.find(x => x[1] === icao); if (p) return [p[0], p[2], p[3]]; const f = FLYG.find(x => x[0] === icao); return f ? [f[1] || icao, f[2], f[3]] : [icao, NaN, NaN]; }
 function tafRita() { tafRitaTabell(); tafRitaKarta(); }
+// 21/11: ordning i tabellen (mt:tafOrdning)
+const TAF_ORDNING = [["alfa", "Bokstavsordning (ICAO)"], ["tillagd", "Ordning de lades till"], ["ns", "Norr → söder"], ["sn", "Söder → norr"], ["vo", "Väst → öst"], ["ov", "Öst → väst"], ["samst", "Sämst först (tidigast röd, sedan gul)"]];
+function tafSamstNyckel(icao) {
+  const T = tafNu(icao); if (!T || T.ute || !T.timmar) return [3, 0];
+  const nu = Math.floor(Date.now() / 3600e3) * 3600e3, fram = T.timmar.filter(x => x.t >= nu), kat = fram.map(x => tafKat(x.sikt, x.bas));
+  const r = kat.indexOf(2); if (r >= 0) return [0, fram[r].t]; const g = kat.indexOf(1); if (g >= 0) return [1, fram[g].t]; return [2, 0];
+}
+function tafSorterad() {
+  const o = lasa("mt:tafOrdning") || "tillagd", l = TAFS.lista.slice(), pos = i => tafPlats(i);
+  if (o === "alfa") l.sort();
+  else if (o === "ns" || o === "sn") l.sort((a, b) => ((pos(b)[1] || 0) - (pos(a)[1] || 0)) * (o === "ns" ? 1 : -1));
+  else if (o === "vo" || o === "ov") l.sort((a, b) => ((pos(a)[2] || 0) - (pos(b)[2] || 0)) * (o === "vo" ? 1 : -1));
+  else if (o === "samst") l.sort((a, b) => { const x = tafSamstNyckel(a), y = tafSamstNyckel(b); return x[0] - y[0] || x[1] - y[1] || a.localeCompare(b); });
+  return l;
+}
 function tafRitaTabell() {
   const box = $("tafTabell"); if (!box) return; box.textContent = "";
   const A = tafAxel(), tab = document.createElement("table"); tab.className = "taftab";
@@ -210,7 +225,7 @@ function tafRitaTabell() {
     th.textContent = d.getUTCHours() % 3 === 0 ? p2(d.getUTCHours()) : ""; th.title = VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z"; hr.appendChild(th); }
   const thead = document.createElement("thead"); thead.appendChild(hr); tab.appendChild(thead);
   const tb = document.createElement("tbody");
-  for (const icao of TAFS.lista) {
+  for (const icao of tafSorterad()) {
     const T0 = tafNu(icao), T = T0 && !T0.ute ? T0 : null, Mo = TAFS.metar[icao], [namn] = tafPlats(icao), banor = tafBanor(icao);
     for (const rad of TAFS.vind && T ? ["sv", "vind"] : ["sv"]) {
       const tr = document.createElement("tr"); if (rad === "vind") tr.className = "vindrad"; if (TAFS.larm[icao] && rad === "sv") tr.classList.add("larm");
@@ -260,8 +275,12 @@ function tafRitaKarta() {
     // METAR-prick pa flygplatsen: samma granser som TAF:en, svart om aldre an 40 min, vit om ingen METAR
     const km = metarKat(Mo);
     gp.appendChild(el("circle", { cx: k.x, cy: k.y, r: px(5.5), fill: km < 0 ? "#fff" : [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod, "#111"][km], stroke: "#111", "stroke-width": px(1.2) }));
-    gp.appendChild(el("text", { x: x0, y: y0 - px(3), "font-size": px(10), "font-weight": 700, fill: "#111", stroke: "#fff", "stroke-width": px(2.5), "paint-order": "stroke" },
-      icao + (T && T.amd ? " AMD" : "") + (T && T.cor ? " COR" : "") + (TAFS.larm[icao] ? " ⚠" : "")));
+    // 21/11: AMD i rott, COR i gult/brunt pa kartan
+    const lab = el("text", { x: x0, y: y0 - px(3), "font-size": px(10), "font-weight": 700, fill: "#111", stroke: "#fff", "stroke-width": px(2.5), "paint-order": "stroke" }, icao);
+    if (T && T.amd) lab.appendChild(el("tspan", { fill: "#dc2626" }, " AMD"));
+    if (T && T.cor) lab.appendChild(el("tspan", { fill: "#a16207" }, " COR"));
+    if (TAFS.larm[icao]) lab.appendChild(el("tspan", { fill: "#dc2626" }, " ⚠"));
+    gp.appendChild(lab);
     if (T0 && T0.ute) {   // nyss utgangen: kort gra streckad ruta "TAF ute HH" i 10 min
       gp.appendChild(el("rect", { x: x0, y: y0, width: px(22), height: px(H), fill: "#e5e7eb", stroke: "#6b7280", "stroke-width": px(0.8), "stroke-dasharray": px(2) + " " + px(1.5), rx: px(2) }));
       gp.appendChild(el("text", { x: x0 + px(25), y: y0 + px(H - 1.5), "font-size": px(8.5), "font-weight": 700, fill: "#6b7280", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" }, "TAF ute " + tafKort(T0.till)));
@@ -322,6 +341,8 @@ function tafInit() {
   $("tafNy").addEventListener("keydown", e => { if (e.key === "Enter") $("tafLagg").click(); });
   $("tafStd").addEventListener("click", () => { TAFS.lista = TAF_STD.slice(); sparaTafs(); tafUppdatera(); });
   $("tafNu").addEventListener("click", () => tafUppdatera());
+  const ord = $("tafOrdning"); for (const [v, n] of TAF_ORDNING) ord.add(new Option(n, v)); ord.value = lasa("mt:tafOrdning") || "tillagd";
+  ord.addEventListener("change", () => { lagra("mt:tafOrdning", ord.value); tafRitaTabell(); });
   // nyhamtning var 5:e minut (aven i bakgrunden, sa att larmen fungerar) - bara om listan anvants
   setInterval(() => { if (lage === "taf") tafRita(); }, 60e3);   // nu-strecket och "TAF ute" foljer klockan
   setInterval(() => { if (Date.now() - TAFS.hamtad >= TAF_INTERVALL_MIN * 60e3 && (lage === "taf" || TAFS.ljud || TAFS.avis)) tafUppdatera(true); }, 30e3);

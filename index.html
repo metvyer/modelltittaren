@@ -360,6 +360,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   <div class="tafinst">
     <span class="grp">Lägg till <input type="text" id="tafNy" size="5" maxlength="4" placeholder="ESNQ"><button class="sek liten" id="tafLagg">Lägg till</button></span>
     <button class="sek liten" id="tafStd" title="Tillbaka till de 11 förvalda flygplatserna">Förvalda 11</button>
+    <span class="grp">Ordna efter <select id="tafOrdning"></select></span>
     <button class="sek liten" id="tafNu">Uppdatera nu</button>
     <span class="lagetips" id="tafStatus"></span>
   </div>
@@ -2507,6 +2508,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 })();
 </script>
 <script src="sannolikhet.js?v=20261121-0030"></script>
-<script src="taf.js?v=20261121-0735"></script>
+<script src="taf.js?v=20261121-0745"></script>
 </body>
 </html>
