@@ -30,8 +30,18 @@ for url in ["https://awiacja.imgw.pl/", "https://awiacja.imgw.pl/metar-taf/", "h
     if m: p("Exempel: " + re.sub(r"\s+", " ", m.group(0)))
 # Angular-sidan: leta API-adresser i skriptfilerna
 st, t, c, ty, s = f("https://awiacja.imgw.pl/")
-for js in sorted(set(re.findall(r'src="([^"]+\.js)"', t))):
-    st2, tj, c2, ty2, s2 = f("https://awiacja.imgw.pl/" + js.lstrip("/"))
+alla = set(re.findall(r'src="([^"]+\.js)"', t)) | set(re.findall(r'href="([^"]+\.js)"', t))
+sedda = set()
+while alla - sedda:   # folj import("./chunk-…") i filerna sa att alla delar laddas
+  for js in sorted(alla - sedda):
+    sedda.add(js)
+    st2, tj, c2, ty2, s2 = f("https://awiacja.imgw.pl/" + js.lstrip("./"))
+    alla |= set("chunk-" + x + ".js" for x in re.findall(r'chunk-([A-Z0-9]+)\.js', tj))
+    urls = sorted(set(re.findall(r'["\'`](https?://[^"\'`\s]{6,140})["\'`]', tj))) + sorted(set(re.findall(r'["\'`](/[a-zA-Z0-9_\-]*(?:api|taf|metar|opmet|data|awiacja|json)[^"\'`\s]{0,100})["\'`]', tj, re.I)))
+    urls = [u for u in urls if "w3.org" not in u]
+    if urls: p(f"{js}: " + " | ".join(urls[:40]))
+for js in []:
+    st2, tj, c2, ty2, s2 = 0, "", "", "", 0
     urls = sorted(set(re.findall(r'["\'`](https?://[^"\'`\s]{6,140})["\'`]', tj))) + sorted(set(re.findall(r'["\'`](/[a-zA-Z0-9_\-]*(?:api|taf|metar|opmet|data|awiacja)[^"\'`\s]{0,100})["\'`]', tj, re.I)))
     if urls: p(f"{js}: " + " | ".join(urls[:40]))
 open("taf_pl.md", "w", encoding="utf-8").write("\n".join(ut) + "\n")
