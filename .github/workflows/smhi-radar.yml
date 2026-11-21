@@ -1,0 +1,14 @@
+# 21/11 natt: reserv till mellanserverns egen cron - ber mellanservern spara SMHI:s senaste radarbild.
+# GitHubs schemalaggning kan forsenas, men da fyller mellanservern i nar sidan fragar efter listan.
+name: SMHI-radar (reserv)
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+permissions: {}
+jobs:
+  samla:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: curl -s -m 60 -H "Origin: https://metvyer.github.io" https://modelltittaren.metvyer.workers.dev/radar/smhi/samla; echo
