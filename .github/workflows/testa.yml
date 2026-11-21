@@ -99,6 +99,12 @@ jobs:
           git commit -qm "Prov J $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -qf origin HEAD:matprov-sida
 
+      - name: Prov satellittider och radarpaletter
+        if: contains(inputs.delar, 'M')
+        run: |
+          python3 -m pip install -q pillow || python3 -m pip install -q --break-system-packages pillow
+          python3 verktyg/testa_obs2.py
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
