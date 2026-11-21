@@ -134,7 +134,7 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 body.obs .baraTH, body.obs .baraP, body.obs .ejTaf { display: none !important; }
 body.obs .arbete { grid-template-columns: minmax(0, 1.9fr) minmax(300px, 1fr); }
 body.obs #karta { width: 100%; height: 80vh; aspect-ratio: auto; margin: 0 auto; }
-body.obs #kProb, body.obs #kM0, body.obs #kSiff, body.obs #kOmr, body.obs .vagval { display: none; }
+body.obs #kProb, body.obs #kM0, body.obs #kSiff, body.obs #kOmr, body.obs .vagval { display: none; } body.obs #siffror { display: none; }
 @media (max-width: 860px) { body.obs .arbete { grid-template-columns: minmax(0, 1fr); } }
 #kObs image { image-rendering: auto; } #obsTid.prognos { color: #b45309; font-weight: 700; }
 @media (max-width: 860px) { body.taf .arbete { grid-template-columns: minmax(0, 1fr); } }
@@ -2290,20 +2290,22 @@ function ritaMarkorer() {
     g.appendChild(bg);
   }
   // Ovriga flygplatser som sma prickar (OurAirports). Sma faltet visas forst nar man zoomat in.
-  const egnaICAO = new Set(PUNKTER.map(p => p[1])), smaOK = vb.w < SMA_FALT_BREDD;
+  // 21/11 kvall: i satellit/radar bara flygplatserna (knappen Flygplatser) - inga hamtstatus, ringar eller egna orter
+  const obsL = lage === "sat" || lage === "rad";
+  const egnaICAO = obsL ? new Set() : new Set(PUNKTER.map(p => p[1])), smaOK = vb.w < SMA_FALT_BREDD;
   if (visaFlyg) FLYG.forEach((f, i) => {
     if (egnaICAO.has(f[0]) || (f[4] === 0 && !smaOK)) return;
     const k = tillKarta(f[2], f[3]); if (k.x < vb.x || k.x > vb.x + vb.w || k.y < vb.y || k.y > vb.y + vb.h) return;
     const r = ruta(f[2], f[3]); if (!r) return;
-    const st = dtg ? hamtStatus(dtg, r.iy, r.ix) : 0;
+    const st = dtg && !obsL ? hamtStatus(dtg, r.iy, r.ix) : 0;
     const m = el("g", { class: "mk", "data-id": "f" + i, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
-    m.dataset.tips = f[1] + " " + f[0] + banText(f[0], f[2], f[3]) + "\n" + STAT[st] + (dtg ? " (" + dtg + ")" : "");
+    m.dataset.tips = f[1] + " " + f[0] + banText(f[0], f[2], f[3]) + (obsL ? "" : "\n" + STAT[st] + (dtg ? " (" + dtg + ")" : ""));
     m.appendChild(el("circle", { r: 5, style: "fill:transparent" }));
     m.appendChild(el("circle", { r: f[4] === 2 ? 2.4 : f[4] === 1 ? 2 : 1.6, style: "fill:" + (st ? "var(--mkhamt)" : "var(--mkfg)") + ";opacity:" + (f[4] === 0 && !st ? .55 : .8) }));
     g.appendChild(m);
   });
   // NYTT 21/11: TAF-fliken - aven flygplatserna utanfor MEPS-rutan (flygplatser_europa.json, bara ICAO-falt)
-  if (visaFlyg && lage === "taf" && typeof FLYG_EU !== "undefined" && FLYG_EU.length) {
+  if (visaFlyg && (lage === "taf" || lage === "sat") && typeof FLYG_EU !== "undefined" && FLYG_EU.length) {
     const harF = new Set(FLYG.map(f => f[0]));
     FLYG_EU.forEach((f, i) => {
       if (harF.has(f[0]) || egnaICAO.has(f[0]) || (f[4] === 0 && !smaOK)) return;
@@ -2316,9 +2318,9 @@ function ritaMarkorer() {
     });
   }
   // NYTT 19/11 natt: grona ringar = snabbdata (forhamtad eller i mellanserverns cache)
-  const snabb = lage !== "p" && REGP.dtg === dtg ? REGP.set : new Map(), ritade = new Set();
+  const snabb = lage !== "p" && !obsL && REGP.dtg === dtg ? REGP.set : new Map(), ritade = new Set();
   const ring = (m, k) => { if (!snabb.has(k)) return; m.insertBefore(el("circle", { r: 6.4, style: "fill:none;stroke:var(--mkhamt);stroke-width:2.2" }), m.children[1] || null); m.dataset.tips += "\nSnabbdata: " + snabb.get(k); };
-  for (const p of lista) {
+  for (const p of obsL ? [] : lista) {
     const r = ruta(p.lat, p.lon); if (!r) continue;
     const st = dtg ? hamtStatus(dtg, r.iy, r.ix) : 0; if (!p.fp && !st) continue;
     const k = tillKarta(p.lat, p.lon);
@@ -2339,7 +2341,7 @@ function ritaMarkorer() {
     m.appendChild(el("circle", { r: 8, style: "fill:transparent" })); m.appendChild(el("circle", { r: 2.4, style: "fill:var(--mkhamt)" }));
     ring(m, k); g.appendChild(m); }
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
-  if (isFinite(lat) && isFinite(lon) && ruta(lat, lon)) {
+  if (!obsL && isFinite(lat) && isFinite(lon) && ruta(lat, lon)) {
     const k = tillKarta(lat, lon), v = el("g", { transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")", style: "pointer-events:none" });
     v.appendChild(el("circle", { r: 7, style: "fill:none;stroke:var(--red);stroke-width:2" }));
     v.appendChild(el("path", { d: "M-11,0h6M5,0h6M0,-11v6M0,5v6", style: "stroke:var(--red);stroke-width:1.8" }));
