@@ -141,7 +141,10 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .taftab .tafx { border: 0; background: none; cursor: pointer; color: var(--dim); font-size: 14px; padding: 0 3px; }
 .taftab .dim { color: var(--dim); }
 #karta.ritlage { cursor: crosshair; }
-.ritrad { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; padding: 5px 8px; border: 1px dashed var(--acc); border-radius: 6px; font-size: 13px; }
+/* 21/11: ritraden ligger INNE i kartan, langst ned (syns aven nar sidan ar skrollad sa att bara kartan syns) */
+.ritrad { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 5px 8px;
+  background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--acc); border-radius: 6px; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+.ritrad[hidden] { display: none; }
 .flikar .delaknapp { margin-left: auto; color: var(--acc); }
 .flikar .delaknapp[aria-pressed="true"] { color: #dc2626; }
 .delarad { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 6px 0 8px; padding: 6px 10px; border: 1px solid var(--acc); border-radius: 6px; font-size: 13px; }
@@ -311,8 +314,8 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
     <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g><g id="kTaf"></g><g id="kRit"></g>
   </svg>
-  </div>
   <div class="ritrad" id="ritRad" hidden></div>
+  </div>
   <div class="baraTH m0rad" id="m0Rad" hidden>
     <select id="m0Param"></select>
     <button class="sek liten" id="m0Bak" title="En timme bakåt">◀</button><span id="m0Tid" class="m0tid"></span><button class="sek liten" id="m0Fram" title="En timme framåt">▶</button>
