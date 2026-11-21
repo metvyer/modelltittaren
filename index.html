@@ -427,7 +427,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <button class="sek liten" id="obsBlixt" aria-pressed="false" title="Lägg blixtar från MTG:s blixtkamera (LI, senaste 5 min före bildens tid) ovanpå">Blixtar</button>
     <span id="obsPrognosRad"><button class="sek liten" id="obsPrognos" aria-pressed="true" title="met.no:s radarprognos (nowcast) ca 2 h framåt efter senaste bilden – markeras PROGNOS">Prognos 2 h</button></span>
     <button class="sek liten" id="obsAuto" aria-pressed="true" title="Automatisk uppdatering: nya bilder hämtas av sig själva (kollar varannan minut). Står du på senaste bilden följer den med.">Auto-uppdatera</button>
-    <div class="falt"><label for="obsFps">Bilder/s</label><select id="obsFps"><option>1</option><option>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option>12</option></select></div>
+    <div class="falt"><label for="obsFps">Tid per bild</label><select id="obsFps"><option value="0.1">0,1 s</option><option value="0.2">0,2 s</option><option value="0.3">0,3 s</option><option value="0.4">0,4 s</option><option value="0.5">0,5 s</option><option value="0.6">0,6 s</option><option value="0.7">0,7 s</option><option value="0.8">0,8 s</option><option value="0.9">0,9 s</option><option value="1.0">1,0 s</option></select></div>
     <div class="falt"><label for="obsPaus">Stopp på sista</label><select id="obsPaus"><option value="0.5">0,5 s</option><option value="1">1 s</option><option value="2">2 s</option><option value="3">3 s</option><option value="5">5 s</option><option value="10">10 s</option></select></div>
     <div class="falt"><label for="obsOpac">Täckning</label><input type="range" id="obsOpac" min="20" max="100" step="5" style="width:90px"></div>
   </div>
@@ -2565,6 +2565,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261121-1330"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261121-1945"></script>
+<script src="obs.js?v=20261121-2000"></script>
 </body>
 </html>
