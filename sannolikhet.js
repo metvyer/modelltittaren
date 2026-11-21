@@ -1382,7 +1382,7 @@ const FAV_KNAPPAR = { by: [27, 32, 45], sikt: [5000, 3000, 2000, 1000], bas: [12
 let fav = false, favSpar = null;
 const FAV_FALT = ["pKorningVal", "pParam", "pVisa", "pTrosk", "pStorlek", "pUppl", "pDt", "pFran", "pTill", "pSteg", "pKombo", "pKomboA", "pKomboB"];
 // 21/11: vintergruppen - kombinerad sannolikhet, hamtas fran met.no nar man trycker (inte forhamtat)
-const FAV_VINTER = [["snofok", "Snöfok"], ["ishalka", "Ishalka"], ["rimfrost", "Rimfrost/frost"]];
+const FAV_VINTER = [["snofok", "Snödrev"], ["ishalka", "Ishalka"], ["rimfrost", "Rimfrost/frost"]];
 function favVinter(k) {
   komboVal(k); document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", "false"));
   document.querySelectorAll("#favVinter button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === k)));

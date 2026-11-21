@@ -3,7 +3,7 @@
 // någon gång i perioden. Det blir en riktig sannolikhet för kombinationen (inte två kartor ovanpå varandra).
 //  * Ishalka:        nederbörd ≥ A mm/h och yttemperatur < B °C
 //  * Rimfrost/frost: yttemperatur < B °C och yttemperatur under daggpunkten 2 m (daggpunkt ur temperatur + fukt 2 m)
-//  * Snöfok:         snöfall ≥ A mm/h och byvind ≥ B kt
+//  * Snödrev:         snöfall ≥ A mm/h och byvind ≥ B kt
 // Fukt 2 m, snöfall och nederbörd finns för alla 30 medlemmar (mätprov S 21/11).
 // Hämtning: "Hämta fält" hämtar varje ingående fält i tur och ordning med sidans vanliga hämtning (cache, GitHub,
 // mellanservern) - P.vOverride / P.listaOverride styr vilket fält och vilka timmar. Nederbörd/snöfall per timme =
@@ -16,7 +16,7 @@ const KOMBO = {
   rimfrost: { namn: "Rimfrost/frost", delar: ["t0", "t2", "rh"], A: null, B: { namn: "Yttemp <", enhet: "°C", std: 0 },
     text: (A, B) => "yttemperatur < " + tal(B) + " °C och under daggpunkten (2 m)",
     villkor: (h, A, B) => h.t0 < B && h.t0 < daggpunkt(h.t2, h.rh) },
-  snofok: { namn: "Snöfok", delar: ["sno", "by"], A: { namn: "Snöfall ≥", enhet: "mm/h", std: 0.3 }, B: { namn: "Byvind ≥", enhet: "kt", std: 25 },
+  snofok: { namn: "Snödrev", delar: ["sno", "by"], A: { namn: "Snöfall ≥", enhet: "mm/h", std: 0.3 }, B: { namn: "Byvind ≥", enhet: "kt", std: 25 },
     text: (A, B) => "snöfall ≥ " + tal(A) + " mm/h och byvind ≥ " + tal(B) + " kt samtidigt",
     villkor: (h, A, B) => h.sno >= A && h.by >= B }
 };
