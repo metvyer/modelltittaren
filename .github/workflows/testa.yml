@@ -80,6 +80,10 @@ jobs:
           python3 -m pip install -q h5py pillow || python3 -m pip install -q --break-system-packages h5py pillow
           python3 verktyg/testa_radar.py
 
+      - name: Prov SMHI-radarns format
+        if: contains(inputs.delar, 'L')
+        run: python3 verktyg/testa_smhi_radar.py
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
