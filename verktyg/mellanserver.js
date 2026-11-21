@@ -169,19 +169,22 @@ export class Kalla extends WorkerEntrypoint {
 const SMHI_RADAR = "https://opendata-download-radar.smhi.se/api/version/latest/area/sweden/product/comp";
 const SMHI_SPARA_H = 6;
 async function smhiSamla(env) {
-  if (!env.DB) return;
+  if (!env.DB) return "ingen DB";
   const j = await (await fetch(SMHI_RADAR + ".json", { headers: UA })).json();
   const f = (j.lastFiles || []).find(x => (x.formats || []).some(y => y.key === "png"));
-  if (!f) return;
-  const m = String(f.valid || "").match(/(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)/); if (!m) return;
+  if (!f) return "ingen png i lastFiles";
+  const m = String(f.valid || "").match(/(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)/); if (!m) return "ingen tid";
   const t = Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]);
   const finns = await env.DB.prepare("SELECT 1 FROM radar_smhi WHERE t = ?").bind(t).first();
+  let ut = "fanns redan " + f.valid;
   if (!finns) {
-    const r = await fetch(SMHI_RADAR + "/latest.png", { headers: UA, cf: { cacheTtl: 0 } });
-    if (r.ok) { const b = new Uint8Array(await r.arrayBuffer());
-      if (b.length > 1000) await env.DB.prepare("INSERT OR IGNORE INTO radar_smhi (t, png, byte, hamtad) VALUES (?, ?, ?, ?)").bind(t, b, b.length, new Date().toISOString()).run(); }
+    const r = await fetch(SMHI_RADAR + "/latest.png?t=" + t, { headers: UA });
+    ut = "png " + r.status;
+    if (r.ok) { const b = await r.arrayBuffer();
+      if (b.byteLength > 1000) { await env.DB.prepare("INSERT OR IGNORE INTO radar_smhi (t, png, byte, hamtad) VALUES (?, ?, ?, ?)").bind(t, b, b.byteLength, new Date().toISOString()).run(); ut = "sparad " + f.valid + " " + b.byteLength + " B"; } }
   }
   await env.DB.prepare("DELETE FROM radar_smhi WHERE t < ?").bind(Date.now() - SMHI_SPARA_H * 3600e3).run();
+  return ut;
 }
 
 export default {
@@ -316,8 +319,11 @@ export default {
     // SMHI-radarn: lista med tider och bilderna (se smhiSamla)
     if (url.pathname === "/radar/smhi/lista") {
       const rad = env.DB ? (await env.DB.prepare("SELECT t FROM radar_smhi ORDER BY t").all()).results : [];
+      // reserv om cron inte gatt: ar senaste bilden aldre an 7 min hamtas en ny i bakgrunden
+      if (!rad.length || Date.now() - rad[rad.length - 1].t > 7 * 60e3) ctx.waitUntil(smhiSamla(env).catch(() => {}));
       return new Response(JSON.stringify(rad.map(r => r.t)), { headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=60" } });
     }
+    if (url.pathname === "/radar/smhi/samla") return new Response(String(await smhiSamla(env).catch(e => "fel: " + e)), { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
     const rm = url.pathname.match(/^\/radar\/smhi\/(\d{13})\.png$/);
     if (rm) {
       const rad = env.DB ? await env.DB.prepare("SELECT png FROM radar_smhi WHERE t = ?").bind(+rm[1]).first() : null;
