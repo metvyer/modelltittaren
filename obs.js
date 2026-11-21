@@ -368,7 +368,9 @@ function kartLegend() {
   const L = $("kartLegend"); if (!L) return;
   const kalla = lage === "p" ? $("pForkl") : lage === "m0" ? $("m0Forkl") : null;
   const rader = kalla ? [...kalla.children].filter(sp => sp.querySelector("i")) : [];
-  if (!rader.length) { L.hidden = true; return; }
+  // 21/11 kvall: isolinjerna (linjeprov i forklaringen) och m0:s "Linjer: ..." kommer med under fargerna
+  const linjer = kalla ? [...kalla.children].filter(sp => sp.querySelector("svg") || (!sp.querySelector("i") && /^Linjer:/.test(sp.textContent))) : [];
+  if (!rader.length && !linjer.length) { L.hidden = true; return; }
   let rub = "";
   if (lage === "p") { const pa = PPARAM[$("pParam").value]; rub = typeof visaLage === "function" && visaLage() === "sannolikhet" ? "Sannolikhet" : pa ? pa.namn.split(",")[0] : ""; }
   else if (typeof M0P !== "undefined" && M0P[M0F.v]) rub = M0P[M0F.v].namn;
@@ -376,6 +378,12 @@ function kartLegend() {
   for (const sp of rader.slice().reverse()) {
     const d = document.createElement("div"), i = document.createElement("i"), src = sp.querySelector("i");
     i.style.background = src.style.background; d.append(i, sp.textContent.trim()); L.appendChild(d);
+  }
+  if (linjer.length) {
+    const r = document.createElement("b"); r.textContent = "Isolinjer"; r.style.marginTop = rader.length ? "5px" : "0"; L.appendChild(r);
+    for (const sp of linjer) { const d = document.createElement("div"), sv = sp.querySelector("svg");
+      if (sv) { const k = sv.cloneNode(true); k.setAttribute("width", 20); k.style.margin = "0"; d.append(k); }
+      d.append(sp.textContent.replace(/^Linjer:\s*/, "").trim()); L.appendChild(d); }
   }
   L.hidden = false;
 }
