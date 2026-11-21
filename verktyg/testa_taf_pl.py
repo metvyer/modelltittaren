@@ -14,7 +14,7 @@ p("## Polska TAF")
 st, t, c, ty, s = f("https://aviationweather.gov/api/data/taf?ids=EPWA,EPMM,EPKK,EPGD,EPPO,EPLB,EPKS,EPDE,EPMI,EPLK&format=json")
 p(f"aviationweather TAF: {st}, {s:.1f} s")
 try:
-    for x in json.loads(t): p(f"- {x.get('icaoId')}: {x.get('rawTAF','')[:120]}")
+    for x in json.loads(t): p(f"- {x.get('icaoId')} finns hos aviationweather")
 except Exception: p(t[:300])
 st, t, c, ty, s = f("https://aviationweather.gov/api/data/metar?ids=EPWA,EPMM&format=json&hours=2")
 p(f"aviationweather METAR EPWA/EPMM: {st} · " + (", ".join(sorted(set(x.get('icaoId') for x in json.loads(t)))) if st == 200 and t.strip().startswith('[') else t[:100]))
@@ -28,4 +28,10 @@ for url in ["https://awiacja.imgw.pl/", "https://awiacja.imgw.pl/metar-taf/", "h
     p("api-liknande sökvägar: " + ", ".join(api[:30]))
     m = re.search(r"TAF\s+(?:AMD\s+)?EPWA[^<]{0,300}", t)
     if m: p("Exempel: " + re.sub(r"\s+", " ", m.group(0)))
+# Angular-sidan: leta API-adresser i skriptfilerna
+st, t, c, ty, s = f("https://awiacja.imgw.pl/")
+for js in sorted(set(re.findall(r'src="([^"]+\.js)"', t))):
+    st2, tj, c2, ty2, s2 = f("https://awiacja.imgw.pl/" + js.lstrip("/"))
+    urls = sorted(set(re.findall(r'["\'`](https?://[^"\'`\s]{6,140})["\'`]', tj))) + sorted(set(re.findall(r'["\'`](/[a-zA-Z0-9_\-]*(?:api|taf|metar|opmet|data|awiacja)[^"\'`\s]{0,100})["\'`]', tj, re.I)))
+    if urls: p(f"{js}: " + " | ".join(urls[:40]))
 open("taf_pl.md", "w", encoding="utf-8").write("\n".join(ut) + "\n")
