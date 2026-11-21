@@ -254,6 +254,7 @@ function tafLaddaEuropa() {
       const g = $("kGeoEU"); g.textContent = "";
       for (const [n, w, d] of [["land", 0.7], ["sjo", 0.5], ["grans", 1, "5 2"], ["grad", 0.6, "4 4"]]) {
         const a = { d: k[n], class: n, "vector-effect": "non-scaling-stroke", "stroke-width": w }; if (d) a["stroke-dasharray"] = d; g.appendChild(el("path", a)); }
+      if (typeof kustOverst === "function") kustOverst($("kKustEU"), k);   // 21/11 kvall: kust/granser overst
       KARTA_EU = { x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1 }; if (lage === "taf") satVb(vb.x, vb.y, vb.w);
     }).catch(() => {})]).then(() => { if (lage === "taf") { tafRita(); ritaMarkorer(); } });
   return euLaddad;

@@ -57,9 +57,9 @@ svg text:not([fill]) { fill: var(--fg); }   /* egen fill (rod T, magenta obs ...
 .ruta { display: inline-block; width: 14px; height: 10px; border: 1px solid var(--line); vertical-align: -1px; margin-right: 4px; }
 .kalla { font-size: 12px; color: var(--dim); margin: 8px 2px 0; }
 /* Karta till vanster, diagram till hoger (staplas pa smal skarm) */
-:root { --hav: #d3e2ee; --land: #f1f2ec; --kust: #8fa3a0; --grans: #b07a7a; --gradnat: #a9b4be; --mkfg: #1b2530; --mkbg: #ffffff; --mkhamt: #1f7a3f; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --hav: #16222d; --land: #262d33; --kust: #5c6f78; --grans: #9a6464; --gradnat: #3b4752; --mkfg: #e3e8ee; --mkbg: #12171d; --mkhamt: #6fd08f; } }
-:root[data-theme="dark"] { --hav: #16222d; --land: #262d33; --kust: #5c6f78; --grans: #9a6464; --gradnat: #3b4752; --mkfg: #e3e8ee; --mkbg: #12171d; --mkhamt: #6fd08f; }
+:root { --kustO: #4b5f5b; --gransO: #9b3f3f; --hav: #d3e2ee; --land: #f1f2ec; --kust: #8fa3a0; --grans: #b07a7a; --gradnat: #a9b4be; --mkfg: #1b2530; --mkbg: #ffffff; --mkhamt: #1f7a3f; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --kustO: #8aa0a6; --gransO: #d08080; --hav: #16222d; --land: #262d33; --kust: #5c6f78; --grans: #9a6464; --gradnat: #3b4752; --mkfg: #e3e8ee; --mkbg: #12171d; --mkhamt: #6fd08f; } }
+:root[data-theme="dark"] { --kustO: #8aa0a6; --gransO: #d08080; --hav: #16222d; --land: #262d33; --kust: #5c6f78; --grans: #9a6464; --gradnat: #3b4752; --mkfg: #e3e8ee; --mkbg: #12171d; --mkhamt: #6fd08f; }
 .arbete { display: grid; grid-template-columns: minmax(260px, 430px) minmax(0, 1fr); gap: 14px; margin-top: 12px; align-items: start; }
 @media (max-width: 860px) { .arbete { grid-template-columns: minmax(0, 1fr); } .kartpanel { max-width: 480px; } }
 .kartpanel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; display: grid; gap: 6px; min-width: 0; }
@@ -79,6 +79,10 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #karta .grans { fill: none; stroke: var(--grans); }
 #karta .grad { fill: none; stroke: var(--gradnat); }
 #kProb { opacity: .78; shape-rendering: crispEdges; }
+/* 21/11 kvall: kust och granser overst */
+#kKust, #kKustEU { pointer-events: none; } body:not(.taf) #kKustEU { display: none; }
+#karta .okust { fill: none; stroke: var(--kustO); stroke-width: 1.1; } #karta .osjo { stroke-width: .7; }
+#karta .ograns { fill: none; stroke: var(--gransO); stroke-width: 1.4; stroke-dasharray: 6 3; }
 #karta .mk { cursor: pointer; }
 #karta.fri .mk { cursor: crosshair; }   /* fri punkt: markeringar ar inte klickbara */
 #karta .mk text { fill: var(--mkfg); paint-order: stroke; stroke: var(--land); font-family: var(--font); font-weight: 600; }
@@ -326,7 +330,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g><g id="kTaf"></g><g id="kRit"></g>
+    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g><g id="kKustEU"></g><g id="kKust"></g><g id="kTaf"></g><g id="kRit"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   </div>
@@ -425,6 +429,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <button class="sek liten" id="tafStd" title="Tillbaka till de 11 förvalda flygplatserna">Förvalda 11</button>
     <span class="grp">Ordna efter <select id="tafOrdning"></select></span>
     <button class="sek liten" id="tafNu">Uppdatera nu</button>
+    <span class="grp"><button class="sek liten" id="bildKnapp" title="Spara en bild (PNG) att ladda ner – välj karta, tabell eller båda (med rubrik, tid och gränser)">📷 Bild</button><select id="bildVal" title="Vad bilden ska innehålla"><option value="bada">Karta + tabell</option><option value="karta">Bara kartan</option><option value="tabell">Bara tabellen</option></select></span>
     <span class="lagetips" id="tafStatus"></span>
   </div>
   <div class="lagetips">Klicka på en flygplats på kartan för att lägga till eller ta bort den. Håll musen över en ruta för TAF-texten. Linjalen på kartan går från 2 h bakåt till 30 h fram; svart streck = nu. Helt gröna TAF:er visas som en kort stump med giltighetstid. Under linjalen: start (fet) och tider när färgen byter; efter linjalen: sluttid (HH i dag/i morgon, annars DDHH). Prick = senaste METAR med samma gränser, svart om äldre än 40 min. × i tabellen tar bort flygplatsen.</div>
@@ -2269,7 +2274,7 @@ function ritaMarkorer() {
     FLYG_EU.forEach((f, i) => {
       if (harF.has(f[0]) || egnaICAO.has(f[0]) || (f[4] === 0 && !smaOK)) return;
       const k = tillKarta(f[2], f[3]); if (k.x < vb.x || k.x > vb.x + vb.w || k.y < vb.y || k.y > vb.y + vb.h) return;
-      const m = el("g", { class: "mk", "data-id": "e" + i, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
+      const m = el("g", { class: "mk", "data-id": "u" + i, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
       m.dataset.tips = f[1] + " " + f[0] + banText(f[0], f[2], f[3]);
       m.appendChild(el("circle", { r: 5, style: "fill:transparent" }));
       m.appendChild(el("circle", { r: f[4] === 2 ? 2.4 : f[4] === 1 ? 2 : 1.6, style: "fill:var(--mkfg);opacity:.8" }));
@@ -2307,6 +2312,13 @@ function ritaMarkorer() {
     g.appendChild(v);
   }
 }
+// NYTT 21/11 kvall: kust och landgranser ritas en gang till OVERST (ovanpa farger, satellit och radar) for overblick
+function kustOverst(g, k) {
+  g.textContent = "";
+  g.appendChild(el("path", { d: k.land, class: "okust", "vector-effect": "non-scaling-stroke" }));
+  if (k.sjo) g.appendChild(el("path", { d: k.sjo, class: "okust osjo", "vector-effect": "non-scaling-stroke" }));
+  g.appendChild(el("path", { d: k.grans, class: "ograns", "vector-effect": "non-scaling-stroke" }));
+}
 function startaKarta() {
   const svg = $("karta");
   fetch("flygplatser.json").then(r => r.json()).then(f => { FLYG = f; ritaMarkorer(); }).catch(() => {});
@@ -2321,6 +2333,7 @@ function startaKarta() {
       geo.appendChild(el("path", a));
     }
     geo.appendChild(geo.firstChild);   // gradnatet overst sa det syns over land
+    kustOverst($("kKust"), k);
   }).catch(() => { $("kartPos").textContent = "Kartunderlaget kunde inte laddas."; });
   const pek = new Map(); let drag = null;
   svg.addEventListener("wheel", e => { e.preventDefault(); const p = kartPunkt(e); zooma(e.deltaY > 0 ? 1.25 : 0.8, p.x, p.y); }, { passive: false });
@@ -2395,7 +2408,7 @@ function kartKlick(e, mal) {
   // 21/11: TAF-fliken - klick pa en flygplats laggs till/tas bort i bevakningen
   if (lage === "taf") {
     let icao = null;
-    if (mk) { const id = mk.dataset.id; if (id[0] === "p") icao = PUNKTER[+id.slice(1)][1]; else if (id[0] === "f") { const f = FLYG[+id.slice(1)]; if (f) icao = f[0]; } else if (id[0] === "e") { const f = FLYG_EU[+id.slice(1)]; if (f) icao = f[0]; } }
+    if (mk) { const id = mk.dataset.id; if (id[0] === "p") icao = PUNKTER[+id.slice(1)][1]; else if (id[0] === "f") { const f = FLYG[+id.slice(1)]; if (f) icao = f[0]; } else if (id[0] === "u") { const f = FLYG_EU[+id.slice(1)]; if (f) icao = f[0]; } }
     else { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); icao = narmasteICAO(ll.lat, ll.lon); }
     if (icao && typeof tafVaxla === "function") tafVaxla(icao);
     return;
@@ -2517,8 +2530,9 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="sannolikhet.js?v=20261121-1600"></script>
 <script src="kombo.js?v=20261121-1330"></script>
 <script src="m0karta.js?v=20261121-1330"></script>
-<script src="taf.js?v=20261121-1745"></script>
+<script src="taf.js?v=20261121-1800"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261121-1330"></script>
+<script src="bild.js?v=20261121-1800"></script>
 </body>
 </html>
