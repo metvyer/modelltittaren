@@ -15,7 +15,7 @@ on:
         default: "ESCM"
         required: false
       delar:
-        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), G = vilka medlemmar (lagged)"
+        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), G = vilka medlemmar (lagged), V = stort prov av datakällor"
         default: "ABCDE"
         required: false
 
@@ -40,6 +40,11 @@ jobs:
           MT_DELAR: ${{ inputs.delar }}
         run: python3 verktyg/testa_thredds.py
 
+      # 21/11: stort matprov av datakallor (delar innehaller V) - se verktyg/testa_kallor.py
+      - name: Testa datakällor
+        if: contains(inputs.delar, 'V')
+        run: python3 verktyg/testa_kallor.py
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
@@ -48,4 +53,5 @@ jobs:
           path: |
             testresultat.md
             das_ensemble.txt
+            kallor.md
           if-no-files-found: ignore
