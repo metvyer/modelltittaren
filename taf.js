@@ -152,8 +152,11 @@ async function tafUppdatera(tyst) {
       const [tafs, mets] = await Promise.all([tafHamtaJson("taf", ids), tafHamtaJson("metar", ids, "&hours=2")]);
       for (const icao of ids) {
         const t = (tafs || []).filter(d => d.icaoId === icao && d.rawTAF).sort((a, b) => (b.issueTime || "").localeCompare(a.issueTime || ""))[0];
-        if (t) { const T = tafTolka(t.rawTAF); if (T) { T.timmar = tafTimmar(T); TAFS.data[icao] = T; } }
-        else if (tafs) TAFS.data[icao] = null;
+        // 21/11: en TAF vars giltighet har gatt ut (t.ex. flygplatsen stangd over helgen) raknas som ingen TAF -
+        // da visas bara METAR, ingen linjal
+        const T = t ? tafTolka(t.rawTAF) : null;
+        if (T && T.till > Date.now()) { T.timmar = tafTimmar(T); TAFS.data[icao] = T; }
+        else if (tafs) { TAFS.data[icao] = null; TAFS.gammal = TAFS.gammal || {}; TAFS.gammal[icao] = T ? T.raw : ""; }
         const m = (mets || []).filter(d => d.icaoId === icao && d.rawOb).sort((a, b) => (b.obsTime || 0) - (a.obsTime || 0))[0];
         if (m) TAFS.metar[icao] = { t: m.obsTime * 1000, raw: m.rawOb, ...tolkaMetar(m.rawOb) }; else if (mets) TAFS.metar[icao] = null;
       }
@@ -215,6 +218,7 @@ function tafRitaTabell() {
           (TAFS.larm[icao] ? ' <span class="larmtxt">⚠ ' + TAFS.larm[icao] + "</span>" : "");
         const x = document.createElement("button"); x.className = "tafx"; x.textContent = "×"; x.title = "Ta bort " + icao; x.addEventListener("click", () => tafVaxla(icao)); c1.appendChild(x);
       } else c1.innerHTML = '<span class="dim">sidvind' + (banor.length ? "" : " (inga banor)") + "</span>";
+      if (rad === "sv" && !T) c1.insertAdjacentHTML("beforeend", ' <span class="dim">– ingen giltig TAF</span>');
       tr.appendChild(c1);
       const c2 = document.createElement("td"); c2.className = "met";
       if (rad === "sv") { const k = metarKat(Mo); c2.innerHTML = Mo ? '<span class="prick" style="background:' + [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod, "#111"][k] + '"></span>' + p2(new Date(Mo.t).getUTCHours()) + p2(new Date(Mo.t).getUTCMinutes()) + "Z" : '<span class="dim">–</span>';
@@ -234,7 +238,7 @@ function tafRitaTabell() {
         if (new Date(t).getUTCHours() === 0) td.classList.add("dygn");
         tr.appendChild(td);
       }
-      if (rad === "sv" && T === null) { const td = tr.children[2]; if (td) { td.colSpan = 1; } tr.title = icao + ": ingen giltig TAF"; }
+      if (rad === "sv" && !T) { tr.title = icao + ": ingen giltig TAF just nu" + (TAFS.gammal && TAFS.gammal[icao] ? " – senaste har gått ut:\n" + tafRader(TAFS.gammal[icao]) : ""); tr.classList.add("ingentaf"); }
       tb.appendChild(tr);
     }
   }
@@ -250,7 +254,7 @@ function tafRitaKarta() {
     const [namn, lat, lon] = tafPlats(icao); if (!isFinite(lat)) continue;
     const k = tillKarta(lat, lon), T = TAFS.data[icao], Mo = TAFS.metar[icao], x0 = k.x + px(10), y0 = k.y - px(H / 2);
     const gp = el("g", {}); g.appendChild(gp);
-    const tt = el("title"); tt.textContent = icao + " " + namn + (T ? "\n" + tafRader(T.raw) : "\ningen giltig TAF") + (Mo ? "\n\n" + Mo.raw : ""); gp.appendChild(tt);
+    const tt = el("title"); tt.textContent = icao + " " + namn + (T ? "\n" + tafRader(T.raw) : "\ningen giltig TAF just nu" + (TAFS.gammal && TAFS.gammal[icao] ? " (senaste har gått ut:\n" + tafRader(TAFS.gammal[icao]) + ")" : "")) + (Mo ? "\n\n" + Mo.raw : ""); gp.appendChild(tt);
     // METAR-prick pa flygplatsen: samma granser som TAF:en, svart om aldre an 40 min, vit om ingen METAR
     const km = metarKat(Mo);
     gp.appendChild(el("circle", { cx: k.x, cy: k.y, r: px(5.5), fill: km < 0 ? "#fff" : [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod, "#111"][km], stroke: "#111", "stroke-width": px(1.2) }));
