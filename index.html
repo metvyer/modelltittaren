@@ -528,9 +528,11 @@ let avbryt = null, stoppad = false, vindLage = false;
 // Testskylten: visas vid start, vid varje flikbyte (bytLage i sannolikhet.js anropar visaTestskylt)
 // och (NYTT 20/11) automatiskt var 20:e minut raknat fran senaste gangen den visades
 const TESTSKYLT_MIN = 20; let testskyltSen = 0;
-function visaTestskylt() { const t = $("testskylt"); if (!t) return; t.hidden = false; testskyltSen = Date.now(); const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
+// 21/11: nar man foljer eller delar visas den bara vid start (inte vid varje flikbyte eller var 20:e min) - flikarna
+// byts ju av den som styr. Den roda raden "TESTSIDA" overst syns alltid.
+function visaTestskylt(start) { const t = $("testskylt"); if (!t) return; if (!start && typeof DELA !== "undefined" && (DELA.folj || DELA.sander || DELA.jagStyr)) return; t.hidden = false; testskyltSen = Date.now(); const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
 setInterval(() => { const t = $("testskylt"); if (t && t.hidden && Date.now() - testskyltSen >= TESTSKYLT_MIN * 60e3) visaTestskylt(); }, 30e3);
-document.addEventListener("DOMContentLoaded", () => { const b = $("testskyltOk"); if (b) b.addEventListener("click", () => { $("testskylt").hidden = true; }); visaTestskylt(); });
+document.addEventListener("DOMContentLoaded", () => { const b = $("testskyltOk"); if (b) b.addEventListener("click", () => { $("testskylt").hidden = true; }); visaTestskylt(true); });
 let visaNiv = lasa("mt:visaNiv") === "ja";
 let visaHovring = lasa("mt:visaHovring") !== "nej";   // NYTT 19/11 kvall: hovringsrutan i tid-hojd (diagram + tabell) av/pa
 let visaIsoT = lasa("mt:visaIsoT") !== "nej";   // NYTT 19/11 em: 0/-10/-20 °C-linjer (pa som standard)
