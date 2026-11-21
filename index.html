@@ -296,7 +296,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <h2 id="testskyltRubrik">Testsida – inte för operativt bruk</h2>
     <p>Modelltittaren är under utveckling och testas fortfarande. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
     <p><b>Använd inte sidan som underlag för operativa beslut eller prognoser.</b> Använd ordinarie verktyg och produkter.</p>
-    <p><b>Det du tittar på kan andra se.</b> Sidan är öppen och data delas via en gemensam mellanserver (cache), så andra användare kan se vilka områden, punkter och flygplatser som hämtats – och en delad vy ser alla som har länken. Vill du inte dela var du tittar: välj <i>Osynligt</i> under ”Hämta MEPS via mellanservern” längst ner (fungerar även på jobbet) och använd inte Dela. Även då ser met.no, Cloudflare och övriga källor vad som hämtas. Mata aldrig in något hemligt.</p>
+    <p><b>Det du tittar på kan andra se.</b> Sidan är öppen och data delas via en gemensam mellanserver (cache), så andra användare kan se vilka områden, punkter och flygplatser som hämtats – och en delad vy ser alla som har länken. Vill du inte dela var du tittar: välj <i>Osynligt</i> under ”Hämta MEPS via mellanservern” längst ner och använd inte Dela. Även då ser met.no, Cloudflare och övriga källor vad som hämtas. Mata aldrig in något hemligt.</p>
     <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo.</p>
     <button id="testskyltOk">Jag förstår</button>
   </div>
@@ -541,10 +541,10 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
 <div class="tips ktips" id="kTips" hidden></div>
 <div class="vagval"><label for="vagVal">Hämta MEPS via mellanservern (Cloudflare):</label>
   <select id="vagVal">
-    <option value="alltid">Alltid (standard) – delar cache med kollegorna, avlastar met.no; direkt om den inte svarar</option>
-    <option value="dold">Osynligt – via mellanservern men syns inte för andra (registreras inte i cachelistan)</option>
-    <option value="auto">Auto – bara när thredds inte nås direkt (t.ex. jobbnätet)</option>
-    <option value="av">Av – alltid direkt till thredds.met.no (fungerar inte på jobbnätet)</option>
+    <option value="alltid">Alltid (standard) – via mellanservern, delad cache med andra</option>
+    <option value="dold">Osynligt – via mellanservern, syns inte för andra</option>
+    <option value="auto">Auto – direkt till met.no, mellanservern om det inte går</option>
+    <option value="av">Av – alltid direkt till met.no</option>
   </select>
   <span class="lagetips" title="Gäller MEPS-data. METAR/TAF går alltid via mellanservern när de inte kan hämtas direkt.">ⓘ</span>
 </div>
