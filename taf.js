@@ -355,11 +355,15 @@ function tafRitaKarta() {
   const gLinjer = el("g", { "pointer-events": "none" }), gd = el("g", {}); g.appendChild(gLinjer);
   const lagda = [];
   for (const ic of ordning) { const [, la, lo] = tafPlats(ic); if (!isFinite(la)) continue; const q = tillKarta(la, lo);
-    lagda.push({ x: q.x - px(6), y: q.y - px(6), w: px(12), h: px(12) }); }
-  const krock = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    lagda.push({ x: q.x - px(4), y: q.y - px(4), w: px(8), h: px(8), prick: true }); }
+  // 21/11 kvall: mindre forsiktig - en krock raknas bara om lapparna verkligen tacker varandra
+  // (minst 40 % av den lagsta hojden och minst 6 px pa bredden); prickar raknas bara om de ligger inne i rutan
+  const krock = (a, b) => { const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+    if (ox <= 0 || oy <= 0) return false; if (b.prick) return ox >= b.w * 0.6 && oy >= b.h * 0.6;
+    return ox >= px(6) && oy >= Math.min(a.h, b.h) * 0.4; };
   const placera = (gp, k, x0, y0) => {
     let bb; try { bb = gp.getBBox(); } catch (e) { return; } if (!bb || !bb.width) return;
-    const m = px(1.5), box = { x: bb.x - m, y: bb.y - m, w: bb.width + 2 * m, h: bb.height + 2 * m }, steg = box.h + px(1);
+    const m = px(0.5), box = { x: bb.x - m, y: bb.y - m, w: bb.width + 2 * m, h: bb.height + 2 * m }, steg = box.h + px(1);
     const fri = dy => !lagda.some(o => krock({ ...box, y: box.y + dy }, o));
     let dy = 0;
     // utzoomat over Europa (vb.w > MEPS-bredden): ingen flytt - det blir bara rorigt

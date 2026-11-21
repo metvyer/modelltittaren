@@ -45,8 +45,11 @@ let obsEumCaps = { t: 0, tider: {} };
 async function obsEumTider() {
   if (Date.now() - obsEumCaps.t < 90e3) return obsEumCaps.tider;
   const r = await fetch(OBS_EUM + "mtg_fd/wms?service=WMS&version=1.3.0&request=GetCapabilities"), x = await r.text(), tider = {};
-  for (const m of x.matchAll(/<Name>(?:mtg_fd:)?([a-z0-9_]+)<\/Name>[\s\S]*?<Dimension name="time"[^>]*>([^<]+)<\/Dimension>/g)) {
-    const del = m[2].trim().split(",").pop().split("/"); if (del.length >= 2) tider["mtg_fd:" + m[1]] = Date.parse(del[1]);
+  // 21/11 kvall (prov M): forsta forekomsten av lagrets namn, och tidsdimensionen strax efter (stilnamn kan krocka)
+  for (const m of x.matchAll(/<Name>(?:mtg_fd:)?([a-z0-9_]+)<\/Name>/g)) {
+    const k = "mtg_fd:" + m[1]; if (k in tider) continue;
+    const d = x.slice(m.index, m.index + 6000).match(/<Dimension name="time"[^>]*>([^<]+)<\/Dimension>/); if (!d) continue;
+    const del = d[1].trim().split(",").pop().split("/"); tider[k] = del.length >= 2 ? Date.parse(del[1]) : Date.parse(del[0]);
   }
   obsEumCaps = { t: Date.now(), tider }; return tider;
 }
@@ -76,13 +79,18 @@ async function obsSmhiLista(n) {
 async function obsRamar() {
   const n = OBS.langd;
   if (OBS.lage === "sat") {
-    const L = OBS_SAT[OBS.sat], tider = await obsEumTider(), slut = tider[L.lager] || Math.floor((Date.now() - 20 * 60e3) / 600e3) * 600e3, steg = (L.steg || 10) * 60e3;
+    const L = OBS_SAT[OBS.sat], tider = await obsEumTider(), steg = (L.steg || 10) * 60e3;
+    let slut = tider[L.lager] || Math.floor((Date.now() - 30 * 60e3) / steg) * steg;
+    // listan hos EUMETSAT ligger ofta en bild efter (prov M) - prova en liten bild for nasta tid(er)
+    for (let f = 0; f < 3 && slut + steg < Date.now(); f++) {
+      try { const r = await fetch(OBS_EUM + "wms?service=WMS&version=1.3.0&request=GetMap&layers=" + L.lager + "&styles=&crs=EPSG:4326&bbox=58,15,60,18&width=8&height=8&format=image/png&time=" + obsIso(slut + steg));
+        if (r.ok && (r.headers.get("content-type") || "").startsWith("image")) slut += steg; else break; } catch (e) { break; } }
     const ramar = []; for (let k = n - 1; k >= 0; k--) { const t = slut - k * steg; ramar.push({ t, nyckel: L.lager + "|" + t, url: vy => obsWms(OBS_EUM + "wms", L.lager, L.fmt, t, vy) }); }
     return ramar;
   }
   if (OBS.rad === "smhi") {
     const l = await obsSmhiLista(n);
-    return l.map(f => ({ t: f.t, nyckel: "smhi|" + f.t, url: () => ({ url: f.url, proj: obsSmhiProj() }) }));
+    return l.map(f => ({ t: f.t, nyckel: "smhi|" + f.t, url: () => ({ url: f.url, proj: { ...obsSmhiProj(), rensa: true } }) }));
   }
   const filer = await obsMetFiler(), sist = filer.slice(-n), ramar = sist.map(f => { const t = obsMetT(f); return { t, nyckel: "met|" + t, url: vy => obsWms("https://thredds.met.no/thredds/wms/" + f, "lwe_precipitation_rate", "image/png", t, vy, true) }; });
   if (OBS.prognos && filer.length) {   // prognosen ur senaste filen: +10, +20 ... +110 min (varannan, for att spara)
@@ -97,7 +105,7 @@ function obsWms(bas, lager, fmt, t, vy, metno) {
   let u = bas + "?service=WMS&version=1.3.0&request=GetMap&crs=EPSG:4326&layers=" + lager + "&bbox=" + [b.s, b.w, b.n, b.e].map(v => v.toFixed(3)).join(",") +
     "&width=" + W + "&height=" + H + "&format=" + encodeURIComponent(fmt) + "&time=" + obsIso(t);
   if (fmt === "image/png") u += "&transparent=true";
-  if (metno) u += "&styles=default-scalar/default&colorscalerange=0.1,50&logscale=true&numcolorbands=20&belowmincolor=transparent&abovemaxcolor=extend";
+  if (metno) u += "&styles=default-scalar/metnoprecipitation&colorscalerange=0.1,50&logscale=true&numcolorbands=250&belowmincolor=transparent&abovemaxcolor=extend";
   else u += "&styles=";
   return { url: u, proj: { typ: "ll", ...b } };
 }
@@ -152,7 +160,7 @@ function obsVrid(img, proj, vy) {
     for (let x = 0; x < W; x++) { const i = Math.floor(x / S), fx = (x - i * S) / S, a = j * gw + i;
       const lat = (LA[a] * (1 - fx) + LA[a + 1] * fx) * (1 - fy) + (LA[a + gw] * (1 - fx) + LA[a + gw + 1] * fx) * fy;
       const lon = (LO[a] * (1 - fx) + LO[a + 1] * fx) * (1 - fy) + (LO[a + gw] * (1 - fx) + LO[a + gw + 1] * fx) * fy;
-      const k = pix(lat, lon); if (k >= 0) dst[y * W + x] = src[k]; } }
+      const k = pix(lat, lon); if (k >= 0) { const v = src[k]; if (!proj.rensa || ((v >>> 24) > 200 && (v & 0xffffff) !== 0)) dst[y * W + x] = v; } } }
   go.putImageData(ut, 0, 0);
   return co;
 }
@@ -208,7 +216,7 @@ async function obsLadda(nyLista) {
       obsStatus("Hämtar lista …"); const ramar = await obsRamar(); if (gen !== OBS.gen) return;
       for (const r of ramar) r.bild = gamla.get(r.nyckel) || null;
       const sistObs = ramar.filter(r => !r.prognos).length - 1;
-      OBS.ramar = ramar; if (!nyLista || varSist || OBS.i > ramar.length - 1) OBS.i = Math.max(0, sistObs);
+      OBS.ramar = ramar; if (OBS.lage === "rad") obsFyllForkl(); if (!nyLista || varSist || OBS.i > ramar.length - 1) OBS.i = Math.max(0, sistObs);
     }
     // ordning: den som visas forst, sedan nyast -> aldst, sist prognosen
     const ordn = [OBS.i, ...OBS.ramar.map((_, k) => k).filter(k => k !== OBS.i && !OBS.ramar[k].prognos).reverse(), ...OBS.ramar.map((_, k) => k).filter(k => k !== OBS.i && OBS.ramar[k].prognos)];
@@ -272,8 +280,11 @@ function obsFyllVal() {
   sel.value = OBS.lage === "sat" ? OBS.sat : OBS.rad;
   $("obsKallaEtikett").textContent = OBS.lage === "sat" ? "Bild (MTG, EUMETSAT)" : "Radar";
   $("obsPrognosRad").hidden = !(OBS.lage === "rad" && OBS.rad === "metno");
+  obsFyllForkl();
+}
+function obsFyllForkl() {
   $("obsForkl").innerHTML = OBS.lage === "rad" ? (OBS.rad === "metno"
-    ? "Nederbördsintensitet mm/h (met.no, logaritmisk skala 0,1–50). <img alt='' src='https://thredds.met.no/thredds/wms/" + (obsMetCat.filer.slice(-1)[0] || "") + "?request=GetLegendGraphic&layer=lwe_precipitation_rate&colorbaronly=true&width=12&height=120&colorscalerange=0.1,50&logscale=true&numcolorbands=20' style='height:12px;vertical-align:middle;transform:rotate(-90deg)' onerror='this.remove()'>"
+    ? "Nederbördsintensitet mm/h (met.no, logaritmisk skala 0,1–50). " + (obsMetCat.filer.length ? "<img alt='' src='https://thredds.met.no/thredds/wms/" + obsMetCat.filer.slice(-1)[0] + "?request=GetLegendGraphic&layer=lwe_precipitation_rate&colorbaronly=true&vertical=false&width=200&height=12&palette=metnoprecipitation&colorscalerange=0.1,50&logscale=true&numcolorbands=250' style='height:12px;vertical-align:middle' onerror='this.remove()'> 0,1 – 50 mm/h" : "")
     : "Radarreflektivitet med SMHI:s färgskala. OBS: SMHI lägger bara ut den senaste bilden öppet – loopen byggs upp medan sidan är öppen (" + obsSmhiArkiv.size + " bilder hittills). För loop direkt: välj met.no.")
     : OBS_SAT[OBS.sat].genom ? "Genomskinligt lager – kartan syns under." : "";
 }
