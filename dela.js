@@ -10,22 +10,27 @@
 // själv pausas följandet ("Följ igen"). Frågar var 3:e s medan delaren är aktiv, annars var 12:e s; dold flik frågar inte.
 // Ägarnyckeln finns i ägarens webbläsare (mt:delningar). "Ägarlänk (hemlig)" = samma delning från en annan dator.
 // Delningar raderas inte automatiskt - bara med "Ta bort".
+// NYTT 21/11: ANTECKNING (kort text från delaren, följer med i vyn) och TA ÖVER STYRET: tittaren trycker "Be om att
+// styra", ägaren svarar "Lämna över"/"Nej" (eller har kryssat "Vem som helst får ta över direkt"). Den som styr har blå
+// ruta och sänder; alla andra - även ägaren - följer. Ägaren kan alltid "Ta tillbaka". Ägarnyckeln lämnar aldrig ägarens
+// webbläsare; den som styr får en tillfällig nyckel som slutar gälla när styret lämnas/tas tillbaka eller sidan stängs.
 
 const DELA_URL = "https://modelltittaren.metvyer.workers.dev/dela";
 const DELA_SKICKA_MS = 1500, DELA_FOLJ_SNABB_MS = 3000, DELA_FOLJ_LUGN_MS = 12000, DELA_AKTIV_MS = 180000, DELA_KOLL_MS = 1000;
-const DELA_HJARTA_MS = 30000, DELA_AGARE_MS = 10000, DELA_LISTA_MS = 20000;
+const DELA_HJARTA_MS = 30000, DELA_AGARE_MS = 4000, DELA_LISTA_MS = 20000;
 const DELA = { mina: [], aktivId: null, sander: false, senastSkickat: "", skickadTid: 0, skickar: false, panel: false,
                folj: null, foljer: false, andrad: 0, tillampar: false, fel: "", tillampad: "", vbSenast: "",
                tittare: [], vem: "", delare: "", aktiva: [], lista: false, nytt: false, ledigt: null,
+               not: "", oppen: false, styr: null, jagStyr: null, vantar: false, fraga: null, agarFoljer: false,
                sess: Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 8) };
 // jamforelse "har tittaren andrat nagot sjalv": utan zoom, korning och ritlinjer
-const utanVb = v => { const k = { ...v }; delete k.vb; delete k.dtg; delete k.rit; return JSON.stringify(k); };
+const utanVb = v => { const k = { ...v }; delete k.vb; delete k.dtg; delete k.rit; delete k.not; return JSON.stringify(k); };
 
 // ---------- Vad som sparas ----------
 function vyFanga() {
   const r = x => Math.round(x * 10) / 10;
   const v = { l: fav ? "f" : lage, vb: [r(vb.x), r(vb.y), r(vb.w)], lat: $("lat").value, lon: $("lon").value, pk: $("punkt").value,
-              sf: siffLage, flyg: visaFlyg, rit: typeof RIT !== "undefined" ? RIT.linjer : [] };
+              sf: siffLage, flyg: visaFlyg, rit: typeof RIT !== "undefined" ? RIT.linjer : [], not: DELA.not || "" };
   if (lage === "p") {
     Object.assign(v, { dtg: P.dtg, pp: $("pParam").value, pv: $("pVisa").value, pm: $("pMedl").value, tr: $("pTrosk").value,
       fr: $("pFran").value, ti: $("pTill").value, st: $("pStorlek").value, up: $("pUppl").value, dt: $("pDt").value,
@@ -66,6 +71,7 @@ async function vyTillampa(v) {
     $("lat").value = v.lat; $("lon").value = v.lon;
     if (v.flyg !== undefined && v.flyg !== visaFlyg) $("visaFlyg").click();
     if (typeof RIT !== "undefined") { RIT.delade = Array.isArray(v.rit) && v.rit.length ? v.rit : null; ritRita(); }
+    DELA.not = v.not || "";
     if (v.sf !== undefined && v.sf !== siffLage) { siffLage = v.sf; sattSiffKnapp(); }
     if (lage === "p") {
       if (!fav) {
@@ -133,36 +139,78 @@ async function delaSkapa(namn) {
   DELA.senastSkickat = JSON.stringify(v); DELA.skickadTid = Date.now(); DELA.sander = true; DELA.tittare = [];
 }
 async function delaSkicka() {
+  if (DELA.jagStyr) return delaSkickaStyr();
   const d = aktivDelning();
-  if (!d || !DELA.sander || DELA.skickar || DELA.tillampar || DELA.foljer) return;
+  if (!d || !DELA.sander || DELA.skickar || DELA.tillampar || DELA.foljer || DELA.folj) return;
   const v = vyFanga(), t = JSON.stringify(v);
   if (t === DELA.senastSkickat || Date.now() - DELA.skickadTid < DELA_SKICKA_MS) return;
   DELA.skickar = true;
   try { await delaFraga("POST", "?id=" + d.id + "&nyckel=" + d.nyckel, { vy: v, vem: DELA.vem }); DELA.senastSkickat = t; DELA.skickadTid = Date.now(); DELA.fel = ""; }
   catch (e) {
     DELA.skickadTid = Date.now();
+    if (e.status === 409) { delaAgarPuls(); return; }   // nagon annan styr - pulsen vaxlar over till att folja
     if (e.status === 404 || e.status === 403) { DELA.sander = false; DELA.fel = "Delningen «" + d.id + "» finns inte längre (eller nyckeln stämmer inte) – skapa en ny."; DELA.mina = DELA.mina.filter(x => x !== d); DELA.aktivId = DELA.mina[0] ? DELA.mina[0].id : null; delaSparaMina(); delaBygg(); }
     else DELA.fel = "Kunde inte skicka ändringen (" + e.message + ") – försöker igen.";
   }
   finally { DELA.skickar = false; delaUppdatera(); }
 }
-// agaren: "jag sander" var 10:e s (haller delningen i listan "Pagaende") + hamtar vilka som tittar
+// den som fatt styret sander med sin tillfalliga nyckel
+async function delaSkickaStyr() {
+  if (DELA.skickar || DELA.tillampar) return;
+  const v = vyFanga(), t = JSON.stringify(v);
+  if (t === DELA.senastSkickat || Date.now() - DELA.skickadTid < DELA_SKICKA_MS) return;
+  DELA.skickar = true;
+  try { const j = await delaFraga("POST", "?id=" + encodeURIComponent(DELA.folj) + "&styrnyckel=" + DELA.jagStyr, { vy: v }); DELA.senastSkickat = t; DELA.skickadTid = Date.now(); DELA.andrad = j.andrad || DELA.andrad; DELA.fel = ""; }
+  catch (e) { DELA.skickadTid = Date.now(); if (e.status === 409) delaStyrSlut("Styret har tagits tillbaka."); else DELA.fel = "Kunde inte skicka (" + e.message + ")."; }
+  finally { DELA.skickar = false; delaUppdatera(); }
+}
+function delaStyrSlut(text) { DELA.jagStyr = null; DELA.foljer = true; DELA.andrad = 0; DELA.vbSenast = ""; DELA.tillampad = ""; DELA.fel = text || ""; delaBygg(); delaHamtaVy(true); }
+async function delaBeOmStyr() {
+  try { const j = await delaFraga("POST", "?id=" + encodeURIComponent(DELA.folj) + "&sess=" + DELA.sess, { namn: DELA.vem }, "/styr");
+    if (j.nyckel) delaBorjaStyra(j.nyckel); else { DELA.vantar = true; DELA.fel = ""; delaBygg(); } }
+  catch (e) { DELA.fel = "Kunde inte fråga (" + e.message + ")."; delaUppdatera(); }
+}
+function delaBorjaStyra(nyckel) { DELA.jagStyr = nyckel; DELA.vantar = false; DELA.foljer = false; DELA.senastSkickat = ""; DELA.skickadTid = 0; DELA.fel = ""; delaBygg(); }
+// agaren: puls var 4:e s (haller delningen i listan "Pagaende"), hamtar vilka som tittar, fragor om att styra
+// och om nagon annan styr -> agaren foljer sin egen delning tills styret lamnas tillbaka
 async function delaAgarPuls() {
-  const d = aktivDelning(); if (!d || !DELA.sander || DELA.folj || document.hidden) return;
-  try { const j = await delaFraga("GET", "?id=" + d.id + "&nyckel=" + d.nyckel); DELA.tittare = j.tittare || []; DELA.lista = !!j.lista; } catch (e) {}
+  const d = aktivDelning(); if (!d || !DELA.sander || document.hidden || (DELA.folj && !DELA.agarFoljer)) return;
+  try {
+    const j = await delaFraga("GET", "?id=" + d.id + "&nyckel=" + d.nyckel);
+    DELA.tittare = j.tittare || []; DELA.lista = !!j.lista; DELA.oppen = !!j.oppen; DELA.styr = j.styr;
+    const nyFraga = j.fraga && !DELA.fraga; DELA.fraga = j.fraga;
+    if (nyFraga) { DELA.panel = true; delaBygg(); try { if (typeof tafPip === "function") tafPip(); } catch (e) {} }
+    else if (!j.fraga && $("delaFragaRad")) delaBygg();
+    if (j.styr && !DELA.agarFoljer) { DELA.agarFoljer = true; DELA.folj = d.id; DELA.foljer = true; DELA.andrad = 0; DELA.vbSenast = ""; DELA.tillampad = ""; DELA.panel = false; delaBygg(); }
+    else if (!j.styr && DELA.agarFoljer) { DELA.agarFoljer = false; DELA.folj = null; DELA.foljer = false; DELA.senastSkickat = ""; DELA.skickadTid = 0; DELA.panel = true;
+      if (typeof RIT !== "undefined") { RIT.delade = null; ritRita(); } delaBygg(); }
+    if (DELA.agarFoljer && DELA.foljer && j.andrad > DELA.andrad && !DELA.tillampar) { DELA.andrad = j.andrad; DELA.not = (j.vy && j.vy.not) || ""; await vyTillampa(j.vy); }
+  } catch (e) {}
   delaUppdatera();
+}
+async function delaAgarSvar(ge) {
+  const d = aktivDelning(); if (!d) return;
+  try { await delaFraga("POST", "?id=" + d.id + "&nyckel=" + d.nyckel, { ge }); } catch (e) { DELA.fel = "Kunde inte (" + e.message + ")."; }
+  DELA.fraga = null; await delaAgarPuls(); delaBygg();
 }
 
 // ---------- Tittaren ----------
 let delaHjarta = 0;
 async function delaHamtaVy(forsta) {
-  if (!DELA.folj || (!DELA.foljer && !forsta) || document.hidden && !forsta || DELA.tillampar) return;
-  const hj = forsta || Date.now() - delaHjarta > DELA_HJARTA_MS;   // "jag ar har" var 30:e s
+  if (DELA.agarFoljer) return;   // agaren foljer sin egen delning via pulsen (delaAgarPuls)
+  if (!DELA.folj || (!DELA.foljer && !forsta && !DELA.jagStyr && !DELA.vantar) || document.hidden && !forsta || DELA.tillampar) return;
+  // "jag ar har": var 30:e s; varje gang medan man vantar pa svar eller sjalv styr (sa man marker direkt om styret tas tillbaka)
+  const hj = forsta || DELA.vantar || !!DELA.jagStyr || Date.now() - delaHjarta > DELA_HJARTA_MS;
   try {
     const j = await delaFraga("GET", "?id=" + encodeURIComponent(DELA.folj) + (hj ? "&sess=" + DELA.sess + "&namn=" + encodeURIComponent(DELA.vem) : ""));
     if (hj) delaHjarta = Date.now();
-    DELA.fel = ""; DELA.tittare = j.tittare || []; DELA.delare = j.vem || "";
-    if (j.andrad > DELA.andrad) { DELA.andrad = j.andrad; await vyTillampa(j.vy); }
+    DELA.fel = DELA.jagStyr || DELA.vantar ? DELA.fel : ""; DELA.tittare = j.tittare || []; DELA.delare = j.vem || ""; DELA.styr = j.styr;
+    if (DELA.vantar && hj) {   // svar pa fragan om att styra
+      if (j.styr && j.styr.du && j.styr.nyckel) { delaBorjaStyra(j.styr.nyckel); return; }
+      if (!j.vantar) { DELA.vantar = false; DELA.fel = "Delaren lämnade inte över styret."; delaBygg(); }
+    }
+    if (DELA.jagStyr) { if (!(j.styr && j.styr.du)) delaStyrSlut("Styret har tagits tillbaka."); else delaUppdatera(); return; }
+    if (DELA.foljer && j.andrad > DELA.andrad) { DELA.andrad = j.andrad; DELA.not = (j.vy && j.vy.not) || ""; await vyTillampa(j.vy); }
   } catch (e) {
     DELA.fel = e.status === 404 ? "Det finns ingen delning som heter «" + DELA.folj + "»." : "Kunde inte hämta den delade vyn (" + e.message + ").";
     if (e.status === 404) DELA.foljer = false;
@@ -202,19 +250,33 @@ function vemFalt() {
 function delaBygg() {
   const rad = $("delaRad"); rad.textContent = ""; rad.className = "delarad";
   if (DELA.folj) {
-    rad.hidden = false; rad.classList.add(DELA.foljer ? "foljer" : "pausad");
+    rad.hidden = false; rad.classList.add(DELA.jagStyr ? "styr" : DELA.foljer ? "foljer" : "pausad");
     rad.append(nyEl("span", { id: "delaRubrik", className: "delanamn" }), nyEl("span", { id: "delaInfo" }));
-    if (DELA.foljer) rad.append(knappEl("Styr själv", () => { DELA.foljer = false; delaBygg(); }, "Sluta följa och titta fritt", true));
-    else rad.append(knappEl("Följ igen", () => { DELA.foljer = true; DELA.andrad = 0; DELA.vbSenast = ""; DELA.tillampad = ""; delaBygg(); delaHamtaVy(true); }, "Gå tillbaka till delarens vy och följ med igen"));
-    rad.append(knappEl("Lämna", delaLamna, "Sluta titta på den delade vyn", true), nyEl("span", {}, "Ditt namn:"), vemFalt(), nyEl("span", { id: "delaFel", className: "delafel" }));
+    if (DELA.jagStyr) rad.append(knappEl("Lämna tillbaka", async () => { try { await delaFraga("POST", "?id=" + encodeURIComponent(DELA.folj) + "&styrnyckel=" + DELA.jagStyr + "&lamna=1"); } catch (e) {} delaStyrSlut(""); }, "Sluta styra – alla följer delaren igen"));
+    else {
+      if (DELA.foljer) rad.append(knappEl("Styr själv", () => { DELA.foljer = false; delaBygg(); }, "Sluta följa och titta fritt (bara på din skärm)", true));
+      else rad.append(knappEl("Följ igen", () => { DELA.foljer = true; DELA.andrad = 0; DELA.vbSenast = ""; DELA.tillampad = ""; delaBygg(); if (DELA.agarFoljer) delaAgarPuls(); else delaHamtaVy(true); }, "Gå tillbaka till den delade vyn och följ med igen"));
+      if (DELA.agarFoljer) rad.append(knappEl("Ta tillbaka", () => delaAgarSvar("tillbaka"), "Ta tillbaka styret direkt – alla följer dig igen"));
+      else if (DELA.vantar) rad.append(nyEl("span", { className: "dim" }, "✋ Väntar på svar …"));
+      else rad.append(knappEl("Be om att styra", delaBeOmStyr, "Fråga delaren om du får styra – då följer alla (även delaren) det du gör", true));
+    }
+    rad.append(knappEl("Lämna", async () => { if (DELA.jagStyr) { try { await delaFraga("POST", "?id=" + encodeURIComponent(DELA.folj) + "&styrnyckel=" + DELA.jagStyr + "&lamna=1"); } catch (e) {} DELA.jagStyr = null; }
+      if (DELA.agarFoljer) { DELA.agarFoljer = false; DELA.sander = false; } delaLamna(); }, "Sluta titta på den delade vyn", true),
+      nyEl("span", {}, "Ditt namn:"), vemFalt(), nyEl("span", { id: "delaFel", className: "delafel" }));
+    rad.append(nyEl("div", { id: "delaNot", className: "delanot" }));
   } else if (DELA.panel) {
     rad.hidden = false; rad.classList.add("panel");
+    if (DELA.fraga) {   // nagon vill styra
+      const rf = nyEl("div", { id: "delaFragaRad", className: "delarad1 delafraga" });
+      rf.append(nyEl("b", {}, "✋ " + (DELA.fraga.namn || "(namnlös)") + " vill styra"), knappEl("Lämna över", () => delaAgarSvar("fraga"), "Hen styr, alla (även du) följer. Du kan alltid ta tillbaka."), knappEl("Nej", () => delaAgarSvar("neka"), "", true));
+      rad.append(rf);
+    }
     // Ga med
     const r1 = nyEl("div", { className: "delarad1" }), gm = nyEl("input", { id: "delaGaMed", placeholder: "namn, t.ex. metocc", className: "delavem" });
     gm.addEventListener("keydown", e => { if (e.key === "Enter") delaFolj(gm.value); });
     r1.append(nyEl("b", {}, "Gå med:"), gm, knappEl("Gå med", () => delaFolj(gm.value), "Följ en delning med det här namnet"), nyEl("span", { id: "delaAktiva", className: "delaaktiva" }));
     // Dela det jag ser
-    const r2 = nyEl("div", { className: "delarad1" }), d = aktivDelning();
+    const r2 = nyEl("div", { className: "delarad1" }), d = aktivDelning(); let rn = null;   // rn = anteckningsraden
     const sel = nyEl("select", { id: "delaVal", title: "Dina delningar (de som skapats i den här webbläsaren eller med ägarlänk)" });
     for (const x of DELA.mina) sel.add(new Option(x.id, x.id)); sel.add(new Option("+ ny delning …", "+"));
     sel.value = DELA.nytt || !d ? "+" : d.id;
@@ -242,11 +304,18 @@ function delaBygg() {
       const tb = knappEl("Ta bort", async e => { const k = e.currentTarget; if (k.dataset.saker !== "1") { k.dataset.saker = "1"; k.textContent = "Säker? Klicka igen"; setTimeout(() => { k.dataset.saker = ""; k.textContent = "Ta bort"; }, 4000); return; }
         try { await delaFraga("POST", "?id=" + d.id + "&nyckel=" + d.nyckel + "&tabort=1"); } catch (x) {}
         DELA.mina = DELA.mina.filter(x => x !== d); DELA.aktivId = DELA.mina[0] ? DELA.mina[0].id : null; DELA.sander = false; delaSparaMina(); delaBygg(); }, "Ta bort delningen för gott (länken slutar fungera)", true);
-      r2.append(l, kl, sk, nyEl("span", { id: "delaSand", className: "delasand" }), ag, lb, tb, nyEl("span", { id: "delaTitt" }));
+      const lo = nyEl("label", { className: "kryss", title: "Tittare som trycker Be om att styra får styret direkt, utan att du behöver svara. Du kan alltid ta tillbaka." });
+      const co = nyEl("input", { type: "checkbox", checked: DELA.oppen }); co.addEventListener("change", async () => { DELA.oppen = co.checked; try { await delaFraga("POST", "?id=" + d.id + "&nyckel=" + d.nyckel, { oppen: DELA.oppen }); } catch (e) { DELA.fel = "Kunde inte ändra: " + e.message; } delaUppdatera(); });
+      lo.append(co, " Vem som helst får ta över direkt");
+      r2.append(l, kl, sk, nyEl("span", { id: "delaSand", className: "delasand" }), ag, lb, lo, tb, nyEl("span", { id: "delaTitt" }));
+      rn = nyEl("div", { className: "delarad1" }); const ni = nyEl("input", { id: "delaNotIn", value: DELA.not, maxLength: 120, placeholder: "t.ex. Tittar på snögränsen lördag", className: "delanotin" });
+      ni.addEventListener("input", () => { DELA.not = ni.value; });
+      rn.append(nyEl("span", {}, "📝 Anteckning:"), ni, nyEl("span", { className: "dim" }, "Öppen sida – skriv inget som rör verksamheten."));
+
     }
     const r3 = nyEl("div", { className: "delarad1" });
     r3.append(nyEl("span", {}, "Ditt namn:"), vemFalt(), knappEl("Stäng", () => { DELA.panel = false; delaBygg(); }, "Dölj raden (sändningen fortsätter om den är på)", true), nyEl("span", { id: "delaFel", className: "delafel" }));
-    rad.append(r1, r2, r3);
+    rad.append(r1, r2); if (rn) rad.append(rn); rad.append(r3);
     delaHamtaAktiva();
   } else rad.hidden = true;
   delaUppdatera();
@@ -254,15 +323,18 @@ function delaBygg() {
 function delaUppdatera() {
   const t = (id, text) => { const e = $(id); if (e) e.textContent = text; };
   if (DELA.folj) {
-    t("delaRubrik", (DELA.foljer ? "👁 Följer delad vy " : "⏸ Följer inte – du styr själv · ") + "«" + DELA.folj + "»" + (DELA.delare ? " (" + DELA.delare + ")" : ""));
-    t("delaInfo", (DELA.foljer ? "Ändras inom några sekunder när delaren ändrar. Zooma och skrolla fritt." : "Du har ändrat något själv. Tryck Följ igen för att gå tillbaka.") + " " + tittText());
+    const styrNamn = DELA.styr && !DELA.styr.du ? (DELA.styr.namn || "(namnlös)") : "";
+    t("delaRubrik", DELA.jagStyr ? "🎮 Du styr «" + DELA.folj + "»" : DELA.agarFoljer ? "🎮 " + styrNamn + " styr din delning «" + DELA.folj + "»" + (DELA.foljer ? "" : " · ⏸ du följer inte") :
+      (DELA.foljer ? "👁 Följer delad vy " : "⏸ Följer inte – du styr själv · ") + "«" + DELA.folj + "»" + (styrNamn ? " – " + styrNamn + " styr" : DELA.delare ? " (" + DELA.delare + ")" : ""));
+    t("delaInfo", (DELA.jagStyr ? "Alla som följer ser det du gör. Ägaren kan ta tillbaka när som helst." : DELA.foljer ? "Ändras inom några sekunder när den som styr ändrar. Zooma och skrolla fritt." : "Du har ändrat något själv. Tryck Följ igen för att gå tillbaka.") + " " + tittText());
+    const n = $("delaNot"); if (n) { n.textContent = DELA.not ? "📝 " + DELA.not : ""; n.hidden = !DELA.not; }
   }
   t("delaSand", DELA.sander ? "● Sänder" : "");
   t("delaTitt", DELA.sander ? tittText() : "");
   t("delaFel", DELA.fel ? " " + DELA.fel : "");
   const a = $("delaAktiva");
   if (a) { a.textContent = ""; const egna = new Set(DELA.mina.map(x => x.id)), l = DELA.aktiva.filter(x => !egna.has(x.id));
-    if (l.length) { a.append(nyEl("span", {}, "Pågående: ")); for (const x of l) a.append(knappEl(x.id + (x.vem ? " – " + x.vem : "") + " · " + x.antal + " tittar", () => delaFolj(x.id), "Följ den här delningen", true)); }
+    if (l.length) { a.append(nyEl("span", {}, "Pågående: ")); for (const x of l) a.append(knappEl(x.id + (x.vem ? " – " + x.vem : "") + " · " + x.antal + " tittar" + (x.anteckning ? " · 📝 " + x.anteckning : ""), () => delaFolj(x.id), "Följ den här delningen", true)); }
     else a.append(nyEl("span", { className: "dim" }, "Inga pågående delningar i listan.")); }
   const dk = $("delaKnapp"); dk.setAttribute("aria-pressed", String(!!(aktivDelning() && DELA.sander))); dk.textContent = aktivDelning() && DELA.sander ? "● Delar «" + DELA.aktivId + "»" : DELA.folj ? "Dela (följer)" : "Dela";
 }

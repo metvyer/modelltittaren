@@ -177,6 +177,12 @@ export default {
     //  POST /dela  {vy, namn?, lista?, vem?}             -> ny delning {id, nyckel}  (409 om namnet ar upptaget)
     //  POST /dela?id=X&nyckel=K {vy?, lista?, vem?}      -> andra;  &tabort=1 -> ta bort delningen
     //  Delningar raderas aldrig automatiskt (bara med tabort). Tittare som inte horts av pa 2 min visas inte.
+    //  NYTT 21/11 - ANTECKNING (vy.not, kopieras till kolumnen anteckning for listan) och TA OVER STYRET:
+    //  POST /dela/styr?id=X&sess=S {namn}  -> tittaren ber att fa styra: {nyckel} direkt om agaren kryssat "vem som helst",
+    //                                         annars {vantar} (agaren ser fragan i GET med sin nyckel)
+    //  POST /dela?id=X&nyckel=K {ge: "fraga" | "neka" | "tillbaka", oppen}  -> agaren lamnar over / nekar / tar tillbaka
+    //  POST /dela?id=X&styrnyckel=N {vy}  -> den som styr sander;  &lamna=1 -> lamnar tillbaka
+    //  Den som styr maste hora av sig (sess) minst varje minut, annars gar styret tillbaka till agaren.
     if (url.pathname.startsWith("/dela")) {
       const json = (o, st) => new Response(JSON.stringify(o), { status: st || 200, headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
       if (!env.DB) return json({ fel: "ingen databas" }, 500);
@@ -186,7 +192,7 @@ export default {
       const tittare = async i => (await DB.prepare("SELECT namn FROM tittare WHERE id = ? AND sedd > ? ORDER BY sedd DESC LIMIT 50").bind(i, nu - 120000).all()).results.map(r => r.namn || "");
       if (req.method === "GET") {
         if (url.pathname === "/dela/aktiva") {
-          const r = (await DB.prepare("SELECT d.id, d.vem, (SELECT COUNT(*) FROM tittare t WHERE t.id = d.id AND t.sedd > ?) AS antal FROM delning d WHERE d.lista = 1 AND d.levande > ? ORDER BY d.levande DESC LIMIT 30").bind(nu - 120000, nu - 120000).all()).results;
+          const r = (await DB.prepare("SELECT d.id, d.vem, d.anteckning, (SELECT COUNT(*) FROM tittare t WHERE t.id = d.id AND t.sedd > ?) AS antal FROM delning d WHERE d.lista = 1 AND d.levande > ? ORDER BY d.levande DESC LIMIT 30").bind(nu - 120000, nu - 120000).all()).results;
           return json(r);
         }
         if (url.pathname === "/dela/ledigt") {
@@ -195,15 +201,22 @@ export default {
           return json({ ledigt: !(await DB.prepare("SELECT 1 FROM delning WHERE id = ?").bind(n).first()) });
         }
         if (!NAMN.test(id)) return json({ fel: "fel id" }, 400);
-        const r = await DB.prepare("SELECT vy, andrad, skapad, vem, lista, nyckel FROM delning WHERE id = ?").bind(id).first();
+        const r = await DB.prepare("SELECT vy, andrad, skapad, vem, lista, nyckel, anteckning, oppen, styr_sess, styr_nyckel, styr_namn, fraga_sess, fraga_namn, fraga_tid FROM delning WHERE id = ?").bind(id).first();
         if (!r) return json({ fel: "finns inte" }, 404);
         const agare = !!nyckel && nyckel === r.nyckel, sess = url.searchParams.get("sess") || "";
+        // den som styr har inte hort av sig pa en minut -> styret tillbaka till agaren
+        if (r.styr_sess) { const t = await DB.prepare("SELECT sedd FROM tittare WHERE id = ? AND sess = ?").bind(id, r.styr_sess).first();
+          if (!t || t.sedd < nu - 60000) { await DB.prepare("UPDATE delning SET styr_sess = NULL, styr_nyckel = NULL, styr_namn = NULL WHERE id = ?").bind(id).run(); r.styr_sess = null; } }
         if (agare) ctx.waitUntil(DB.prepare("UPDATE delning SET levande = ? WHERE id = ?").bind(nu, id).run());
         if (/^[a-z0-9]{8,24}$/.test(sess)) {
           await DB.prepare("INSERT INTO tittare (id, sess, namn, sedd) VALUES (?, ?, ?, ?) ON CONFLICT(id, sess) DO UPDATE SET namn = excluded.namn, sedd = excluded.sedd").bind(id, sess, ren(url.searchParams.get("namn"), 30), nu).run();
           if (Math.random() < 0.05) ctx.waitUntil(DB.prepare("DELETE FROM tittare WHERE sedd < ?").bind(nu - 600000).run());
         }
-        return json({ vy: JSON.parse(r.vy), andrad: r.andrad, skapad: r.skapad, vem: r.vem || "", lista: !!r.lista, agare, tittare: await tittare(id) });
+        const styr = r.styr_sess ? { namn: r.styr_namn || "", du: !!sess && sess === r.styr_sess } : null;
+        if (styr && styr.du) styr.nyckel = r.styr_nyckel;   // bara till den som styr (sess ar hemlig for andra)
+        const fraga = agare && r.fraga_sess && r.fraga_tid > nu - 120000 ? { namn: r.fraga_namn || "" } : null;
+        const vantar = !!sess && r.fraga_sess === sess && r.fraga_tid > nu - 120000;
+        return json({ vy: JSON.parse(r.vy), andrad: r.andrad, skapad: r.skapad, vem: r.vem || "", lista: !!r.lista, oppen: !!r.oppen, agare, styr, fraga, vantar, tittare: await tittare(id) });
       }
       if (req.method !== "POST") return json({ fel: "fel metod" }, 405);
       if (!ok) return json({ fel: "Bara från metvyer.github.io" }, 403);
@@ -211,6 +224,19 @@ export default {
       if (text.length > DELA_MAX) return json({ fel: "för stor" }, 413);
       let k = {}; if (text) { try { k = JSON.parse(text); } catch (e) { return json({ fel: "fel format" }, 400); } }
       if (k.vy !== undefined && (!k.vy || typeof k.vy !== "object")) return json({ fel: "fel format" }, 400);
+      if (url.pathname === "/dela/styr") {   // tittaren ber att fa styra
+        const sess = url.searchParams.get("sess") || "";
+        if (!NAMN.test(id) || !/^[a-z0-9]{8,24}$/.test(sess)) return json({ fel: "fel id/sess" }, 400);
+        const d = await DB.prepare("SELECT oppen, styr_sess FROM delning WHERE id = ?").bind(id).first();
+        if (!d) return json({ fel: "finns inte" }, 404);
+        const namn = ren(k.namn, 30);
+        await DB.prepare("INSERT INTO tittare (id, sess, namn, sedd) VALUES (?, ?, ?, ?) ON CONFLICT(id, sess) DO UPDATE SET namn = excluded.namn, sedd = excluded.sedd").bind(id, sess, namn, nu).run();
+        if (d.oppen) { const sn = slump(24, "abcdefghijklmnopqrstuvwxyz0123456789");
+          await DB.prepare("UPDATE delning SET styr_sess = ?, styr_nyckel = ?, styr_namn = ?, fraga_sess = NULL, levande = ? WHERE id = ?").bind(sess, sn, namn, nu, id).run();
+          return json({ nyckel: sn }); }
+        await DB.prepare("UPDATE delning SET fraga_sess = ?, fraga_namn = ?, fraga_tid = ? WHERE id = ?").bind(sess, namn, nu, id).run();
+        return json({ vantar: true });
+      }
       if (!id) {   // ny delning
         if (!k.vy) return json({ fel: "fel format" }, 400);
         let nyId = (k.namn || "").toLowerCase();
@@ -221,15 +247,32 @@ export default {
         catch (e) { return json({ fel: "Namnet är upptaget." }, 409); }
         return json({ id: nyId, nyckel: ny, andrad: nu });
       }
-      const rad = await DB.prepare("SELECT nyckel FROM delning WHERE id = ?").bind(id).first();
+      const rad = await DB.prepare("SELECT nyckel, styr_sess, styr_nyckel, fraga_sess, fraga_namn FROM delning WHERE id = ?").bind(id).first();
       if (!rad) return json({ fel: "finns inte" }, 404);
+      const sn = url.searchParams.get("styrnyckel") || "";
+      if (sn) {   // den som fatt styret
+        if (!rad.styr_nyckel || sn !== rad.styr_nyckel) return json({ fel: "styret är inte ditt längre", styrSlut: true }, 409);
+        if (url.searchParams.get("lamna") === "1") { await DB.prepare("UPDATE delning SET styr_sess = NULL, styr_nyckel = NULL, styr_namn = NULL WHERE id = ?").bind(id).run(); return json({ id, lamnat: true }); }
+        if (!k.vy) return json({ fel: "fel format" }, 400);
+        const vy = { ...k.vy, not: k.vy.not };
+        await DB.prepare("UPDATE delning SET vy = ?, andrad = ?, anteckning = ?, levande = ? WHERE id = ?").bind(JSON.stringify(vy), nu, ren(vy.not, 120), nu, id).run();
+        return json({ id, andrad: nu });
+      }
       if (rad.nyckel !== nyckel) return json({ fel: "fel nyckel" }, 403);
+      if (k.ge === "fraga" && rad.fraga_sess) {   // agaren lamnar over till den som fragade
+        await DB.prepare("UPDATE delning SET styr_sess = fraga_sess, styr_nyckel = ?, styr_namn = fraga_namn, fraga_sess = NULL WHERE id = ?").bind(slump(24, "abcdefghijklmnopqrstuvwxyz0123456789"), id).run();
+        return json({ id, overlamnat: true });
+      }
+      if (k.ge === "neka") { await DB.prepare("UPDATE delning SET fraga_sess = NULL WHERE id = ?").bind(id).run(); return json({ id }); }
+      if (k.ge === "tillbaka") { await DB.prepare("UPDATE delning SET styr_sess = NULL, styr_nyckel = NULL, styr_namn = NULL, fraga_sess = NULL WHERE id = ?").bind(id).run(); return json({ id }); }
+      if (k.vy && rad.styr_sess) return json({ fel: "någon annan styr just nu", styrAnnan: true }, 409);
       if (url.searchParams.get("tabort") === "1") {
         await DB.batch([DB.prepare("DELETE FROM delning WHERE id = ?").bind(id), DB.prepare("DELETE FROM tittare WHERE id = ?").bind(id)]);
         return json({ id, borttagen: true });
       }
       const satt = [], varden = [];
-      if (k.vy) { satt.push("vy = ?", "andrad = ?"); varden.push(JSON.stringify(k.vy), nu); }
+      if (k.vy) { satt.push("vy = ?", "andrad = ?", "anteckning = ?"); varden.push(JSON.stringify(k.vy), nu, ren(k.vy.not, 120)); }
+      if (k.oppen !== undefined) { satt.push("oppen = ?"); varden.push(k.oppen ? 1 : 0); }
       if (k.lista !== undefined) { satt.push("lista = ?"); varden.push(k.lista ? 1 : 0); }
       if (k.vem !== undefined) { satt.push("vem = ?"); varden.push(ren(k.vem, 30)); }
       satt.push("levande = ?"); varden.push(nu);

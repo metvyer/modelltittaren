@@ -151,6 +151,12 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .delarad.pausad { background: #ffedd5; border-color: #ea580c; color: #7c2d12; }
 @media (prefers-color-scheme: dark) { .delarad.foljer { background: #0f3d22; color: #bbf7d0; } .delarad.pausad { background: #4a2408; color: #fed7aa; } }
 .delarad .delanamn { font-weight: 700; }
+.delarad.styr { position: sticky; top: 0; z-index: 50; font-weight: 500; box-shadow: 0 2px 6px rgba(0,0,0,.15); background: #dbeafe; border-color: #2563eb; color: #1e3a8a; }
+@media (prefers-color-scheme: dark) { .delarad.styr { background: #172554; color: #bfdbfe; } }
+.delarad .delanot { flex-basis: 100%; font-weight: 600; }
+.delarad .delanotin { width: 340px; max-width: 100%; font-size: 12px; }
+.delarad .delafraga { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 4px 8px; animation: delaBlink 1s ease-in-out 6; }
+@keyframes delaBlink { 50% { background: #fde68a; } }
 .delarad.panel { flex-direction: column; align-items: stretch; }
 .delarad1 { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
 .delarad .delavem { width: 150px; font-size: 12px; }
@@ -2546,6 +2552,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="sannolikhet.js?v=20261121-1110"></script>
 <script src="taf.js?v=20261121-1100"></script>
 <script src="rita.js?v=20261121-1115"></script>
-<script src="dela.js?v=20261121-1110"></script>
+<script src="dela.js?v=20261121-1130"></script>
 </body>
 </html>
