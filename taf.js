@@ -297,19 +297,21 @@ function tafRitaKarta() {
       continue;
     }
     const xAv = t => x0 + px(Math.max(0, Math.min(A.n, (t - A.t0) / 3600e3)) * tim);
-    gp.appendChild(el("rect", { x: x0, y: y0, width: px(L), height: px(H), fill: "#ffffff", stroke: "#111", "stroke-width": px(0.8) }));
+    // 21/11: linjalen ritas bara over TAF:ens giltighet (inget vitt fore start eller efter slut), men pa den gemensamma tidsaxeln
+    const xa = xAv(T.fran), xb = xAv(T.till), bl = xb - xa;
+    gp.appendChild(el("rect", { x: xa, y: y0, width: bl, height: px(H), fill: "#ffffff", stroke: "#111", "stroke-width": px(0.8) }));
     const ritaRad = (kk, yy, hh) => T.timmar.forEach((x, i) => { const h = (x.t - A.t0) / 3600e3; if (h < 0 || h >= A.n || kk[i] < 0) return;
       gp.appendChild(el("rect", { x: x0 + px(h * tim), y: yy, width: px(tim) + px(0.3), height: px(hh), fill: [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod][kk[i]] })); });
     ritaRad(kat, y0, H);
     if (TAFS.vind) {   // 21/11: sidvind som halvtjock linjal under
-      gp.appendChild(el("rect", { x: x0, y: y0 + px(H + 1), width: px(L), height: px(H / 2), fill: "#ffffff", stroke: "#111", "stroke-width": px(0.6) }));
+      gp.appendChild(el("rect", { x: xa, y: y0 + px(H + 1), width: bl, height: px(H / 2), fill: "#ffffff", stroke: "#111", "stroke-width": px(0.6) }));
       ritaRad(svKat, y0 + px(H + 1), H / 2);
-      gp.appendChild(el("rect", { x: x0, y: y0 + px(H + 1), width: px(L), height: px(H / 2), fill: "none", stroke: "#111", "stroke-width": px(0.6) }));
+      gp.appendChild(el("rect", { x: xa, y: y0 + px(H + 1), width: bl, height: px(H / 2), fill: "none", stroke: "#111", "stroke-width": px(0.6) }));
     }
     const hn = (A.nu - A.t0) / 3600e3; gp.appendChild(el("line", { x1: x0 + px(hn * tim), x2: x0 + px(hn * tim), y1: y0 - px(2), y2: y0 + px(H + (TAFS.vind ? H / 2 + 1 : 0) + 2), stroke: "#111", "stroke-width": px(1.4) }));
-    gp.appendChild(el("rect", { x: x0, y: y0, width: px(L), height: px(H), fill: "none", stroke: "#111", "stroke-width": px(0.8) }));
+    gp.appendChild(el("rect", { x: xa, y: y0, width: bl, height: px(H), fill: "none", stroke: "#111", "stroke-width": px(0.8) }));
     // 21/11: sluttid alltid efter linjalen; starttid och tider for fargbyten under linjalen (hoppar over om de krockar)
-    gp.appendChild(el("text", { x: x0 + px(L + 3), y: y0 + px(H - 1.5), "font-size": px(9), "font-weight": 700, fill: "#111", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" }, tafKort(T.till)));
+    gp.appendChild(el("text", { x: xb + px(3), y: y0 + px(H - 1.5), "font-size": px(9), "font-weight": 700, fill: "#111", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" }, tafKort(T.till)));
     const satta = [];
     const lagg = (t, fet) => { const x = xAv(t); if (satta.some(q => Math.abs(q - x) < px(15))) return; satta.push(x); tidText(x, tafKort(t), "middle", fet); };
     if (T.fran >= A.t0) lagg(T.fran, true);
