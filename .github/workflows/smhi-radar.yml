@@ -11,4 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - run: curl -s -m 60 -H "Origin: https://metvyer.github.io" https://modelltittaren.metvyer.workers.dev/radar/smhi/samla; echo
+      - name: Spara senaste bilden
+        run: |
+          curl -s -m 60 -H "Origin: https://metvyer.github.io" https://modelltittaren.metvyer.workers.dev/radar/smhi/samla; echo
