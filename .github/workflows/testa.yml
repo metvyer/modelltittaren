@@ -15,7 +15,7 @@ on:
         default: "ESCM"
         required: false
       delar:
-        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), G = vilka medlemmar (lagged), V = stort prov av datakällor, Y = djupare prov (bilder i grenen matprov), Z = SMHI KNEP/MEPS-mappar"
+        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), G = vilka medlemmar (lagged), V = stort prov av datakällor, Y = djupare prov (bilder i grenen matprov), Z = SMHI KNEP/MEPS-mappar, K = radar/satellit"
         default: "ABCDE"
         required: false
 
@@ -73,6 +73,11 @@ jobs:
         if: contains(inputs.delar, 'Z')
         run: python3 verktyg/testa_smhi.py
 
+      # 21/11 kvall: prov K - radar (SMHI/met.no) och satellit (verktyg/testa_radar.py)
+      - name: Prov radar och satellit
+        if: contains(inputs.delar, 'K')
+        run: python3 verktyg/testa_radar.py
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
@@ -84,4 +89,5 @@ jobs:
             kallor.md
             taf_pl.md
             smhi.md
+            radar.md
           if-no-files-found: ignore
