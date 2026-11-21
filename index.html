@@ -296,7 +296,8 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <h2 id="testskyltRubrik">Testsida – inte för operativt bruk</h2>
     <p>Modelltittaren är under utveckling och testas fortfarande. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
     <p><b>Använd inte sidan som underlag för operativa beslut eller prognoser.</b> Använd ordinarie verktyg och produkter.</p>
-    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov.</p>
+    <p><b>Det du tittar på kan andra se.</b> Sidan är öppen och data delas via en gemensam mellanserver (cache), så andra användare kan se vilka områden, punkter och flygplatser som hämtats – och en delad vy ser alla som har länken. Vill du inte dela var du tittar: välj <i>Av</i> under ”Hämta MEPS via mellanservern” längst ner och använd inte Dela. Även då går trafiken öppet till met.no och andra källor. Mata aldrig in något hemligt.</p>
+    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo.</p>
     <button id="testskyltOk">Jag förstår</button>
   </div>
 </div>
@@ -542,7 +543,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   <select id="vagVal">
     <option value="alltid">Alltid (standard) – delar cache med kollegorna, avlastar met.no; direkt om den inte svarar</option>
     <option value="auto">Auto – bara när thredds inte nås direkt (t.ex. jobbnätet)</option>
-    <option value="av">Av – alltid direkt till thredds.met.no</option>
+    <option value="av">Av – alltid direkt till thredds.met.no (andra ser inte via cachen var du tittar)</option>
   </select>
   <span class="lagetips" title="Gäller MEPS-data. METAR/TAF går alltid via mellanservern när de inte kan hämtas direkt.">ⓘ</span>
 </div>
