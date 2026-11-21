@@ -547,6 +547,26 @@ def fukt(iy, ix):
     skriv()
 
 
+def detFalt():
+    """T (21/11): alla falt i det-filen (medlem 0) med dimensioner - underlag for fliken Karta m0."""
+    skriv("## T. Alla fält i det-filen")
+    nu = datetime.now(timezone.utc); d = nu - timedelta(hours=nu.hour % 3 + 6); dtg = d.strftime("%Y%m%dT%HZ")
+    st, dds, _, _ = hamta(BAS + "meps_det_2_5km_" + dtg + ".ncml.dds", tidsgrans=60)
+    st2, das, _, _ = hamta(BAS + "meps_det_2_5km_" + dtg + ".ncml.das", tidsgrans=60)
+    skriv(f"Körning {dtg}, dds {st}, das {st2}")
+    # enheter och long_name ur DAS
+    attr = {}
+    for m in re.finditer(r"\n    (\w+) \{(.*?)\n    \}", das, re.S):
+        u = re.search(r'units "([^"]*)"', m.group(2)); l = re.search(r'long_name "([^"]*)"', m.group(2)); sn = re.search(r'standard_name "([^"]*)"', m.group(2))
+        attr[m.group(1)] = ((u.group(1) if u else ""), (l.group(1) if l else (sn.group(1) if sn else "")))
+    skriv("```")
+    for m in re.finditer(r"ARRAY:\s*\n\s*\w+ (\w+)(\[[^;]*\]);", dds):
+        n = m.group(1); dims = re.sub(r"\s", "", m.group(2)); u, l = attr.get(n, ("", ""))
+        skriv(f"{n} {dims} | {u} | {l}")
+    skriv("```")
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -584,6 +604,8 @@ def main():
         parKoll()
     if "S" in delar:
         fukt(iy, ix)
+    if "T" in delar:
+        detFalt()
     if not set(delar) & set("BCDE"):
         return spara(0)
 
