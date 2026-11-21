@@ -210,7 +210,7 @@ function tafRitaTabell() {
   const tb = document.createElement("tbody");
   for (const icao of TAFS.lista) {
     const T = TAFS.data[icao], Mo = TAFS.metar[icao], [namn] = tafPlats(icao), banor = tafBanor(icao);
-    for (const rad of TAFS.vind ? ["sv", "vind"] : ["sv"]) {
+    for (const rad of TAFS.vind && T ? ["sv", "vind"] : ["sv"]) {
       const tr = document.createElement("tr"); if (rad === "vind") tr.className = "vindrad"; if (TAFS.larm[icao] && rad === "sv") tr.classList.add("larm");
       const c1 = document.createElement("td"); c1.className = "namn";
       if (rad === "sv") {
