@@ -49,6 +49,10 @@ jobs:
         if: contains(inputs.delar, 'W')
         run: python3 verktyg/testa_taf_pl.py
 
+      - name: Testa IMGW:s flyg-API
+        if: contains(inputs.delar, 'X')
+        run: python3 verktyg/testa_taf_pl2.py
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
