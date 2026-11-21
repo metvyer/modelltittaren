@@ -160,7 +160,7 @@ function obsVrid(img, proj, vy) {
     for (let x = 0; x < W; x++) { const i = Math.floor(x / S), fx = (x - i * S) / S, a = j * gw + i;
       const lat = (LA[a] * (1 - fx) + LA[a + 1] * fx) * (1 - fy) + (LA[a + gw] * (1 - fx) + LA[a + gw + 1] * fx) * fy;
       const lon = (LO[a] * (1 - fx) + LO[a + 1] * fx) * (1 - fy) + (LO[a + gw] * (1 - fx) + LO[a + gw + 1] * fx) * fy;
-      const k = pix(lat, lon); if (k >= 0) { const v = src[k]; if (!proj.rensa || ((v >>> 24) > 200 && (v & 0xffffff) !== 0)) dst[y * W + x] = v; } } }
+      const k = pix(lat, lon); if (k >= 0) { const v = src[k]; if (!proj.rensa || ((v >>> 24) > 200 && !((v & 255) === ((v >>> 8) & 255) && (v & 255) === ((v >>> 16) & 255)))) dst[y * W + x] = v;   /* SMHI: bort med svart/gratt (bakgrund, logga) */ } } }
   go.putImageData(ut, 0, 0);
   return co;
 }
@@ -232,7 +232,7 @@ async function obsLadda(nyLista) {
         r.bild = { ...b, lager }; klara++;
         if (k === OBS.i) obsVisa();
       } catch (e) { fel++; }
-      obsStatus("Bilder " + klara + "/" + OBS.ramar.length + (fel ? " (" + fel + " saknas)" : "") + " · " + (OBS.bytes / 1e6).toFixed(1) + " MB hämtat totalt");
+      obsStatus("Bilder " + klara + "/" + OBS.ramar.length + (fel ? " (" + fel + " saknas)" : ""));
     });
     // tre at gangen
     let p = 0; await Promise.all([0, 1, 2].map(async () => { while (p < jobb.length) await jobb[p++](); }));
@@ -241,7 +241,7 @@ async function obsLadda(nyLista) {
     const sist = OBS.ramar.filter(r => !r.prognos).length - 1;
     if (OBS.lage === "sat" && OBS.ramar[sist] && OBS.ramar[sist].bild && OBS.ramar[sist].bild.tom && sist > 0) { OBS.ramar.splice(sist, 1); if (OBS.i >= sist) OBS.i = sist - 1; }
     obsVisa();
-    obsStatus("Klart: " + OBS.ramar.filter(r => r.bild).length + "/" + OBS.ramar.length + " bilder på " + ((performance.now() - t0) / 1000).toFixed(1) + " s" + (fel ? ", " + fel + " saknas" : "") + " · " + (OBS.bytes / 1e6).toFixed(1) + " MB totalt");
+    obsStatus("Klart: " + OBS.ramar.filter(r => r.bild).length + "/" + OBS.ramar.length + " bilder på " + ((performance.now() - t0) / 1000).toFixed(1) + " s" + (fel ? ", " + fel + " saknas" : ""));
   } catch (e) { if (gen === OBS.gen) obsStatus("Kunde inte hämta: " + e.message); }
 }
 // gamla bilder slapps nar vyn byts (annars vaxer minnet)
