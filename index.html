@@ -1429,6 +1429,21 @@ const RISK_RADER = {   // nyckel: [namn, kort, villkor, standardgrans, enhet, va
   sikt:  ["Sikt", "Sikt", "<", 1500, "m", ["sikt"]],
   bas:   ["Molnbas", "Molnbas", "<", 500, "ft", ["bas"]],
   t2:    ["Temperatur 2 m", "T 2 m", "<", 0, "°C", ["t2"]],
+  // NYTT 21/11: halkrisker ur yttemperatur, daggpunkt och nederbord (raknas per medlem och timme, se RISK_SPEC)
+  dagg:  ["Dagg/rimfrost (yttemp minus daggpunkt)", "Dagg/frost", "<", 0.5, "°C", ["t0", "t2", "rh"]],
+  kallr: ["Regn på kalla ytor (≥ 0,1 mm/h och yttemp under gränsen)", "Kallt regn", "<", 0, "°C", ["nb", "t0"]],
+  halka: ["Halka efter nederbörd (≥ 0,5 mm senaste 6 h, plusgrader före, yttemp nu under gränsen)", "Halka efter", "<", 0, "°C", ["nb", "t0"]],
+};
+// NYTT 21/11: radtyper som raknas ur flera falt. Returnerar null (data saknas), 0 (nej), 1 (ja) eller 2 (ja, rimfrost).
+const HALKA_TIM = 6, HALKA_MM = 0.5, KALLR_MM = 0.1;
+const RISK_SPEC = {
+  dagg: (D, te, m, NM, gr) => { const t0 = D.t0[te * NM + m], td = daggpunkt(D.t2[te * NM + m], D.rh[te * NM + m]);
+    if (!isFinite(t0) || !isFinite(td)) return null; return t0 - td < gr ? (t0 < 0 ? 2 : 1) : 0; },
+  kallr: (D, te, m, NM, gr) => { if (te < 1) return null; const a = D.nb[te * NM + m], b = D.nb[(te - 1) * NM + m], t0 = D.t0[te * NM + m];
+    if (!isFinite(a) || !isFinite(b) || !isFinite(t0)) return null; return a - b >= KALLR_MM && t0 < gr ? 1 : 0; },
+  halka: (D, te, m, NM, gr) => { if (te < HALKA_TIM) return null; const t0 = D.t0[te * NM + m], a = D.nb[te * NM + m], b = D.nb[(te - HALKA_TIM) * NM + m];
+    if (!isFinite(t0) || !isFinite(a) || !isFinite(b)) return null; if (!(t0 < gr) || a - b < HALKA_MM) return 0;
+    for (let q = te - HALKA_TIM; q < te; q++) if (D.t0[q * NM + m] > 0) return 1; return 0; },
 };
 let RISK = (() => { try { return JSON.parse(lasa("mt:risk") || "null") || {}; } catch (e) { return {}; } })();
 RISK.pa = !!RISK.pa; RISK.rad = RISK.rad || {};
@@ -1496,6 +1511,9 @@ const RISK_INFO = {
   sikt: "Sikt (visibility_in_air) i meter. Stapeln = andel medlemmar med sikt under gränsen. Medlem 0 tas ur det-filen om den saknas i ensemblen.",
   bas: "Molnbas (cloud_base_altitude) i fot över marken. Stapeln = andel medlemmar med bas under gränsen. Inga moln = ingen bas = räknas inte som under.",
   t2: "Temperatur 2 m i °C. Stapeln = andel medlemmar med temperatur under gränsen.",
+  dagg: "Yttemperatur (0 m) minus daggpunkten 2 m (ur temperatur och fukt 2 m). Under gränsen = ytan är så kall att fukt fälls ut: dagg om ytan är över 0 °C, rimfrost om den är under. 0,5 °C är en rimlig start (0 = bara när ytan redan är under daggpunkten). Hovra för hur många medlemmar som ger rimfrost.",
+  kallr: "Nederbörd minst 0,1 mm senaste timmen och yttemperatur under gränsen (0 °C = regnet/snöblandat fryser på ytan; +1 °C fångar även fall nära noll). Modellens nederbördstyp används inte – det är mängd + yttemperatur.",
+  halka: "Minst 0,5 mm nederbörd de senaste 6 timmarna, plusgrader på ytan någon gång under dessa 6 timmar och yttemperatur under gränsen nu: blöta ytor som fryser. Mängd och timmar är fasta i den här versionen.",
 };
 const RISK_SKALA = "Färg: grå <10 %, gul 10–30, orange 30–50, röd 50–70, mörkröd 70–90, mörkast ≥90 %.";
 function ritaRisk(svg, ax, y0, nt, t0, c) {
@@ -1524,9 +1542,10 @@ function ritaRisk(svg, ax, y0, nt, t0, c) {
     const harData = r.k === "bas" ? Array.from({ length: NM }, (_, m) => { for (let q = 0; q < ENS_TIDER; q++) if (isFinite(D.bas[q * NM + m])) return true; return false; }) : null;
     for (let t = 0; t < nt; t++) {
       const te = t - offs; if (te < 0 || te >= ENS_TIDER) continue;
-      let n = 0, j = 0;
+      let n = 0, j = 0, jr = 0;
       for (let m = 0; m < NM; m++) {
         if (typeof iUrval === "function" && !iUrval(m)) continue;   // 20/11 kvall: medlemsurvalet (alla / 15 nya / 15 gamla)
+        if (RISK_SPEC[r.k]) { const b = RISK_SPEC[r.k](D, te, m, NM, r.gr); if (b === null) continue; n++; if (b) j++; if (b === 2) jr++; continue; }
         let v;
         if (r.k === "sv") {
           const g = D.by[te * NM + m], u = D.u10[te * NM + m], w = D.v10[te * NM + m]; if (!isFinite(g) || !isFinite(u) || !isFinite(w)) continue;
@@ -1541,7 +1560,7 @@ function ritaRisk(svg, ax, y0, nt, t0, c) {
       const p = j / n, h = Math.max(p > 0 ? 1.5 : 0, p * hMax);
       const bar = el("rect", { x: t * COL + 3, y: yB - h, width: COL - 6, height: h, fill: RISK_FARG(p) });
       const tb = el("title"); const d = new Date(t0 + t * 3600e3);
-      tb.textContent = r.namn + " " + r.villkor + " " + r.gr + " " + r.enhet + "\n" + VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z: " + Math.round(p * 100) + " % (" + j + " av " + n + " medlemmar)";
+      tb.textContent = r.namn + " " + r.villkor + " " + r.gr + " " + r.enhet + "\n" + VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z: " + Math.round(p * 100) + " % (" + j + " av " + n + " medlemmar)" + (r.k === "dagg" && j ? " – " + (jr === j ? "rimfrost" : jr ? jr + " rimfrost, " + (j - jr) + " dagg" : "dagg") : "");
       bar.appendChild(tb); svg.appendChild(bar);
       if (p >= 0.1) svg.appendChild(el("text", { x: t * COL + COL / 2, y: yT + 8, "font-size": 8, "text-anchor": "middle", fill: c("--dim"), "pointer-events": "none" }, String(Math.round(p * 100))));
     }
