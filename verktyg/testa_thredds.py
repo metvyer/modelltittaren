@@ -507,6 +507,26 @@ def flerPunkter(iy, ix):
     skriv()
 
 
+def parKoll():
+    """R (21/11): parvis hamtning i forhamta.py - ger dela_par exakt samma svar som en enpunktsfraga?"""
+    skriv("## R. Kontroll av parvis hämtning (forhamta.par_bitar)")
+    dtg, nt = F.senaste_korning()
+    pkt = [F.ruta(59.8973, 17.5886), F.ruta(59.6519, 17.9186)]
+    stat = F.stat_punkt(dtg, *pkt[0]); ks = F.lagsta_niva(stat)
+    t0 = time.time(); par = F.par_bitar(dtg, 24, pkt, ks); tp = time.time() - t0
+    skriv(f"Körning {dtg}, ks {ks}. Paret ESCM+ESSA +0..+23: {tp:.1f} s")
+    for k, r in enumerate(pkt):
+        t0 = time.time(); en = F.par_bitar(dtg, 24, [r], ks); te = time.time() - t0
+        a_, b_ = par[0][k][3] if par else "", en[0][0][3] if en else ""
+        lika = a_ == b_
+        skriv(f"- punkt {r}: ensam {te:.1f} s, svaren {'IDENTISKA' if lika else 'OLIKA'} ({len(a_)} / {len(b_)} tecken)")
+        if not lika:
+            ra, rb = a_.split("\n"), b_.split("\n")
+            for n, (x, y) in enumerate(zip(ra, rb)):
+                if x != y: skriv(f"  första skillnad rad {n}: {x[:90]!r} / {y[:90]!r}"); break
+    skriv()
+
+
 def main():
     punkt = os.environ.get("MT_PUNKT", "ESCM").strip().upper() or "ESCM"
     delar = os.environ.get("MT_DELAR", "ABCDE").strip().upper() or "ABCDE"
@@ -540,6 +560,8 @@ def main():
         ytTemp(iy, ix)
     if "Q" in delar:
         flerPunkter(iy, ix)
+    if "R" in delar:
+        parKoll()
     if not set(delar) & set("BCDE"):
         return spara(0)
 

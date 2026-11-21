@@ -34,7 +34,12 @@ PUNKTER = [
     ("Kallinge (Ronneby)", "ESDF", 56.2667, 15.265), ("Malmen", "ESCF", 58.3978, 15.5228), ("Såtenäs", "ESIB", 58.4264, 12.7144),
     ("Kallax", "ESPA", 65.5438, 22.122), ("Vidsel", "ESPE", 65.8753, 20.15), ("Uppsala", "ESCM", 59.8973, 17.5886),
     ("Visby", "ESSV", 57.6628, 18.3462), ("Sturup", "ESMS", 55.5363, 13.3762), ("Arlanda", "ESSA", 59.6519, 17.9186),
-    ("Landvetter", "ESGG", 57.6628, 12.2798), ("Hagshult", "ESMV", 57.2922, 14.1372)]
+    ("Landvetter", "ESGG", 57.6628, 12.2798), ("Hagshult", "ESMV", 57.2922, 14.1372), ("Kalmar", "ESMQ", 56.6855, 16.2876)]
+# NYTT 21/11 - PARVIS HAMTNING (matprov Q): thredds vagrar samma variabel tva ganger i en fraga, men kostnaden
+# sitter i uppackningen av faltet, inte i antalet punkter. En "ruta" med steg = avstandet mellan tva orter ger
+# exakt de tva orterna (+ tva skraphorn) till ungefar samma tid som en ort. Svaret delas sedan upp i ett
+# vanligt enpunktssvar per ort (dela_par), sa sidan laser det som forut. Kalmar kom med "gratis" (par med Visby).
+PAR = [("ESDF", "ESMS"), ("ESCF", "ESIB"), ("ESPA", "ESPE"), ("ESCM", "ESSA"), ("ESSV", "ESMQ"), ("ESGG", "ESMV")]
 # Molnen och vinden pa modellnivaer hamtas upp till TOPP_FL (det tunga). Tryckytor och
 # isbildning hamtas hela vagen (litet). Valjer man hogre topp pa sidan hamtar den sjalv resten.
 TOPP_FL = 450   # 18/11: tillbaka till FL450 (FL200 sparade lite tid)
@@ -164,6 +169,55 @@ def lagsta_niva(stat):
     return max(0, k)
 
 
+def par_yx(rr):
+    """Index-uttryck for en eller tva punkter: ("[y0:sy:y1][x0:sx:x1]", [(j, i) for varje punkt i rutan])."""
+    ys, xs = sorted({r[0] for r in rr}), sorted({r[1] for r in rr})
+    dim = lambda v: f"[{v[0]}]" if len(v) == 1 else f"[{v[0]}:{v[1] - v[0]}:{v[1]}]"
+    return dim(ys) + dim(xs), [(ys.index(r[0]), xs.index(r[1])) for r in rr]
+
+
+_HUV = re.compile(r"^([\w.]+)((?:\[\d+\])+)$")
+
+
+def dela_par(txt, j, i, ny, nx):
+    """Gor om ett thredds-ascii-svar for en ny x nx-ruta till ett svar for punkten (j, i), exakt som om
+    punkten hamtats ensam. Alla falt i fragan har [..][y][x] sist."""
+    if ny == 1 and nx == 1:
+        return txt
+    ut, akt, start = [], None, False
+    for rad in txt.split("\n"):
+        if not start:
+            if rad.startswith("----------"):
+                start = True
+            else:   # DDS-delen: [y = 2] / [x = 2] -> 1
+                rad = re.sub(r"\[y = \d+\]", "[y = 1]", re.sub(r"\[x = \d+\]", "[x = 1]", rad))
+            ut.append(rad); continue
+        r = rad.rstrip("\r")
+        m = _HUV.match(r.strip())
+        if m:
+            namn, dims = m.group(1), re.findall(r"\d+", m.group(2))
+            if namn.endswith(".y") and dims == [str(ny)]: akt = ("y", None)
+            elif namn.endswith(".x") and dims == [str(nx)]: akt = ("x", None)
+            elif len(dims) >= 2 and dims[-2:] == [str(ny), str(nx)]:
+                akt = ("falt", len(dims)); dims[-2:] = ["1", "1"]
+                r = namn + "".join(f"[{d}]" for d in dims)
+            else: akt = None
+            ut.append(r); continue
+        if not r.strip() or akt is None:
+            ut.append(r); continue
+        if akt[0] in ("y", "x"):
+            v = [x.strip() for x in r.split(",")]
+            ut.append(v[j if akt[0] == "y" else i]); continue
+        # falt: "[t][k][y], v0, v1"
+        p = r.index(","); pre, v = r[:p], [x.strip() for x in r[p + 1:].split(",")]
+        idx = re.findall(r"\[(\d+)\]", pre)
+        if int(idx[-1]) != j:
+            continue
+        idx[-1] = "0"
+        ut.append("".join(f"[{d}]" for d in idx) + ", " + v[i])
+    return "\n".join(ut)
+
+
 def punkt(dtg, nt, iy, ix):
     """Fasta data + alla bitar for en punkt. None om nagot misslyckas."""
     yx = f"[{iy}][{ix}]"
@@ -192,6 +246,70 @@ def punkt(dtg, nt, iy, ix):
         bitar.append([a, b, etikett, txt])
     return {"static": stat, "bitar": bitar}
 
+
+
+def stat_punkt(dtg, iy, ix):
+    yx = f"[{iy}][{ix}]"
+    st, stat = hamta(BAS + FIL(dtg) + ".ascii?" + enc(
+        "time,ap,b,pressure,height5,latitude" + yx + ",longitude" + yx + ",surface_geopotential[0][0]" + yx))
+    return stat if st == 200 else None
+
+
+def par_bitar(dtg, nt, rr, ks):
+    """Varv 1 for en eller tva punkter i samma fragor. Lista (en per punkt) med bitar, eller None."""
+    yx, pos = par_yx(rr)
+    ny, nx = (2 if len({r[0] for r in rr}) == 2 else 1), (2 if len({r[1] for r in rr}) == 2 else 1)
+    ut = [[] for _ in rr]
+    for a in range(0, nt, BIT):
+        b = min(a + BIT - 1, nt - 1)
+        tt, t3 = f"[{a}:{b}]", f"[{a}:{VIND_DT}:{b}]"
+        v = [n + tt + "[0]" + yx for n in YTA]
+        v.append("cloud_base_altitude" + tt + "[0]" + yx)
+        v.append("cloud_area_fraction_ml" + tt + f"[{ks}:{NIV - 1}]" + yx)
+        v.append("geopotential_pl" + tt + f"[0:{NTRYCK - 1}]" + yx)
+        v.append("icing_index" + tt + f"[0:{NIS - 1}]" + yx)
+        v += [n + t3 + f"[{ks}:{VIND_DK}:{NIV - 1}]" + yx for n in ("x_wind_ml", "y_wind_ml")]
+        v += [n + t3 + f"[0:{NTRYCK - 1}]" + yx for n in ("x_wind_pl", "y_wind_pl")]
+        etikett = ".".join(["s", "b", f"c{ks}-{NIV - 1}", f"g0-{NTRYCK - 1}", f"i0-{NIS - 1}", f"u{ks}-{NIV - 1}", f"v0-{NTRYCK - 1}"])
+        st, txt = hamta(BAS + FIL(dtg) + ".ascii?" + enc(",".join(v)), tidsgrans=300)
+        if st != 200:
+            print(f"  +{a}..+{b}: svar {st}", flush=True)
+            return None
+        for k, (j, i) in enumerate(pos):
+            ut[k].append([a, b, etikett, dela_par(txt, j, i, ny, nx)])
+    return ut
+
+
+def par_tq(dtg, nt, rr, ks):
+    """Varv 2 for en eller tva punkter i samma fragor."""
+    yx, pos = par_yx(rr)
+    ny, nx = (2 if len({r[0] for r in rr}) == 2 else 1), (2 if len({r[1] for r in rr}) == 2 else 1)
+    ut = [[] for _ in rr]
+    for a, b, st in TQ_DELAR:
+        b = min(b, nt - 1)
+        if a > b:
+            continue
+        tt = f"[{a}:{b}]" if st == 1 else f"[{a}:{st}:{b}]"
+        v = [n + tt + f"[{ks}:{NIV - 1}]" + yx for n in TQ_VAR]
+        etikett = f"T{ks}-{NIV - 1}" + ("" if st == 1 else f".x{st}")
+        code, txt = hamta(BAS + FIL(dtg) + ".ascii?" + enc(",".join(v)), tidsgrans=300)
+        if code != 200:
+            print(f"  T+q +{a}..+{b}: svar {code}", flush=True)
+            return None
+        for k, (j, i) in enumerate(pos):
+            ut[k].append([a, b, etikett, dela_par(txt, j, i, ny, nx)])
+    return ut
+
+
+def grupper():
+    """PUNKTER indelade i par enligt PAR (orter som inte finns i nagot par hamtas ensamma)."""
+    ic = {p[1]: p for p in PUNKTER}
+    g, med = [], set()
+    for par in PAR:
+        pp = [ic[x] for x in par if x in ic]
+        if pp: g.append(pp); med.update(x[1] for x in pp)
+    g += [[p] for p in PUNKTER if p[1] not in med]
+    return g
 
 
 def tq_punkt(dtg, nt, stat, iy, ix):
@@ -228,22 +346,30 @@ def varv_tq(ut):
     dtg, nt = idx["dtg"], idx["nt"]
     print(f"Varv 2 (T + fukt): {dtg}, {len(idx['punkter'])} punkter", flush=True)
     t0, ok = time.time(), 0
-    for nyckel, fil in idx["punkter"].items():
-        iy, ix = map(int, nyckel.split(":"))
-        path = os.path.join(thdir, dtg, fil)
-        with open(path, encoding="utf-8") as f:
-            d = json.load(f)
-        if any(str(b[2]).startswith("T") for b in d["bitar"]):
-            ok += 1; continue
+    for grp in grupper():   # 21/11: parvis
+        rr, paths, data = [], [], []
+        for namn, icao, lat, lon in grp:
+            r = ruta(lat, lon)
+            fil = idx["punkter"].get(f"{r[0]}:{r[1]}") if r else None
+            if not fil: continue
+            path = os.path.join(thdir, dtg, fil)
+            with open(path, encoding="utf-8") as f:
+                d = json.load(f)
+            if any(str(b[2]).startswith("T") for b in d["bitar"]):
+                ok += 1; continue
+            rr.append(r); paths.append(path); data.append(d)
+        if not rr: continue
         t1 = time.time()
-        tq = tq_punkt(dtg, nt, d["static"], iy, ix)
+        ks = min(lagsta_niva(d["static"]) for d in data)
+        tq = par_tq(dtg, nt, rr, ks)
         if not tq:
-            print(f"{nyckel}: T+q misslyckades", flush=True); continue
-        d["bitar"] += tq
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
-        ok += 1
-        print(f"{nyckel}: T+q {time.time() - t1:.0f} s", flush=True)
+            print(f"{'+'.join(p[1] for p in grp)}: T+q misslyckades", flush=True); continue
+        for d, path, bt in zip(data, paths, tq):
+            d["bitar"] += bt
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
+            ok += 1
+        print(f"{'+'.join(p[1] for p in grp)}: T+q {time.time() - t1:.0f} s", flush=True)
     if ok == 0:
         print("Varv 2: ingen punkt fick T+q."); return 0
     idx["tq"] = ok == len(idx["punkter"])          # alla klara -> inte igen; annars forsoker nasta korning av skriptet
@@ -463,21 +589,26 @@ def main():
     ny = os.path.join(thdir, dtg)
     os.makedirs(ny, exist_ok=True)
     punkter, t0 = {}, time.time()
-    for namn, icao, lat, lon in PUNKTER:
-        r = ruta(lat, lon)
-        if not r:
-            continue
-        iy, ix = r
+    for grp in grupper():   # 21/11: tva orter per fraga
         t1 = time.time()
-        d = punkt(dtg, nt, iy, ix)
-        if not d:
-            print(f"{icao}: misslyckades", flush=True)
+        rr, stats = [], []
+        for namn, icao, lat, lon in grp:
+            r = ruta(lat, lon)
+            s_ = stat_punkt(dtg, *r) if r else None
+            if s_: rr.append(r); stats.append(s_)
+            else: print(f"{icao}: fasta data saknas", flush=True)
+        if not rr: continue
+        ks = min(lagsta_niva(s_) for s_ in stats)   # molnen och vinden fran denna niva och nedat (lagsta av de tva)
+        bt = par_bitar(dtg, nt, rr, ks)
+        if not bt:
+            print(f"{'+'.join(p[1] for p in grp)}: misslyckades", flush=True)
             continue
-        fil = f"{iy}_{ix}.json"
-        with open(os.path.join(ny, fil), "w", encoding="utf-8") as f:
-            json.dump(d, f, ensure_ascii=False, separators=(",", ":"))
-        punkter[f"{iy}:{ix}"] = fil
-        print(f"{icao}: {time.time() - t1:.0f} s, {os.path.getsize(os.path.join(ny, fil)) // 1024} kB", flush=True)
+        for (iy, ix), s_, b_ in zip(rr, stats, bt):
+            fil = f"{iy}_{ix}.json"
+            with open(os.path.join(ny, fil), "w", encoding="utf-8") as f:
+                json.dump({"static": s_, "bitar": b_}, f, ensure_ascii=False, separators=(",", ":"))
+            punkter[f"{iy}:{ix}"] = fil
+        print(f"{'+'.join(p[1] for p in grp)}: {time.time() - t1:.0f} s", flush=True)
     if not punkter:
         print("Inga punkter kunde hamtas - behaller den gamla korningen.")
         shutil.rmtree(ny, ignore_errors=True)
