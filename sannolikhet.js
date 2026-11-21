@@ -54,6 +54,13 @@ const PPARAM = {
   // 21/11 (matprov S): relativ fukt 2 m finns for alla 30 medlemmar - anvands for daggpunkten (rimfrost) i kombinationerna
   rh:    { namn: "Relativ fukt 2 m", var: "relative_humidity_2m", enhet: "%", konv: v => Math.min(100, v > 1.5 ? v : v * 100), villkor: "≥", agg: "max", std: 95, snabb: [70, 80, 90, 95, 100], bitar: 8, steg: 1 }
 };
+// NYTT 21/11 kvall: rutfargerna forstoras i canvasen (varje ruta = flera pixlar, utan utjamning) innan de blir
+// <image> - Safari m.fl. struntar i image-rendering:pixelated pa SVG-bilder och suddar ut rutorna nar man zoomar.
+function skarpaRutor(cv) {
+  const f = Math.max(1, Math.min(8, Math.floor(2400 / Math.max(cv.width, cv.height)))); if (f === 1) return cv.toDataURL();
+  const c2 = document.createElement("canvas"); c2.width = cv.width * f; c2.height = cv.height * f;
+  const g = c2.getContext("2d"); g.imageSmoothingEnabled = false; g.drawImage(cv, 0, 0, c2.width, c2.height); return c2.toDataURL();
+}
 function oktas(v) { return Math.min(8, (v > 1.5 ? v / 100 : v) * 8); }
 // Olinjar skala for 1 byte (Jakobs forslag 16/11): fint steg dar trosklarna finns, grovt dar det inte spelar roll.
 // [fran, till, steg] -> lista med alla tillatna varden. Koden ar platsen i listan.
@@ -937,7 +944,7 @@ async function probVisa() {
       px[i] = f[1]; px[i + 1] = f[2]; px[i + 2] = f[3]; px[i + 3] = 255;
     }
     cx.putImageData(img, 0, 0);
-    g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
+    g.appendChild(el("image", { href: skarpaRutor(cv), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
       preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   }
   // NYTT 20/11 kvall: medlem 0:s linje for troskeln ovanpa sannolikheten (bla) - ligger den langt fran de roda
@@ -1423,12 +1430,13 @@ function bytLage(nytt) {
   if (nytt !== (fav ? "f" : lage) && typeof visaTestskylt === "function") visaTestskylt();   // testskylt vid flikbyte (19/11 kvall)
   const varFav = fav; fav = nytt === "f"; if (fav) nytt = "p";
   if (varFav && !fav) favUt();
-  lage = nytt; document.body.classList.toggle("p", nytt === "p"); document.body.classList.toggle("fav", fav); document.body.classList.toggle("taf", nytt === "taf"); document.body.classList.toggle("m0", nytt === "m0");
+  lage = nytt; document.body.classList.toggle("p", nytt === "p"); document.body.classList.toggle("fav", fav); document.body.classList.toggle("taf", nytt === "taf"); document.body.classList.toggle("m0", nytt === "m0"); document.body.classList.toggle("sat", nytt === "sat"); document.body.classList.toggle("rad", nytt === "rad"); document.body.classList.toggle("obs", nytt === "sat" || nytt === "rad");
   $("flikTH").setAttribute("aria-selected", String(nytt === "th")); $("flikP").setAttribute("aria-selected", String(nytt === "p" && !fav)); $("flikF").setAttribute("aria-selected", String(fav));
-  $("flikTAF").setAttribute("aria-selected", String(nytt === "taf")); $("flikM0").setAttribute("aria-selected", String(nytt === "m0"));
+  $("flikTAF").setAttribute("aria-selected", String(nytt === "taf")); $("flikSat").setAttribute("aria-selected", String(nytt === "sat")); $("flikRad").setAttribute("aria-selected", String(nytt === "rad")); $("vyObs").hidden = nytt !== "sat" && nytt !== "rad"; $("flikM0").setAttribute("aria-selected", String(nytt === "m0"));
   $("vyTH").hidden = nytt !== "th"; $("vyP").hidden = nytt !== "p"; $("vyTAF").hidden = nytt !== "taf"; $("vyM0").hidden = nytt !== "m0";
-  $("underrubrik").textContent = nytt === "m0" ? "Karta m0 · AROME 2,5 km (MEPS medlem 0), fält i färg + linjer" : nytt === "taf" ? "TAF-bevakning · grön/gul/röd per timme, METAR och larm" : fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
+  $("underrubrik").textContent = nytt === "sat" ? "Satellit · MTG (EUMETSAT), var 10:e minut" : nytt === "rad" ? "Radar · SMHI eller met.no, var 5:e minut (met.no med prognos)" : nytt === "m0" ? "Karta m0 · AROME 2,5 km (MEPS medlem 0), fält i färg + linjer" : nytt === "taf" ? "TAF-bevakning · grön/gul/röd per timme, METAR och larm" : fav ? "Favoriter · förhämtad ensemble, laddas direkt" : nytt === "p" ? "Sannolikhet · MEPS-ensemblen 2,5 km (30 medlemmar)" : "Tid-höjd · AROME 2,5 km (MEPS medlem 0)";
   if (nytt === "taf" && typeof tafIn === "function") setTimeout(tafIn, 0);
+  if (typeof obsLage === "function") setTimeout(() => obsLage(nytt), 0);   // 21/11 kvall
   if (typeof m0Rita === "function") { if (nytt === "m0") setTimeout(m0In, 0); else $("kM0").textContent = ""; }
   if (typeof satVb === "function" && typeof vb !== "undefined" && vb) setTimeout(() => satVb(vb.x, vb.y, vb.w), 0);   // 21/11: kartans granser byts (Europa i TAF)
   lagra("mt:lageVy", fav ? "f" : nytt); $("kTips").hidden = true;
@@ -1544,7 +1552,7 @@ function bytLage(nytt) {
   setInterval(() => { if (lage === "p" && visaSnabb && !document.hidden) hamtaRegister().then(ritaOmrade); }, 60e3);
   $("visaOmr").addEventListener("click", e => { visaOmr = !visaOmr; lagra("mt:visaOmr", visaOmr ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaOmr)); ritaOmrade(); });
   $("pStopp").addEventListener("click", () => { stoppad = true; if (avbryt) avbryt.abort(); status("Stoppar …"); });
-  $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f")); $("flikTAF").addEventListener("click", () => bytLage("taf")); $("flikM0").addEventListener("click", () => bytLage("m0"));
+  $("flikTH").addEventListener("click", () => bytLage("th")); $("flikP").addEventListener("click", () => bytLage("p")); $("flikF").addEventListener("click", () => bytLage("f")); $("flikTAF").addEventListener("click", () => bytLage("taf")); $("flikM0").addEventListener("click", () => bytLage("m0")); $("flikSat").addEventListener("click", () => bytLage("sat")); $("flikRad").addEventListener("click", () => bytLage("rad"));
   favKnappar(); $("pTrosk").addEventListener("input", favMarkera);
   $("m0Linje").setAttribute("aria-pressed", String(visaM0Linje));
   $("m0Linje").addEventListener("click", e => { visaM0Linje = !visaM0Linje; lagra("mt:m0Linje", visaM0Linje ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaM0Linje)); probVisa(); });
@@ -1552,5 +1560,5 @@ function bytLage(nytt) {
   try { await laddaIndex(); } catch (e) {}
   // 20/11 kvall: nya besokare (inget sparat val) borjar i Favoriter
   const forst = lasa("mt:lageVy");
-  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "m0") bytLage("m0"); else if (forst === "f" || !forst) bytLage("f");
+  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "m0") bytLage("m0"); else if (forst === "sat" || forst === "rad") bytLage(forst); else if (forst === "f" || !forst) bytLage("f");
 })();

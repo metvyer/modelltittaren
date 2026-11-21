@@ -88,7 +88,7 @@ async function bildSpara() {
     if (K) { g.drawImage(K.im, pad, y, K.w, K.h); y += K.h + (T ? pad : 0); }
     if (T) { g.drawImage(T.im, pad, y, T.w, T.h); y += T.h; }
     g.fillStyle = cs.getPropertyValue("--dim") || "#666"; g.font = "11px " + cs.fontFamily; g.textBaseline = "alphabetic";
-    g.fillText("Modelltittaren (testsida) · " + tid + " · TAF/METAR: aviationweather.gov, IMGW", pad, H - pad + 4);
+    g.fillText(tid + " · TAF/METAR: aviationweather.gov, IMGW", pad, H - pad + 4);
     const blob = await new Promise(ok => c.toBlob(ok, "image/png"));
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "taf_" + nu.toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "_") + "Z_" + val + ".png";
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);

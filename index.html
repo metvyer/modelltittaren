@@ -71,7 +71,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #karta.drar { cursor: grabbing; }
 #kHav { fill: var(--hav); }
 /* 21/11: Europakartan (bara TAF-fliken) - grovt underlag utanfor MEPS-rutan */
-#kHavEU { fill: var(--hav); } body:not(.taf) #kHavEU, body:not(.taf) #kGeoEU { display: none; }
+#kHavEU { fill: var(--hav); } body:not(.taf):not(.sat) #kHavEU, body:not(.taf):not(.sat) #kGeoEU { display: none; }
 #kGeoEU .land { fill: var(--land); stroke: var(--kust); fill-rule: evenodd; } #kGeoEU .sjo { fill: var(--hav); stroke: var(--kust); }
 #kGeoEU .grans { fill: none; stroke: var(--grans); } #kGeoEU .grad { fill: none; stroke: var(--gradnat); } #kGeoEU .meps { fill: none; stroke: var(--dim); }
 #karta .land { fill: var(--land); stroke: var(--kust); fill-rule: evenodd; }
@@ -80,7 +80,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #karta .grad { fill: none; stroke: var(--gradnat); }
 #kProb { opacity: .78; shape-rendering: crispEdges; }
 /* 21/11 kvall: kust och granser overst */
-#kKust, #kKustEU { pointer-events: none; } body:not(.taf) #kKustEU { display: none; }
+#kKust, #kKustEU { pointer-events: none; } body:not(.taf):not(.sat) #kKustEU { display: none; } body:not(.taf) #kTaf { display: none; } body:not(.obs) #kObs { display: none; }
 #karta .okust { fill: none; stroke: var(--kustO); stroke-width: 1.1; } #karta .osjo { stroke-width: .7; }
 #karta .ograns { fill: none; stroke: var(--gransO); stroke-width: 1.4; stroke-dasharray: 6 3; }
 #karta .mk { cursor: pointer; }
@@ -130,6 +130,13 @@ body.taf .arbete { grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1.2fr);
 body.taf #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 body:not(.taf) #kTaf { display: none; }
 body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none; }
+/* 21/11 kvall: satellit- och radarflikarna */
+body.obs .baraTH, body.obs .baraP, body.obs .ejTaf { display: none !important; }
+body.obs .arbete { grid-template-columns: minmax(0, 1.9fr) minmax(300px, 1fr); }
+body.obs #karta { width: 100%; height: 80vh; aspect-ratio: auto; margin: 0 auto; }
+body.obs #kProb, body.obs #kM0, body.obs #kSiff, body.obs #kOmr { display: none; }
+@media (max-width: 860px) { body.obs .arbete { grid-template-columns: minmax(0, 1fr); } }
+#kObs image { image-rendering: auto; } #obsTid.prognos { color: #b45309; font-weight: 700; }
 @media (max-width: 860px) { body.taf .arbete { grid-template-columns: minmax(0, 1fr); } }
 .tafinst { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; margin-bottom: 8px; }
 .tafinst input[type=number] { width: 5em; }
@@ -137,7 +144,9 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .tafinst .gul { color: #a16207; font-weight: 700; } .tafinst .rod { color: #b91c1c; font-weight: 700; }
 .taftab { border-collapse: collapse; font-size: 12px; width: 100%; }
 .taftab th, .taftab td { padding: 0; height: 20px; }
-.taftab th.tim { font-weight: 500; color: var(--dim); font-size: 10px; text-align: left; }
+.taftab th.tim { font-weight: 500; color: var(--dim); font-size: 10px; text-align: left; position: relative; width: 12px; }
+.taftab th.tim span { position: absolute; left: 1px; bottom: 3px; white-space: nowrap; pointer-events: none; }   /* 21/11 kvall: lika breda timmar */
+.taftab td.cell { width: 12px; }
 .taftab td.namn { white-space: nowrap; padding: 0 6px 0 0; }
 .taftab td.met { white-space: nowrap; padding: 0 6px; font-variant-numeric: tabular-nums; }
 .taftab td.cell { min-width: 9px; border-left: 1px solid var(--panel); border-right: 1px solid var(--panel); background-clip: padding-box; }
@@ -292,7 +301,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme">Karta m0</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Dela det du tittar på: ger en länk som kollegor kan öppna. När du ändrar följer deras sida med (inom några sekunder).">Dela</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme">Karta m0</button><button role="tab" id="flikSat" aria-selected="false" title="Satellitbilder från MTG (EUMETSAT) – välj bildtyp, loop och automatisk uppdatering">Satellit</button><button role="tab" id="flikRad" aria-selected="false" title="Radar från SMHI eller met.no (med prognos 2 h) – loop och automatisk uppdatering">Radar</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Dela det du tittar på: ger en länk som kollegor kan öppna. När du ändrar följer deras sida med (inom några sekunder).">Dela</button>
 </div>
 
 <div class="nykorning" id="nyKorning" hidden role="status"></div>
@@ -330,7 +339,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g><g id="kKustEU"></g><g id="kKust"></g><g id="kTaf"></g><g id="kRit"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kMark"></g><g id="kKustEU"></g><g id="kKust"></g><g id="kTaf"></g><g id="kRit"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   </div>
@@ -411,6 +420,24 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   <dl class="info"><dt>Körning</dt><dd id="m0Korn">–</dd><dt>Status</dt><dd id="m0Status"></dd></dl>
   <p class="karttips">Fälten gäller medlem 0 (det-körningen, samma som tid-höjd) för hela den förhämtade rutan, var 5:e km. Håll muspekaren över kartan för värdena. Ett anrop per fält och timme – nästa timme hämtas i förväg. Nederbörd, regn och snö = mängd senaste timmen.</p>
 </div>
+<div id="vyObs" hidden>
+  <div class="pkontroller">
+    <div class="falt"><label for="obsKalla" id="obsKallaEtikett">Bild</label><select id="obsKalla"></select></div>
+    <div class="falt"><label for="obsLangd">Loop</label><select id="obsLangd"></select></div>
+    <button class="sek liten" id="obsBlixt" aria-pressed="false" title="Lägg blixtar från MTG:s blixtkamera (LI, senaste 5 min före bildens tid) ovanpå">Blixtar</button>
+    <span id="obsPrognosRad"><button class="sek liten" id="obsPrognos" aria-pressed="true" title="met.no:s radarprognos (nowcast) ca 2 h framåt efter senaste bilden – markeras PROGNOS">Prognos 2 h</button></span>
+    <button class="sek liten" id="obsAuto" aria-pressed="true" title="Hämta nya bilder automatiskt (kollar varannan minut). Står du på senaste bilden följer den med.">Auto</button>
+    <div class="falt"><label for="obsOpac">Täckning</label><input type="range" id="obsOpac" min="20" max="100" step="5" style="width:90px"></div>
+  </div>
+  <div class="pkontroller m0tidrad">
+    <button class="sek" id="obsBak" title="Bakåt (vänsterpil)">◀</button><button class="sek" id="obsSpela" aria-pressed="false" title="Spela/pausa loopen (mellanslag)">▶</button><button class="sek" id="obsFram" title="Framåt (högerpil)">▶|</button>
+    <div class="m0tidmitt"><div id="obsTid" class="tidsvald"></div><input type="range" id="obsReglage" min="0" max="0" value="0" title="Dra för att välja bild"></div>
+    <button class="sek liten" id="obsNu" title="Hoppa till senaste bilden">Senaste</button>
+  </div>
+  <div class="m0forkl" id="obsForkl"></div>
+  <dl class="info"><dt>Status</dt><dd id="obsStatus">–</dd></dl>
+  <p class="karttips">Bilderna hämtas direkt av din webbläsare från EUMETSAT, SMHI och met.no – bara det som syns, i skärmens upplösning – och läggs om till kartans projektion. Zoomar eller flyttar du hämtas de om. Satellit: ny bild var 10:e minut, ca 15–20 min fördröjning. Radar: var 5:e minut. Pilar = stega, mellanslag = spela.</p>
+</div>
 <div id="vyTAF" hidden>
   <div class="tafinst">
     <span class="grp"><span class="gul">Gul</span> bas &lt; <input type="number" id="tafGulBas" step="100"> ft eller sikt &lt; <input type="number" id="tafGulSikt" step="0.1" min="0"> km</span>
@@ -456,7 +483,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   <button class="sek liten" id="lIso" aria-pressed="true" title="0, −10 och −20 °C ur modellens temperatur på alla modellnivåer (förhämtade flygplatser: varje timme +3 till +23, var 3:e timme +24 till +45)">Isotermer</button>
   <button class="sek liten" id="lMetar" aria-pressed="false" title="Visa observerade molnskikt (METAR) och senaste TAF från närmaste flygplats">METAR/TAF</button>
   <button class="sek liten" id="lRisk" aria-pressed="false" title="Riskpanel under diagrammet: sannolikhet (andel av ensemblens 30 medlemmar) timme för timme för sidvind i byar per bana, byvind, dimma, låga moln, sikt, molnbas och minusgrader. Alla rader är släckta från start.">Risk</button>
-  <button class="sek liten" id="lIs" aria-pressed="false" title="Nedisning från MEPS isindex. TEST: gränserna är obekräftade och underskattar jämfört med SMHI">Nedisning (test)</button>
+  <button class="sek liten" id="lIs" aria-pressed="false" title="Isbildning från MEPS isindex. TEST: gränserna är obekräftade och underskattar jämfört med SMHI">Isbildning (test)</button>
   <span class="lagetips" id="metarInfo" title="Observerade molnskikt (METAR från aviationweather.gov) som magenta streck vid observationstiden; tunt = FEW, tjockt = OVC, vit med streckad kant = VV (vertikal sikt)"></span>
   <span class="lagetips" id="lageTips"></span>
 </div>
@@ -476,15 +503,15 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <button class="sek liten" id="skewIn" title="Zooma in (eller mushjul / nyp med två fingrar)">+</button>
     <button class="sek liten" id="skewUt" title="Zooma ut">−</button>
     <button class="sek liten" id="skewHela" title="Hela diagrammet (eller dubbelklicka)">Hela</button>
-    <button class="sek liten" id="skewVatten" aria-pressed="false" title="Flytande molnvatten (g/kg) som stapel till höger. Lila = underkylt (T under 0 °C) – nedisningsrisk. Hämtas för timmarna du tittar på (eller med Bara skew-T).">Molnvatten</button>
+    <button class="sek liten" id="skewVatten" aria-pressed="false" title="Flytande molnvatten (g/kg) som stapel till höger. Lila = underkylt (T under 0 °C) – isbildningsrisk. Hämtas för timmarna du tittar på (eller med Bara skew-T).">Molnvatten</button>
     <button class="sek liten" id="skewGraupel" aria-pressed="false" title="Graupel (trindsnö/snöhagel, g/kg) som egen stapel till höger. Hämtas för timmarna du tittar på (eller med Bara skew-T).">Graupel</button>
-    <button class="sek liten" id="skewLyft" aria-pressed="false" title="Lyftkurva från marken (2 m-värden), LCL, LFC, EL, CAPE och CIN – och nedisningsindex som röda staplar till höger">Lyft/CAPE</button>
+    <button class="sek liten" id="skewLyft" aria-pressed="false" title="Lyftkurva från marken (2 m-värden), LCL, LFC, EL, CAPE och CIN – och isbildningsindex som röda staplar till höger">Lyft/CAPE</button>
     <span id="skewInfo" class="dim"></span>
     <button class="sek liten" id="skewStang" title="Stäng skew-T">✕</button>
   </div>
   <svg id="skewSvg" viewBox="0 0 640 540" preserveAspectRatio="xMidYMid meet"></svg>
   <div id="skewLyftText" class="skewlyft" hidden></div>
-  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Lyft/CAPE: orange streckad = lyftkurva från marken, röd yta = CAPE, blå = CIN, röda staplar till höger = nedisningsindex (TRC eller mer). Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. <b>Molnvatten</b>/<b>Graupel</b> (knappar): staplar per nivå i g/kg (full stapel = 0,5 g/kg), lila = underkylt vatten (T under 0 °C), siffran under = största värdet (lila = största underkylda). Modellens eget molnvatten – en uppskattning, inte en mätning. <b>Bara skew-T</b> (bredvid Hämta): hämtar bara skew-T-data, ett dygn per tryck i 6 h-bitar. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶. Klickar du en ny plats på kartan följer skew-T med (samma timme).</div>
+  <div class="dim skewforkl">Heldragen svart = temperatur (prick per modellnivå), streckad = daggpunkt (MEPS medlem 0). Mörkröda 45°-linjer = isotermer (0 °C blå), bruna = torradiabater, gröna = fuktadiabater, gröna streckade = blandningskvot g/kg. Röd/grön prick vid marken = T/Td 2 m. Lyft/CAPE: orange streckad = lyftkurva från marken, röd yta = CAPE, blå = CIN, röda staplar till höger = isbildningsindex (TRC eller mer). Remsan längst till vänster: modellens molnmängd per nivå. Höger: vindflaggor. <b>Molnvatten</b>/<b>Graupel</b> (knappar): staplar per nivå i g/kg (full stapel = 0,5 g/kg), lila = underkylt vatten (T under 0 °C), siffran under = största värdet (lila = största underkylda). Modellens eget molnvatten – en uppskattning, inte en mätning. <b>Bara skew-T</b> (bredvid Hämta): hämtar bara skew-T-data, ett dygn per tryck i 6 h-bitar. Zooma med + − eller mushjulet (två fingrar på mobil), dra för att flytta, dubbelklicka eller Hela för att återställa. Klicka på en annan timme i tid-höjd eller stega med ◀ ▶. Klickar du en ny plats på kartan följer skew-T med (samma timme).</div>
 </div>
 
 <div class="forklaring" id="fVind" hidden>
@@ -496,7 +523,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   <span><span class="ruta" style="background:var(--sct)"></span>SCT 3–4/8</span>
   <span><span class="ruta" style="background:var(--bkn)"></span>BKN 5–7/8</span>
   <span><span class="ruta" style="background:var(--ovc)"></span>OVC 8/8</span>
-  <span id="fIs" hidden>Röd linje = nedisning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
+  <span id="fIs" hidden>Röd linje = isbildning bas–topp, symbol: båge = TRC, +1/2/3 streck = LGT/MOD/SEV (index-gränser obekräftade)</span>
   <span>Sikt km (horisontell, 2 m), avrundat nedåt, en decimal under 10 km</span>
   <span>Bas hft = modellens molnbas i hundratal fot över mark</span>
   <span id="fMetar" hidden>METAR (observerat, magenta, ett streck per observation vid observationstiden, underkant = molnbas):<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="7" width="12" height="2" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>FEW<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="5" width="12" height="4" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>SCT<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="3" width="12" height="6" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>BKN<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="1" width="12" height="8" fill="#c000c0" stroke="#fff" stroke-width="0.6"/></svg>OVC<svg width="14" height="10" style="vertical-align:-1px;margin:0 2px 0 6px"><rect x="1" y="2" width="12" height="6" fill="#fff" stroke="#c000c0" stroke-width="1.6" stroke-dasharray="3 2"/></svg>VV (vertikal sikt) – hela texten i hovringen. Raderna Sikt obs och T obs: varje METAR vid sin observationstid (HH:20 och HH:50); samma värde hela timmen skrivs en gång; >10 = 9999/CAVOK.</span>
@@ -574,7 +601,7 @@ let visaHovring = lasa("mt:visaHovring") !== "nej";   // NYTT 19/11 kvall: hovri
 let visaIsoT = lasa("mt:visaIsoT") !== "nej";   // NYTT 19/11 em: 0/-10/-20 °C-linjer (pa som standard)
 // Isotermerna: farg, bredd. Glesare tidssteg (var 3:e timme efter +23) ritas blekare.
 const ISOTERM = [{ t: 0, farg: "#dc2626", bredd: 2, namn: "0°" }, { t: -10, farg: "#d97706", bredd: 1.6, namn: "−10°" }, { t: -20, farg: "#7c3aed", bredd: 1.4, namn: "−20°" }];
-let visaIs = lasa("mt:visaIs") === "ja";   // nedisning (test) - av som standard tills metoden ar bekraftad
+let visaIs = lasa("mt:visaIs") === "ja";   // isbildning (test) - av som standard tills metoden ar bekraftad
 let visaMetar = lasa("mt:visaMetar") === "ja";   // METAR i tid-hojd (av som standard)   // tunna linjer for modellnivaerna i tid-hojd
 
 function lagra(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
@@ -1022,7 +1049,7 @@ function hojder(t, kFran) {
 const COL = 22, PLOT_H = 400, TOPP_RAD = 30, RAD_H = 17;
 // Tabellraderna under diagrammet (nyckel, etikett). Obs-raderna (magenta) visas bara nar METAR ar pa.
 const RAD_NAMN = { tid: "Tid UTC", sikt: "Sikt km", siktObs: "Sikt obs", bas: "Bas hft", t: "T °C", tObs: "T obs", td: "Td °C",
-  pil: "Vind", vind: "Vind kt", by: "By kt", vader: "Väder", moln: "Moln", nb: "Nb mm/h", is: "Nedisning" };
+  pil: "Vind", vind: "Vind kt", by: "By kt", vader: "Väder", moln: "Moln", nb: "Nb mm/h", is: "Isbildning" };
 function tabellRader(obs) {
   return ["tid", "sikt", ...(obs ? ["siktObs"] : []), "bas", "t", ...(obs ? ["tObs"] : []), "td", "pil", "vind", "by", "vader", "moln", "nb", ...(visaIs ? ["is"] : [])];
 }
@@ -1229,7 +1256,7 @@ function ritaNivaer(svg, sk, zTopp, c, fore) {
       if (t >= 0) g.appendChild(el("text", { x: t * COL + 2, y: sk.y(zs[t][k] * FOT) - 2, "font-size": 8, fill: c("--fg"), stroke: c("--bg"), "stroke-width": 2.5, "paint-order": "stroke" }, String(k)));
     }
   }
-  svg.insertBefore(g, fore.nextSibling);   // ovanpa moln och nedisning, under vind och tabell
+  svg.insertBefore(g, fore.nextSibling);   // ovanpa moln och isbildning, under vind och tabell
 }
 
 // NYTT 19/11 em: isotermer (0/-10/-20 °C) med marching squares i rutnatet tid x modellniva.
@@ -1343,7 +1370,7 @@ function rita() {
     if (zSaknas === 0) { if (saknasStart < 0) saknasStart = t; }
     else { if (saknasStart >= 0) { saknasRekt(saknasStart, t - 1, 0); saknasStart = -1; } if (zSaknas > 0) saknasRekt(t, t, zSaknas); }
 
-    // nedisning
+    // isbildning
     let iMax = NaN, ib = NaN, it = NaN;
     for (let j = 0; j < NIS; j++) if (M.iceHar[t * NIS + j]) { const v = M.ice[t * NIS + j]; if (isFinite(v)) { if (!(v <= iMax)) iMax = v; if (v >= IS[0]) { if (!isFinite(ib)) ib = M.h5[j]; it = M.h5[j]; } } }
     const kat = !isFinite(iMax) ? 0 : iMax >= IS[3] ? 4 : iMax >= IS[2] ? 3 : iMax >= IS[1] ? 2 : iMax >= IS[0] ? 1 : 0;
@@ -1649,7 +1676,7 @@ const SKEW_PTOPP = 200, SKEW_PBOTT = 1058;   // hPa (FL-10 = 1050 hPa syns, for 
 const SKEW_BIT = 6, VATTEN_P = 400, VATTEN_MAX = 0.5, GRAUPEL_MAX = 0.5;   // hPa; staplarnas fulla langd i g/kg
 const VATTEN_FARG = "#0284c7", UNDERKYLT_FARG = "#c026d3", GRAUPEL_FARG = "#b45309";
 let baraSkew = lasa("mt:baraSkew") === "ja", visaVatten = lasa("mt:skewVatten") === "ja", visaGraupel = lasa("mt:skewGraupel") === "ja";
-let visaLyft = lasa("mt:visaLyft") === "ja";   // NYTT 19/11 kvall: lyftkurva/CAPE/nedisning i skew-T (av som standard)
+let visaLyft = lasa("mt:visaLyft") === "ja";   // NYTT 19/11 kvall: lyftkurva/CAPE/isbildning i skew-T (av som standard)
 let SKZ = { z: 1, pB: 0, TL: 0, M: null, geo: null };   // zoomlage i skew-T (pB = 0 -> utgangslage)
 const SKZ_MAX = 8;
 // skarmpunkt (i viewBox-enheter) <-> (temperatur, tryck)
@@ -1802,7 +1829,7 @@ function ritaSkewT() {
   // ---- Lyft/CAPE (knappen Lyft/CAPE, NYTT 19/11 kvall) ----
   // Paket fran marken med 2 m-temperatur och -daggpunkt: torradiabatiskt till LCL (Bolton), sedan fuktadiabatiskt
   // (pseudoadiabat). CAPE/CIN med virtuell temperatur over modellnivaerna: CAPE = Rd * sum((Tvp - Tve) * dln p).
-  // Rott = positiv yta ovanfor LFC, blatt = CIN under LFC. Nedisningsindex (>= TRC) som roda staplar till hoger.
+  // Rott = positiv yta ovanfor LFC, blatt = CIN under LFC. Isbildningsindex (>= TRC) som roda staplar till hoger.
   let lyftText = "";
   if (visaLyft && pT.length && isFinite(t2) && isFinite(td2)) {
     const p0 = ps / 100, T0 = t2 + 273.15, D0 = td2 + 273.15;
@@ -1834,7 +1861,7 @@ function ritaSkewT() {
     const markera = (p, txt) => { if (p > pBott || p < pTopp) return; const y = yP(p); g("line", { x1: X1 - 60, x2: X1, y1: y, y2: y, stroke: "#ea580c", "stroke-width": 1.5 }); g("text", { x: X1 - 62, y: y + 3.5, "font-size": 10, "font-weight": 700, "text-anchor": "end", fill: "#c2410c" }, txt); };
     markera(pL, "LCL " + flAv(pL)); if (lfc) markera(lfc, "LFC " + flAv(lfc)); if (el_ && cape > 1) markera(el_, "EL " + flAv(el_));
     lyftText = "Lyft från marken: LCL " + flAv(pL) + " (" + Math.round(pL) + " hPa)" + (lfc ? ", LFC " + flAv(lfc) : ", ingen LFC") + (el_ && cape > 1 ? ", EL " + flAv(el_) : "") + (lfc !== null ? " · CAPE " + Math.round(cape) + " J/kg · CIN " + Math.round(cin) + " J/kg" : " · CAPE 0 J/kg (paketet blir aldrig varmare än omgivningen)");
-    // nedisningsindex (10 hojder over marken) som roda staplar vid hogerkanten
+    // isbildningsindex (10 hojder over marken) som roda staplar vid hogerkanten
     const zz = hojder(t, 0);
     if (zz) for (let j = 0; j < NIS; j++) { if (!M.iceHar[t * NIS + j]) continue; const v = M.ice[t * NIS + j]; if (!(v >= IS[0])) continue;
       const pAv = h => { for (let k = NIV - 1; k > 0; k--) if (h >= (k === NIV - 1 ? 0 : zz[k]) && h <= zz[k - 1]) return pk(k); return NaN; };
@@ -2006,7 +2033,7 @@ function tipsText(t, yPix, xPix) {
     if (isFinite(nb)) rad.push(["Nederbörd", nb.toFixed(1) + " mm/h"]);
     if (M.cbHar[t]) rad.push(["Molnbas", isFinite(M.cb[t]) ? Math.round(M.cb[t] * FOT) + " ft (" + M.cb[t].toFixed(1) + " m) över mark, modellens värde" : "inget moln"]);
     if (isFinite(Y(9))) rad.push(["Totalt moln", Math.round((Y(9) > 1.5 ? Y(9) / 100 : Y(9)) * 8) + "/8"]);
-    if (visaIs && M.isKat && M.isKat[t]) rad.push(["Nedisning", ISNAMN[M.isKat[t]] + " (någonstans i höjdled)"]);
+    if (visaIs && M.isKat && M.isKat[t]) rad.push(["Isbildning", ISNAMN[M.isKat[t]] + " (någonstans i höjdled)"]);
     // Alla METAR/SPECI vars streck ligger i kolumnen, i tidsordning; den narmast
     // muspekaren i fetstil (den fyrkant man pekar pa)
     if (visaMetar && M.metar && M.metar.length) {
@@ -2213,7 +2240,7 @@ function hamtStatus(dtg, iy, ix) {
 function kartAspekt() { const r = $("karta").getBoundingClientRect(); return r.width > 20 && r.height > 20 ? r.height / r.width : KY / KX; }
 // 21/11: kartans granser - MEPS-rutan, men hela Europa i TAF-fliken (karta_europa.json)
 let KARTA_EU = null;
-const kartGr = () => lage === "taf" && KARTA_EU ? KARTA_EU : { x0: 0, y0: 0, x1: KX, y1: KY };
+const kartGr = () => (lage === "taf" || lage === "sat") && KARTA_EU ? KARTA_EU : { x0: 0, y0: 0, x1: KX, y1: KY };
 const kartMaxBredd = () => { const G = kartGr(); return Math.max(G.x1 - G.x0, (G.y1 - G.y0) / kartAspekt()); };
 function satVb(x, y, w) {
   const a = kartAspekt(); w = Math.min(kartMaxBredd(), Math.max(MIN_BREDD, w)); const h = w * a;
@@ -2223,6 +2250,7 @@ function satVb(x, y, w) {
   if (typeof ritaSiffror === "function") { clearTimeout(satVb.tim); satVb.tim = setTimeout(ritaSiffror, 120); }
   if (typeof tafRitaKarta === "function" && lage === "taf") { clearTimeout(satVb.tim2); satVb.tim2 = setTimeout(tafRitaKarta, 80); }
   if (typeof ritRita === "function") { clearTimeout(satVb.tim3); satVb.tim3 = setTimeout(ritRita, 60); }
+  if (typeof obsVyAndrad === "function") obsVyAndrad();   // 21/11 kvall: satellit/radar hamtas om for nya vyn
 }
 function zooma(f, cx, cy) {
   if (cx === undefined) { cx = vb.x + vb.w / 2; cy = vb.y + vb.h / 2; }
@@ -2413,6 +2441,7 @@ function kartKlick(e, mal) {
     if (icao && typeof tafVaxla === "function") tafVaxla(icao);
     return;
   }
+  if (lage === "sat" || lage === "rad") return;   // 21/11 kvall: klick i satellit/radar gor inget (rita gar)
   if (mk) {
     const id = mk.dataset.id;
     if (id[0] === "p") { sel.value = id.slice(1); sattPunkt(); }
@@ -2527,12 +2556,13 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261121-1600"></script>
+<script src="sannolikhet.js?v=20261121-1830"></script>
 <script src="kombo.js?v=20261121-1330"></script>
-<script src="m0karta.js?v=20261121-1330"></script>
-<script src="taf.js?v=20261121-1800"></script>
+<script src="m0karta.js?v=20261121-1830"></script>
+<script src="taf.js?v=20261121-1900"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261121-1330"></script>
-<script src="bild.js?v=20261121-1800"></script>
+<script src="bild.js?v=20261121-1900"></script>
+<script src="obs.js?v=20261121-1830"></script>
 </body>
 </html>

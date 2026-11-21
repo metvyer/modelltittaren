@@ -84,6 +84,21 @@ jobs:
         if: contains(inputs.delar, 'L')
         run: python3 verktyg/testa_smhi_radar.py
 
+      # 21/11 kvall: prov J - sidan i en riktig webblasare (playwright), skarmbilder i grenen matprov
+      - name: Prov sidan i webbläsare
+        if: contains(inputs.delar, 'J')
+        run: |
+          python3 -m pip install -q playwright || python3 -m pip install -q --break-system-packages playwright
+          python3 -m playwright install --with-deps chromium > /dev/null
+          python3 verktyg/testa_sida.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan matprov-sida
+          git rm -rq --cached .
+          git add -f matprov sida.md
+          git commit -qm "Prov J $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf origin HEAD:matprov-sida
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4

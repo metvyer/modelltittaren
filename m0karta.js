@@ -61,12 +61,12 @@ const M0P = {
   lcl:    { g: "Instabilitet och konvektion", namn: "Kondensationsnivå (LCL)", var: "lifting_condensation_level", enh: "ft", klass: [5000, 3000, 2000, 1000, 500], lagre: true, konv: v => v * FOT, iso: [1000, 3000] },
   lfc:    { g: "Instabilitet och konvektion", namn: "Fri konvektionsnivå (LFC)", var: "atmosphere_level_of_free_convection", enh: "ft", klass: [10000, 6000, 3000, 1500], lagre: true, konv: v => v * FOT, iso: [3000] },
   lnb:    { g: "Instabilitet och konvektion", namn: "Neutral flytkraft (LNB, ungefär molntopp)", var: "atmosphere_level_of_neutral_buoyancy", enh: "ft", klass: [10000, 15000, 20000, 25000, 30000, 35000], konv: v => v * FOT, iso: [20000, 30000] },
-  // Nedisning och turbulens
-  isTopp: { g: "Nedisning och turbulens", namn: "Nedisning, övre gräns", var: "atmosphere_level_of_icing_top", enh: "ft", klass: [2000, 5000, 10000, 15000, 20000], konv: v => v * FOT, iso: [10000] },
-  isBott: { g: "Nedisning och turbulens", namn: "Nedisning, undre gräns", var: "atmosphere_level_of_icing_bottom", enh: "ft", klass: [500, 1000, 2000, 5000, 10000], konv: v => v * FOT, iso: [2000] },
-  isMax:  { g: "Nedisning och turbulens", namn: "Nivå för kraftigast nedisning", var: "atmosphere_level_of_max_icing", enh: "ft", klass: [1000, 2000, 5000, 10000, 15000], konv: v => v * FOT, iso: [5000] },
-  cat:    { g: "Nedisning och turbulens", namn: "CAT-index (max i pelaren)", var: "max_cat_index", enh: "", klass: [0.5, 1, 2, 3, 5], konv: v => v, iso: [1, 3] },
-  catNiv: { g: "Nedisning och turbulens", namn: "Nivå för max CAT", var: "level_of_max_CAT_index", enh: "ft", klass: [15000, 20000, 25000, 30000, 35000, 40000], konv: v => v * FOT, iso: [30000] },
+  // Isbildning och turbulens
+  isTopp: { g: "Isbildning och turbulens", namn: "Isbildning, övre gräns", var: "atmosphere_level_of_icing_top", enh: "ft", klass: [2000, 5000, 10000, 15000, 20000], konv: v => v * FOT, iso: [10000] },
+  isBott: { g: "Isbildning och turbulens", namn: "Isbildning, undre gräns", var: "atmosphere_level_of_icing_bottom", enh: "ft", klass: [500, 1000, 2000, 5000, 10000], konv: v => v * FOT, iso: [2000] },
+  isMax:  { g: "Isbildning och turbulens", namn: "Nivå för kraftigast isbildning", var: "atmosphere_level_of_max_icing", enh: "ft", klass: [1000, 2000, 5000, 10000, 15000], konv: v => v * FOT, iso: [5000] },
+  cat:    { g: "Isbildning och turbulens", namn: "CAT-index (max i pelaren)", var: "max_cat_index", enh: "", klass: [0.5, 1, 2, 3, 5], konv: v => v, iso: [1, 3] },
+  catNiv: { g: "Isbildning och turbulens", namn: "Nivå för max CAT", var: "level_of_max_CAT_index", enh: "ft", klass: [15000, 20000, 25000, 30000, 35000, 40000], konv: v => v * FOT, iso: [30000] },
   // Mark, hav och snö
   sst:    { g: "Mark, hav och snö", namn: "Havsytans temperatur", var: "SFX_SST", niv: 0, enh: "°C", klass: [-1, 0, 2, 4, 6, 8, 10, 12, 15, 20], pal: PAL_TEMP, konv: K_, iso: [0, 5, 10] },
   sjo:    { g: "Mark, hav och snö", namn: "Temperatur i sjöar", var: "SFX_TS_WATER", niv: null, enh: "°C", klass: [-1, 0, 2, 4, 6, 8, 10, 12, 15, 20], pal: PAL_TEMP, konv: K_, iso: [0, 4] },
@@ -175,7 +175,7 @@ function m0Rita() {
     const i = ((o.ny - 1 - y) * o.nx + x) * 4; px[i] = F[k][0]; px[i + 1] = F[k][1]; px[i + 2] = F[k][2]; px[i + 3] = 210;
   }
   cx.putImageData(img, 0, 0);
-  g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
+  g.appendChild(el("image", { href: skarpaRutor(cv), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
     preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   // isolinjer fran det andra faltet
   if (M0F.v2 && M0F.data2) {

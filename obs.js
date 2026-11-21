@@ -1,0 +1,300 @@
+// ===================================================================
+//  SATELLIT OCH RADAR (NYTT 21/11 kvall) - flikarna "Satellit" och "Radar"
+// ===================================================================
+// Webblasaren hamtar bilderna SJALV direkt fran kallan (alla har CORS *) - inget gar via GitHub eller
+// mellanservern. Varje bild vrids om (omprojiceras) till kartans Lambert-projektion i en canvas och lagges
+// som <image> i gruppen kObs (under kust/granser, som ritas overst). Bara det som syns hamtas, i skarmens
+// upplosning; zoomar/panorerar man hamtas bilderna om efter en kort paus.
+//  Satellit: EUMETSAT EUMETView WMS (MTG, bild var 10:e min, blixtar var 5:e). Tiderna laser vi ur
+//            namnrymdens GetCapabilities (bara MTG-lagren, litet svar).
+//  Radar:    SMHI (Sverige, komposit var 5:e min, png i polarstereografisk projektion) eller met.no
+//            (Norden, 1 km, var 5:e min, thredds WMS). met.no:s filer innehaller aven en prognos (nowcast)
+//            ca 2 h framat - den kan spelas i loopen efter "nu" (markeras PROGNOS).
+// Loop: valj langd, spela/pausa, stega. Auto: ny bild laggs till nar den finns (kollas varannan minut).
+// Allt sparas i mt:obs (val per flik).
+
+const OBS_EUM = "https://view.eumetsat.int/geoserver/";
+const OBS_SAT = {
+  geocolour:   { namn: "Geocolour – dag färg, natt IR + ljus", lager: "mtg_fd:rgb_geocolour", fmt: "image/jpeg" },
+  truecolour:  { namn: "Truecolour (bara dag)", lager: "mtg_fd:rgb_truecolour", fmt: "image/jpeg" },
+  ir105:       { namn: "IR 10,5 µm (molntoppstemperatur)", lager: "mtg_fd:ir105_hrfi", fmt: "image/png" },
+  vis06:       { namn: "VIS 0,6 µm (synligt, dag)", lager: "mtg_fd:vis06_hrfi", fmt: "image/jpeg" },
+  cloudtype:   { namn: "Molntyp RGB", lager: "mtg_fd:rgb_cloudtype", fmt: "image/jpeg" },
+  cloudphase:  { namn: "Molnfas RGB (is/vatten)", lager: "mtg_fd:rgb_cloudphase", fmt: "image/jpeg" },
+  fog:         { namn: "Dimma / låga moln RGB", lager: "mtg_fd:rgb_fog", fmt: "image/jpeg" },
+  snow:        { namn: "Snö RGB (snö vs moln, dag)", lager: "mtg_fd:rgb_snow", fmt: "image/jpeg" },
+  dust:        { namn: "Dust RGB (även molnfysik)", lager: "mtg_fd:rgb_dust", fmt: "image/jpeg" },
+  h40b:        { namn: "Nederbörd (satellit + mikrovåg)", lager: "mtg_fd:h40b", fmt: "image/png", genom: true },
+  li:          { namn: "Blixtar (LI, 5 min)", lager: "mtg_fd:li_afa", fmt: "image/png", genom: true, steg: 5 }
+};
+const OBS_RAD = { smhi: { namn: "SMHI – Sverige" }, metno: { namn: "met.no – Norden 1 km (+ prognos)" } };
+const OBS_LANGD = [[1, "Senaste"], [6, "1 h"], [12, "2 h"], [18, "3 h"], [36, "6 h"]];
+// SMHI:s kompositbild: polarstereografisk (Bessel), horn och rutstorlek ur h5-filen (prov K 21/11)
+let OBS_SMHI_PROJ = null;   // satts i obsSmhiProj() nar vi vet - se nedan
+
+let OBS = (() => { let o = {}; try { o = JSON.parse(lasa("mt:obs") || "{}"); } catch (e) {}
+  return { sat: o.sat || "geocolour", rad: o.rad || "smhi", langd: o.langd || 12, opac: o.opac || 90, blixt: !!o.blixt, prognos: o.prognos !== false, auto: o.auto !== false,
+    lage: null, ramar: [], i: 0, spelar: false, cache: new Map(), gen: 0, bytes: 0, senast: 0 }; })();
+const obsSpara = () => lagra("mt:obs", JSON.stringify({ sat: OBS.sat, rad: OBS.rad, langd: OBS.langd, opac: OBS.opac, blixt: OBS.blixt, prognos: OBS.prognos, auto: OBS.auto }));
+const obsTidTxt = t => { const d = new Date(t); return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + "Z"; };
+const obsIso = t => new Date(t).toISOString().slice(0, 19) + "Z";
+
+// ---------------- tider ----------------
+// EUMETSAT: namnrymdens capabilities ger "start/slut/PT10M" per lager
+let obsEumCaps = { t: 0, tider: {} };
+async function obsEumTider() {
+  if (Date.now() - obsEumCaps.t < 90e3) return obsEumCaps.tider;
+  const r = await fetch(OBS_EUM + "mtg_fd/wms?service=WMS&version=1.3.0&request=GetCapabilities"), x = await r.text(), tider = {};
+  for (const m of x.matchAll(/<Name>(?:mtg_fd:)?([a-z0-9_]+)<\/Name>[\s\S]*?<Dimension name="time"[^>]*>([^<]+)<\/Dimension>/g)) {
+    const del = m[2].trim().split(",").pop().split("/"); if (del.length >= 2) tider["mtg_fd:" + m[1]] = Date.parse(del[1]);
+  }
+  obsEumCaps = { t: Date.now(), tider }; return tider;
+}
+// met.no: senaste filerna i katalogen (en fil var 5:e min, varje fil = analys + 23 prognossteg)
+let obsMetCat = { t: 0, filer: [] };
+async function obsMetFiler() {
+  if (Date.now() - obsMetCat.t < 90e3) return obsMetCat.filer;
+  const x = await (await fetch("https://thredds.met.no/thredds/catalog/radarnowcasting/catalog.xml")).text();
+  const filer = [...new Set([...x.matchAll(/urlPath="(radarnowcasting\/[^"]+\.(\d{8}T\d{6})Z\.nc)"/g)].map(m => m[1]))].sort();
+  obsMetCat = { t: Date.now(), filer }; return filer;
+}
+const obsMetT = f => { const m = f.match(/\.(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)Z\.nc$/); return m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : NaN; };
+// SMHI: bara SENASTE bilden finns som png (prov L 21/11: aldre bilder finns bara som h5, som webblasaren inte
+// kan lasa utan ett stort bibliotek). Loopen byggs darfor upp medan sidan ar oppen: varje ny bild sparas i minnet.
+const OBS_SMHI = "https://opendata-download-radar.smhi.se/api/version/latest/area/sweden/product/comp";
+const obsSmhiArkiv = new Map();   // tid -> blob-url for bilden
+async function obsSmhiLista(n) {
+  const j = await (await fetch(OBS_SMHI + ".json", { cache: "no-store" })).json();
+  const f = (j.lastFiles || []).find(x => (x.formats || []).some(y => y.key === "png"));
+  if (f) { const m = String(f.valid || "").match(/(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)/), t = m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : NaN;
+    if (isFinite(t) && !obsSmhiArkiv.has(t)) { const b = await (await fetch(OBS_SMHI + "/latest.png?t=" + t, { cache: "no-store" })).blob(); obsSmhiArkiv.set(t, URL.createObjectURL(b)); OBS.bytes += b.size; } }
+  return [...obsSmhiArkiv.entries()].sort((a, b) => a[0] - b[0]).slice(-n).map(([t, url]) => ({ t, url }));
+}
+
+// ---------------- vilka bilder (ramar) ----------------
+// en ram = { t, prognos, nyckel, url(vy) -> {url, proj} }
+async function obsRamar() {
+  const n = OBS.langd;
+  if (OBS.lage === "sat") {
+    const L = OBS_SAT[OBS.sat], tider = await obsEumTider(), slut = tider[L.lager] || Math.floor((Date.now() - 20 * 60e3) / 600e3) * 600e3, steg = (L.steg || 10) * 60e3;
+    const ramar = []; for (let k = n - 1; k >= 0; k--) { const t = slut - k * steg; ramar.push({ t, nyckel: L.lager + "|" + t, url: vy => obsWms(OBS_EUM + "wms", L.lager, L.fmt, t, vy) }); }
+    return ramar;
+  }
+  if (OBS.rad === "smhi") {
+    const l = await obsSmhiLista(n);
+    return l.map(f => ({ t: f.t, nyckel: "smhi|" + f.t, url: () => ({ url: f.url, proj: obsSmhiProj() }) }));
+  }
+  const filer = await obsMetFiler(), sist = filer.slice(-n), ramar = sist.map(f => { const t = obsMetT(f); return { t, nyckel: "met|" + t, url: vy => obsWms("https://thredds.met.no/thredds/wms/" + f, "lwe_precipitation_rate", "image/png", t, vy, true) }; });
+  if (OBS.prognos && filer.length) {   // prognosen ur senaste filen: +10, +20 ... +110 min (varannan, for att spara)
+    const f = filer[filer.length - 1], t0 = obsMetT(f);
+    for (let m = 10; m <= 110; m += 10) { const t = t0 + m * 60e3; ramar.push({ t, prognos: true, nyckel: "metp|" + t0 + "|" + t, url: vy => obsWms("https://thredds.met.no/thredds/wms/" + f, "lwe_precipitation_rate", "image/png", t, vy, true) }); }
+  }
+  return ramar;
+}
+// WMS-adress i EPSG:4326 for det som syns (latitud forst i 1.3.0)
+function obsWms(bas, lager, fmt, t, vy, metno) {
+  const b = obsLatLonRuta(vy), W = Math.min(2048, Math.round(vy.W * 1.25)), H = Math.min(2048, Math.max(64, Math.round(W * (b.n - b.s) / ((b.e - b.w) * Math.cos((b.n + b.s) / 2 * Math.PI / 180)))));
+  let u = bas + "?service=WMS&version=1.3.0&request=GetMap&crs=EPSG:4326&layers=" + lager + "&bbox=" + [b.s, b.w, b.n, b.e].map(v => v.toFixed(3)).join(",") +
+    "&width=" + W + "&height=" + H + "&format=" + encodeURIComponent(fmt) + "&time=" + obsIso(t);
+  if (fmt === "image/png") u += "&transparent=true";
+  if (metno) u += "&styles=default-scalar/default&colorscalerange=0.1,50&logscale=true&numcolorbands=20&belowmincolor=transparent&abovemaxcolor=extend";
+  else u += "&styles=";
+  return { url: u, proj: { typ: "ll", ...b } };
+}
+// lat/lon-granser for det som syns: kanten provas pa 24 stallen per sida
+function obsLatLonRuta(vy) {
+  let s = 90, n = -90, w = 180, e = -180;
+  for (let k = 0; k <= 24; k++) for (const [x, y] of [[vy.x + vy.w * k / 24, vy.y], [vy.x + vy.w * k / 24, vy.y + vy.h], [vy.x, vy.y + vy.h * k / 24], [vy.x + vy.w, vy.y + vy.h * k / 24]]) {
+    const ll = franRuta(x, KY - 1 - y); s = Math.min(s, ll.lat); n = Math.max(n, ll.lat); w = Math.min(w, ll.lon); e = Math.max(e, ll.lon); }
+  const pl = (n - s) * 0.02, po = (e - w) * 0.02;
+  return { s: Math.max(-80, s - pl), n: Math.min(85, n + pl), w: w - po, e: e + po };
+}
+
+// ---------------- SMHI-projektionen ----------------
+// png/tif-bilden ar i SWEREF 99 TM (UTM zon 33, GRS80) - GeoTIFF-taggarna i latest.tif (prov L 21/11):
+// ovre vanstra hornet E 126648.404 N 7771252.876, rutor 2014.958 m, 471 x 887 rutor.
+function obsSmhiProj() {
+  if (!OBS_SMHI_PROJ) OBS_SMHI_PROJ = { typ: "utm", a: 6378137, rf: 298.257222101, lon0: 15, k0: 0.9996, fe: 500000, x0: 126648.404, y0: 7771252.876, dx: 2014.9581656, dy: 2014.9581657 };
+  return OBS_SMHI_PROJ;
+}
+// lat/lon -> transversal Mercator (Snyder 8-9..8-10), ger {x: ostlig, y: nordlig}
+function obsTm(P, lat, lon) {
+  if (!P.e2) { const f = 1 / P.rf; P.e2 = 2 * f - f * f; P.ep2 = P.e2 / (1 - P.e2); }
+  const r = Math.PI / 180, ph = lat * r, e2 = P.e2, N = P.a / Math.sqrt(1 - e2 * Math.sin(ph) ** 2), T = Math.tan(ph) ** 2, C = P.ep2 * Math.cos(ph) ** 2, A = (lon - P.lon0) * r * Math.cos(ph);
+  const M = P.a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 ** 3 / 256) * ph - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 ** 3 / 1024) * Math.sin(2 * ph) + (15 * e2 * e2 / 256 + 45 * e2 ** 3 / 1024) * Math.sin(4 * ph) - (35 * e2 ** 3 / 3072) * Math.sin(6 * ph));
+  return { x: P.fe + P.k0 * N * (A + (1 - T + C) * A ** 3 / 6 + (5 - 18 * T + T * T + 72 * C - 58 * P.ep2) * A ** 5 / 120),
+           y: P.k0 * (M + N * Math.tan(ph) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A ** 4 / 24 + (61 - 58 * T + T * T + 600 * C - 330 * P.ep2) * A ** 6 / 720)) };
+}
+// lat/lon -> projicerade x,y (Snyder 21-33/21-34, nordpol)
+function obsSter(P, lat, lon) {
+  if (!P.e) { const f = 1 / P.rf; P.e = Math.sqrt(2 * f - f * f); const r = Math.PI / 180, ts = Math.tan(Math.PI / 4 - P.latTs * r / 2) / Math.pow((1 - P.e * Math.sin(P.latTs * r)) / (1 + P.e * Math.sin(P.latTs * r)), P.e / 2);
+    P.mc = Math.cos(P.latTs * r) / Math.sqrt(1 - P.e * P.e * Math.sin(P.latTs * r) ** 2); P.tc = ts; }
+  const r = Math.PI / 180, ph = lat * r, t = Math.tan(Math.PI / 4 - ph / 2) / Math.pow((1 - P.e * Math.sin(ph)) / (1 + P.e * Math.sin(ph)), P.e / 2);
+  const rho = P.a * P.mc * t / P.tc, l = (lon - P.lon0) * r;
+  return { x: rho * Math.sin(l), y: -rho * Math.cos(l) };
+}
+
+// ---------------- omprojicering ----------------
+// Bilden (fran kallan) -> canvas i kartans koordinater for vyn vy = {x, y, w, h, W, H}
+function obsVrid(img, proj, vy) {
+  const iw = img.naturalWidth, ih = img.naturalHeight; if (!iw || !ih) return null;
+  const ci = document.createElement("canvas"); ci.width = iw; ci.height = ih; const gi = ci.getContext("2d", { willReadFrequently: true }); gi.drawImage(img, 0, 0);
+  const src = new Uint32Array(gi.getImageData(0, 0, iw, ih).data.buffer);
+  const W = vy.W, H = vy.H, co = document.createElement("canvas"); co.width = W; co.height = H;
+  const go = co.getContext("2d"), ut = go.createImageData(W, H), dst = new Uint32Array(ut.data.buffer);
+  // kallans pixel for en punkt (lat/lon); -1 = utanfor
+  const pix = proj.typ === "ll" ? (lat, lon) => { const px = (lon - proj.w) / (proj.e - proj.w) * iw, py = (proj.n - lat) / (proj.n - proj.s) * ih; return px < 0 || py < 0 || px >= iw || py >= ih ? -1 : (py | 0) * iw + (px | 0); }
+    : (lat, lon) => { const p = proj.typ === "utm" ? obsTm(proj, lat, lon) : obsSter(proj, lat, lon), px = (p.x - proj.x0) / proj.dx, py = (proj.y0 - p.y) / proj.dy; return px < 0 || py < 0 || px >= iw || py >= ih ? -1 : (py | 0) * iw + (px | 0); };
+  // grovt natt (var 8:e pixel) med lat/lon, linjart emellan - snabbt och tillrackligt exakt
+  const S = 8, gw = Math.ceil(W / S) + 1, gh = Math.ceil(H / S) + 1, LA = new Float64Array(gw * gh), LO = new Float64Array(gw * gh);
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) { const ll = franRuta(vy.x + Math.min(W, i * S) / W * vy.w, KY - 1 - (vy.y + Math.min(H, j * S) / H * vy.h)); LA[j * gw + i] = ll.lat; LO[j * gw + i] = ll.lon; }
+  for (let y = 0; y < H; y++) { const j = Math.floor(y / S), fy = (y - j * S) / S;
+    for (let x = 0; x < W; x++) { const i = Math.floor(x / S), fx = (x - i * S) / S, a = j * gw + i;
+      const lat = (LA[a] * (1 - fx) + LA[a + 1] * fx) * (1 - fy) + (LA[a + gw] * (1 - fx) + LA[a + gw + 1] * fx) * fy;
+      const lon = (LO[a] * (1 - fx) + LO[a + 1] * fx) * (1 - fy) + (LO[a + gw] * (1 - fx) + LO[a + gw + 1] * fx) * fy;
+      const k = pix(lat, lon); if (k >= 0) dst[y * W + x] = src[k]; } }
+  go.putImageData(ut, 0, 0);
+  return co;
+}
+// andel pixlar med innehall (for att kanna igen en tom bild = tiden finns inte an)
+function obsInnehall(c) { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0, m = 0;
+  for (let i = 0; i < d.length; i += 64) { m++; if (d[i + 3] > 0 && (d[i] + d[i + 1] + d[i + 2]) > 30) n++; } return m ? n / m : 0; }
+
+// ---------------- hamtning ----------------
+function obsLaddaBild(url) {
+  return new Promise((ok, fel) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => ok(im); im.onerror = () => fel(new Error("bilden kunde inte hämtas")); im.src = url; });
+}
+async function obsHamtaRam(r, vy) {
+  const nyck = r.nyckel + "|" + vy.nyckel; if (OBS.cache.has(nyck)) return OBS.cache.get(nyck);
+  const p = (async () => {
+    const { url, proj } = r.url(vy), im = await obsLaddaBild(url);
+    const c = obsVrid(im, proj, vy); if (!c) throw new Error("tom bild");
+    const blob = await new Promise(ok => c.toBlob(ok, "image/png")); OBS.bytes += blob.size;
+    return { href: URL.createObjectURL(blob), vy, tom: obsInnehall(c) < 0.002 };
+  })();
+  OBS.cache.set(nyck, p); p.catch(() => OBS.cache.delete(nyck));
+  return p;
+}
+// vyn = det som syns just nu, i skarmens upplosning
+function obsVy() {
+  const r = $("karta").getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.max(200, Math.min(1800, Math.round(r.width * dpr)));
+  const H = Math.max(200, Math.min(2200, Math.round(W * vb.h / vb.w)));
+  return { x: vb.x, y: vb.y, w: vb.w, h: vb.h, W, H, nyckel: [vb.x, vb.y, vb.w, vb.h].map(v => v.toFixed(1)).join(",") + "|" + W };
+}
+
+// ---------------- ritning ----------------
+function obsVisa() {
+  const g = $("kObs"); if (!g) return;
+  const r = OBS.ramar[OBS.i]; if (!r || !OBS.lage) { g.textContent = ""; return; }
+  const v = r.bild;
+  $("obsTid").textContent = obsTidTxt(r.t) + (r.prognos ? "  PROGNOS +" + Math.round((r.t - OBS.ramar.filter(x => !x.prognos).pop().t) / 60e3) + " min" : "") + "  ·  " + obsSen(r.t);
+  $("obsTid").classList.toggle("prognos", !!r.prognos);
+  $("obsReglage").max = Math.max(0, OBS.ramar.length - 1); $("obsReglage").value = OBS.i;
+  if (!v) return;   // behall forra bilden tills denna ar klar
+  const lag = v.lager || [];   // [bas, ev. blixtar]
+  g.textContent = "";
+  for (const b of [v, ...lag]) if (b && b.href) g.appendChild(el("image", { href: b.href, x: b.vy.x, y: b.vy.y, width: b.vy.w, height: b.vy.h, preserveAspectRatio: "none" }));
+}
+const obsSen = t => { const m = Math.round((Date.now() - t) / 60e3); return m < 0 ? "om " + -m + " min" : m < 90 ? m + " min sedan" : Math.round(m / 6) / 10 + " h sedan"; };
+function obsStatus(txt) { const s = $("obsStatus"); if (s) s.textContent = txt; }
+
+// ---------------- laddning av loopen ----------------
+async function obsLadda(nyLista) {
+  if (!OBS.lage) return;
+  const gen = ++OBS.gen, vy = obsVy();
+  try {
+    if (nyLista || !OBS.ramar.length) {
+      const varSist = OBS.ramar.length && OBS.i >= OBS.ramar.filter(r => !r.prognos).length - 1, gamla = new Map(OBS.ramar.map(r => [r.nyckel, r.bild]));
+      obsStatus("Hämtar lista …"); const ramar = await obsRamar(); if (gen !== OBS.gen) return;
+      for (const r of ramar) r.bild = gamla.get(r.nyckel) || null;
+      const sistObs = ramar.filter(r => !r.prognos).length - 1;
+      OBS.ramar = ramar; if (!nyLista || varSist || OBS.i > ramar.length - 1) OBS.i = Math.max(0, sistObs);
+    }
+    // ordning: den som visas forst, sedan nyast -> aldst, sist prognosen
+    const ordn = [OBS.i, ...OBS.ramar.map((_, k) => k).filter(k => k !== OBS.i && !OBS.ramar[k].prognos).reverse(), ...OBS.ramar.map((_, k) => k).filter(k => k !== OBS.i && OBS.ramar[k].prognos)];
+    let klara = 0, fel = 0; const t0 = performance.now();
+    const blixt = OBS.blixt && !(OBS.lage === "sat" && OBS.sat === "li");
+    const jobb = ordn.map(k => async () => {
+      if (gen !== OBS.gen) return; const r = OBS.ramar[k];
+      try {
+        const b = await obsHamtaRam(r, vy); let lager = [];
+        if (blixt) { const tl = Math.floor(r.t / 300e3) * 300e3, L = OBS_SAT.li;   // blixtar (LI) narmast fore bildens tid
+          try { lager = [await obsHamtaRam({ nyckel: "li|" + tl, url: v => obsWms(OBS_EUM + "wms", L.lager, L.fmt, tl, v) }, vy)]; } catch (e) {} }
+        if (gen !== OBS.gen) return;
+        r.bild = { ...b, lager }; klara++;
+        if (k === OBS.i) obsVisa();
+      } catch (e) { fel++; }
+      obsStatus("Bilder " + klara + "/" + OBS.ramar.length + (fel ? " (" + fel + " saknas)" : "") + " · " + (OBS.bytes / 1e6).toFixed(1) + " MB hämtat totalt");
+    });
+    // tre at gangen
+    let p = 0; await Promise.all([0, 1, 2].map(async () => { while (p < jobb.length) await jobb[p++](); }));
+    if (gen !== OBS.gen) return;
+    // senaste satellitbilden kan vara tom (tiden finns i listan men bilden ar inte klar) - hoppa over den
+    const sist = OBS.ramar.filter(r => !r.prognos).length - 1;
+    if (OBS.lage === "sat" && OBS.ramar[sist] && OBS.ramar[sist].bild && OBS.ramar[sist].bild.tom && sist > 0) { OBS.ramar.splice(sist, 1); if (OBS.i >= sist) OBS.i = sist - 1; }
+    obsVisa();
+    obsStatus("Klart: " + OBS.ramar.filter(r => r.bild).length + "/" + OBS.ramar.length + " bilder på " + ((performance.now() - t0) / 1000).toFixed(1) + " s" + (fel ? ", " + fel + " saknas" : "") + " · " + (OBS.bytes / 1e6).toFixed(1) + " MB totalt");
+  } catch (e) { if (gen === OBS.gen) obsStatus("Kunde inte hämta: " + e.message); }
+}
+// gamla bilder slapps nar vyn byts (annars vaxer minnet)
+function obsRensaCache(behall) {
+  for (const [k, p] of OBS.cache) if (!behall || !k.endsWith(behall)) { p.then(b => setTimeout(() => URL.revokeObjectURL(b.href), 30e3)).catch(() => {}); OBS.cache.delete(k); }
+}
+
+// ---------------- loop och auto ----------------
+let obsSpelTimer = 0, obsAutoTimer = 0, obsVyTimer = 0;
+function obsSpela(pa) {
+  OBS.spelar = pa === undefined ? !OBS.spelar : pa; $("obsSpela").textContent = OBS.spelar ? "⏸" : "▶"; $("obsSpela").setAttribute("aria-pressed", String(OBS.spelar));
+  clearTimeout(obsSpelTimer); if (!OBS.spelar) return;
+  const steg = () => { if (!OBS.spelar) return; const n = OBS.ramar.length; if (!n) return;
+    // hoppa over bilder som inte ar klara
+    let k = OBS.i; for (let f = 0; f < n; f++) { k = (k + 1) % n; if (OBS.ramar[k].bild) break; }
+    OBS.i = k; obsVisa(); obsSpelTimer = setTimeout(steg, k === n - 1 || (OBS.ramar[k + 1] && OBS.ramar[k + 1].prognos && !OBS.ramar[k].prognos) ? 1400 : 450); };
+  obsSpelTimer = setTimeout(steg, 300);
+}
+function obsStega(d) { if (!OBS.ramar.length) return; obsSpela(false); OBS.i = Math.max(0, Math.min(OBS.ramar.length - 1, OBS.i + d)); obsVisa(); }
+function obsAuto() { clearInterval(obsAutoTimer); if (OBS.auto && OBS.lage) obsAutoTimer = setInterval(() => { if (!document.hidden && OBS.lage) obsLadda(true); }, 120e3); }
+// kallas fran satVb nar kartan flyttas/zoomas
+function obsVyAndrad() { if (!OBS.lage) return; clearTimeout(obsVyTimer); obsVyTimer = setTimeout(() => { obsRensaCache(obsVy().nyckel); obsLadda(false); }, 600); }
+
+// ---------------- flikbyte ----------------
+function obsLage(nytt) {
+  const var_ = OBS.lage; OBS.lage = nytt === "sat" || nytt === "rad" ? nytt : null;
+  if (!OBS.lage) { obsSpela(false); clearInterval(obsAutoTimer); $("kObs").textContent = ""; OBS.gen++; return; }
+  if (OBS.lage === "sat" && typeof tafLaddaEuropa === "function") tafLaddaEuropa().then(() => satVb(vb.x, vb.y, vb.w));
+  obsFyllVal();
+  if (var_ !== OBS.lage) { OBS.ramar = []; OBS.i = 0; $("kObs").textContent = ""; }
+  obsLadda(true); obsAuto();
+}
+function obsFyllVal() {
+  const sel = $("obsKalla"), lista = OBS.lage === "sat" ? OBS_SAT : OBS_RAD; sel.textContent = "";
+  for (const k in lista) sel.add(new Option(lista[k].namn, k));
+  sel.value = OBS.lage === "sat" ? OBS.sat : OBS.rad;
+  $("obsKallaEtikett").textContent = OBS.lage === "sat" ? "Bild (MTG, EUMETSAT)" : "Radar";
+  $("obsPrognosRad").hidden = !(OBS.lage === "rad" && OBS.rad === "metno");
+  $("obsForkl").innerHTML = OBS.lage === "rad" ? (OBS.rad === "metno"
+    ? "Nederbördsintensitet mm/h (met.no, logaritmisk skala 0,1–50). <img alt='' src='https://thredds.met.no/thredds/wms/" + (obsMetCat.filer.slice(-1)[0] || "") + "?request=GetLegendGraphic&layer=lwe_precipitation_rate&colorbaronly=true&width=12&height=120&colorscalerange=0.1,50&logscale=true&numcolorbands=20' style='height:12px;vertical-align:middle;transform:rotate(-90deg)' onerror='this.remove()'>"
+    : "Radarreflektivitet med SMHI:s färgskala. OBS: SMHI lägger bara ut den senaste bilden öppet – loopen byggs upp medan sidan är öppen (" + obsSmhiArkiv.size + " bilder hittills). För loop direkt: välj met.no.")
+    : OBS_SAT[OBS.sat].genom ? "Genomskinligt lager – kartan syns under." : "";
+}
+(function obsInit() {
+  if (!$("obsKalla")) return;
+  const ls = $("obsLangd"); for (const [n, t] of OBS_LANGD) ls.add(new Option(t, n)); ls.value = OBS.langd;
+  $("obsKalla").addEventListener("change", e => { if (OBS.lage === "sat") OBS.sat = e.target.value; else OBS.rad = e.target.value; obsSpara(); obsFyllVal(); OBS.ramar = []; OBS.i = 0; obsLadda(true); });
+  ls.addEventListener("change", () => { OBS.langd = +ls.value; obsSpara(); obsLadda(true); });
+  $("obsSpela").addEventListener("click", () => obsSpela());
+  $("obsBak").addEventListener("click", () => obsStega(-1)); $("obsFram").addEventListener("click", () => obsStega(1));
+  $("obsNu").addEventListener("click", () => { obsSpela(false); OBS.i = Math.max(0, OBS.ramar.filter(r => !r.prognos).length - 1); obsVisa(); });
+  $("obsReglage").addEventListener("input", e => { obsSpela(false); OBS.i = +e.target.value; obsVisa(); });
+  const knapp = (id, nyckel, efter) => { const b = $(id); b.setAttribute("aria-pressed", String(OBS[nyckel]));
+    b.addEventListener("click", () => { OBS[nyckel] = !OBS[nyckel]; b.setAttribute("aria-pressed", String(OBS[nyckel])); obsSpara(); efter(); }); };
+  knapp("obsAuto", "auto", obsAuto);
+  knapp("obsBlixt", "blixt", () => { for (const r of OBS.ramar) r.bild = null; obsLadda(false); });
+  knapp("obsPrognos", "prognos", () => obsLadda(true));
+  const op = $("obsOpac"); op.value = OBS.opac; $("kObs").style.opacity = OBS.opac / 100;
+  op.addEventListener("input", () => { OBS.opac = +op.value; $("kObs").style.opacity = OBS.opac / 100; obsSpara(); });
+  document.addEventListener("keydown", ev => {
+    if (!OBS.lage || ev.altKey || ev.ctrlKey || ev.metaKey) return; const t = ev.target.tagName; if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
+    if (ev.key === "ArrowLeft") { obsStega(-1); ev.preventDefault(); } else if (ev.key === "ArrowRight") { obsStega(1); ev.preventDefault(); } else if (ev.key === " ") { obsSpela(); ev.preventDefault(); }
+  });
+})();

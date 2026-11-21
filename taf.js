@@ -287,7 +287,7 @@ function tafRitaTabell() {
   const A = tafAxel(), tab = document.createElement("table"); tab.className = "taftab";
   const hr = document.createElement("tr"); hr.innerHTML = "<th>Flygplats</th><th>METAR</th>";
   for (let h = 0; h < A.n; h++) { const d = new Date(A.t0 + h * 3600e3), th = document.createElement("th"); th.className = "tim" + (d.getUTCHours() === 0 ? " dygn" : "") + (A.nu >= d.getTime() && A.nu < d.getTime() + 3600e3 ? " nu" : "");
-    th.textContent = d.getUTCHours() % 3 === 0 ? p2(d.getUTCHours()) : ""; th.title = VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z"; hr.appendChild(th); }
+    if (d.getUTCHours() % 3 === 0) { const sp = document.createElement("span"); sp.textContent = p2(d.getUTCHours()); th.appendChild(sp); }   /* 21/11 kvall: etiketten flyter, kolumnen blir inte bredare */ th.title = VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z"; hr.appendChild(th); }
   const thead = document.createElement("thead"); thead.appendChild(hr); tab.appendChild(thead);
   const tb = document.createElement("tbody");
   for (const icao of tafSorterad()) {
