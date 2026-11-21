@@ -64,7 +64,9 @@ async function mellan() {
   // 21/11 kvall: detaljerna kraver nyckeln (sparas bara i den har webblasaren, i localStorage)
   const nyckel = localStorage.getItem("mt:statNyckel") || "";
   try { const r = await fetch(STAT_URL, { cache: "no-store", headers: nyckel ? { "X-Mt-Nyckel": nyckel } : {} }); d = await r.json(); }
-  catch (e) { $("dagar").innerHTML = '<tr><td class="v fel">Kunde inte nå mellanservern.</td></tr>'; return; }
+  catch (e) { $("dagar").innerHTML = '<tr><td class="v fel">Kunde inte nå mellanservern (' + esc(e.message) + ').</td></tr>';
+    $("senaste").innerHTML = '<tr><td class="v fel">Hämtningen misslyckades' + (nyckel ? ' – nyckeln innehåller kanske ett otillåtet tecken (prova Glöm nyckeln och klistra in igen)' : '') + '.</td></tr>';
+    $("nyckelGlom").hidden = !nyckel; return; }
   // per dag
   const dagar = new Map();
   for (const r of d.dagar) { if (!dagar.has(r.datum)) dagar.set(r.datum, []); dagar.get(r.datum).push(r); }
@@ -87,7 +89,7 @@ async function mellan() {
   if (!d.detaljer) s = '<tr><td class="v">' + (d.ingenNyckel ? '<span class="fel">Mellanservern har ingen nyckel inlagd (STAT_NYCKEL saknas).</span>' : d.felnyckel ? '<span class="fel">Fel nyckel.</span>' : 'Ange nyckeln ovan för att se listan.') + '</td></tr>';
   else if (!d.senaste.length) s += '<tr><td class="v" colspan="6">Inga hämtningar registrerade än.</td></tr>';
   $("nyckelGlom").hidden = !nyckel; $("nyckel").hidden = $("nyckelOk").hidden = !!d.detaljer;
-  $("nyckelInfo").textContent = d.detaljer ? "Nyckeln är sparad i den här webbläsaren." : "";
+  $("nyckelInfo").textContent = d.detaljer ? "Nyckeln är sparad i den här webbläsaren." : nyckel ? "(en nyckel med " + nyckel.length + " tecken skickades)" : "";
   $("senaste").innerHTML = s;
 }
 async function github() {
@@ -98,7 +100,7 @@ async function github() {
   if (!d.length) h += '<tr><td class="v" colspan="6">Ingen förhämtning registrerad än (loggen startar 19/11).</td></tr>';
   $("github").innerHTML = h;
 }
-$("nyckelOk").addEventListener("click", () => { const v = $("nyckel").value.trim(); if (v) { localStorage.setItem("mt:statNyckel", v); $("nyckel").value = ""; mellan(); } });
+$("nyckelOk").addEventListener("click", () => { const v = $("nyckel").value.replace(/[^\x21-\x7e]/g, "");   /* bara synliga ASCII-tecken (radbrytningar, mellanslag och osynliga tecken bort) */ if (v) { localStorage.setItem("mt:statNyckel", v); $("nyckel").value = ""; mellan(); } });
 $("nyckel").addEventListener("keydown", e => { if (e.key === "Enter") $("nyckelOk").click(); });
 $("nyckelGlom").addEventListener("click", () => { localStorage.removeItem("mt:statNyckel"); mellan(); });
 mellan(); github();
