@@ -136,8 +136,9 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .taftab th.tim { font-weight: 500; color: var(--dim); font-size: 10px; text-align: left; }
 .taftab td.namn { white-space: nowrap; padding: 0 6px 0 0; }
 .taftab td.met { white-space: nowrap; padding: 0 6px; font-variant-numeric: tabular-nums; }
-.taftab td.cell { min-width: 9px; border-left: 1px solid var(--panel); }
-.taftab td.cell.dygn, .taftab th.dygn { border-left: 2px solid var(--fg); }
+.taftab td.cell { min-width: 9px; border-left: 1px solid var(--panel); border-right: 1px solid var(--panel); background-clip: padding-box; }
+.taftab tr:not(.vindrad) td.cell { border-top: 2px solid var(--panel); border-bottom: 2px solid var(--panel); }
+.taftab td.cell.dygn, .taftab th.dygn { border-left: 2px dashed var(--grid); }   /* 21/11: svagare midnattsstreck */
 .taftab td.cell.nu { box-shadow: inset 2px 0 0 #111; }
 .taftab tr { border-top: 1px solid var(--grid); }
 .taftab tr.vindrad { border-top: 0; } .taftab tr.vindrad td.cell { height: 10px; }
@@ -1109,6 +1110,7 @@ function platsNamn(lat, lon) {
 }
 function narmasteICAO(lat, lon) {
   const lista = PUNKTER.map(p => [p[1], p[2], p[3]]).concat(FLYG.map(f => [f[0], f[2], f[3]]));
+  if (lage === "taf" && typeof FLYG_EU !== "undefined") for (const f of FLYG_EU) lista.push([f[0], f[2], f[3]]);   // 21/11: hela Europa
   let bast = null, bd = 1e9;
   for (const [icao, la, lo] of lista) {
     const dy = (la - lat) * 111.2, dx = (lo - lon) * 111.2 * Math.cos(lat * Math.PI / 180), d = Math.hypot(dx, dy);
@@ -2261,6 +2263,19 @@ function ritaMarkorer() {
     m.appendChild(el("circle", { r: f[4] === 2 ? 2.4 : f[4] === 1 ? 2 : 1.6, style: "fill:" + (st ? "var(--mkhamt)" : "var(--mkfg)") + ";opacity:" + (f[4] === 0 && !st ? .55 : .8) }));
     g.appendChild(m);
   });
+  // NYTT 21/11: TAF-fliken - aven flygplatserna utanfor MEPS-rutan (flygplatser_europa.json, bara ICAO-falt)
+  if (visaFlyg && lage === "taf" && typeof FLYG_EU !== "undefined" && FLYG_EU.length) {
+    const harF = new Set(FLYG.map(f => f[0]));
+    FLYG_EU.forEach((f, i) => {
+      if (harF.has(f[0]) || egnaICAO.has(f[0]) || (f[4] === 0 && !smaOK)) return;
+      const k = tillKarta(f[2], f[3]); if (k.x < vb.x || k.x > vb.x + vb.w || k.y < vb.y || k.y > vb.y + vb.h) return;
+      const m = el("g", { class: "mk", "data-id": "e" + i, transform: "translate(" + k.x + "," + k.y + ") scale(" + s + ")" });
+      m.dataset.tips = f[1] + " " + f[0] + banText(f[0], f[2], f[3]);
+      m.appendChild(el("circle", { r: 5, style: "fill:transparent" }));
+      m.appendChild(el("circle", { r: f[4] === 2 ? 2.4 : f[4] === 1 ? 2 : 1.6, style: "fill:var(--mkfg);opacity:.8" }));
+      g.appendChild(m);
+    });
+  }
   // NYTT 19/11 natt: grona ringar = snabbdata (forhamtad eller i mellanserverns cache)
   const snabb = lage !== "p" && REGP.dtg === dtg ? REGP.set : new Map(), ritade = new Set();
   const ring = (m, k) => { if (!snabb.has(k)) return; m.insertBefore(el("circle", { r: 6.4, style: "fill:none;stroke:var(--mkhamt);stroke-width:2.2" }), m.children[1] || null); m.dataset.tips += "\nSnabbdata: " + snabb.get(k); };
@@ -2380,7 +2395,7 @@ function kartKlick(e, mal) {
   // 21/11: TAF-fliken - klick pa en flygplats laggs till/tas bort i bevakningen
   if (lage === "taf") {
     let icao = null;
-    if (mk) { const id = mk.dataset.id; if (id[0] === "p") icao = PUNKTER[+id.slice(1)][1]; else if (id[0] === "f") { const f = FLYG[+id.slice(1)]; if (f) icao = f[0]; } }
+    if (mk) { const id = mk.dataset.id; if (id[0] === "p") icao = PUNKTER[+id.slice(1)][1]; else if (id[0] === "f") { const f = FLYG[+id.slice(1)]; if (f) icao = f[0]; } else if (id[0] === "e") { const f = FLYG_EU[+id.slice(1)]; if (f) icao = f[0]; } }
     else { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); icao = narmasteICAO(ll.lat, ll.lon); }
     if (icao && typeof tafVaxla === "function") tafVaxla(icao);
     return;
@@ -2502,7 +2517,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="sannolikhet.js?v=20261121-1600"></script>
 <script src="kombo.js?v=20261121-1330"></script>
 <script src="m0karta.js?v=20261121-1330"></script>
-<script src="taf.js?v=20261121-1600"></script>
+<script src="taf.js?v=20261121-1745"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261121-1330"></script>
 </body>

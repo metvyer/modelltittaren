@@ -254,9 +254,8 @@ function tafLaddaEuropa() {
       const g = $("kGeoEU"); g.textContent = "";
       for (const [n, w, d] of [["land", 0.7], ["sjo", 0.5], ["grans", 1, "5 2"], ["grad", 0.6, "4 4"]]) {
         const a = { d: k[n], class: n, "vector-effect": "non-scaling-stroke", "stroke-width": w }; if (d) a["stroke-dasharray"] = d; g.appendChild(el("path", a)); }
-      g.appendChild(el("rect", { x: 0, y: 0, width: KX, height: KY, class: "meps", "stroke-width": 1, "stroke-dasharray": "6 4", "vector-effect": "non-scaling-stroke" }));
       KARTA_EU = { x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1 }; if (lage === "taf") satVb(vb.x, vb.y, vb.w);
-    }).catch(() => {})]).then(() => { if (lage === "taf") tafRita(); });
+    }).catch(() => {})]).then(() => { if (lage === "taf") { tafRita(); ritaMarkorer(); } });
   return euLaddad;
 }
 // "Hela" i TAF-fliken: zooma till alla bevakade flygplatser
@@ -339,8 +338,10 @@ function tafRitaKarta() {
   // 21/11: "Visa ICAO" - koden bredvid varje flygplats i bilden (inte de bevakade, de har egen etikett)
   if (TAFS.icao) {
     const gi = el("g", { "pointer-events": "none" }); g.appendChild(gi);
-    const alla = PUNKTER.map(p => [p[1], p[2], p[3]]).concat(FLYG.map(f => [f[0], f[2], f[3]]));
+    const alla = PUNKTER.map(p => [p[1], p[2], p[3]]).concat(FLYG.map(f => [f[0], f[2], f[3]]), FLYG_EU.filter(f => f[4] > 0 || vb.w < SMA_FALT_BREDD).map(f => [f[0], f[2], f[3]]));
+    const sett = new Set();
     for (const [ic, la, lo] of alla) {
+      if (sett.has(ic)) continue; sett.add(ic);
       if (TAFS.lista.includes(ic) || !isFinite(la)) continue; const k = tillKarta(la, lo);
       if (k.x < vb.x || k.x > vb.x + vb.w || k.y < vb.y || k.y > vb.y + vb.h) continue;
       gi.appendChild(el("text", { x: k.x + px(5), y: k.y - px(4), "font-size": px(8.5), fill: "#374151", stroke: "#fff", "stroke-width": px(2), "paint-order": "stroke" }, ic));
