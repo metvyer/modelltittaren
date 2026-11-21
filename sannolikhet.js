@@ -312,7 +312,7 @@ async function sokEnsKorning() {
     const dtg = dtgText(new Date(d.getTime() - i * 3 * 3600e3));
     if (P.senast && dtgDatum(dtg) <= dtgDatum(P.senast)) return P.senast;
     status("Letar senaste ensemblekörning " + dtg + " …");
-    if (await ensFinns(dtg)) { P.ny = !!P.senast; P.senast = dtg; lagra("mt:ensSenast", dtg); return dtg; }
+    if (await ensFinns(dtg)) { P.ny = !!P.senast; P.senast = dtg; lagra("mt:ensSenast", dtg); nyKorningInfo(); return dtg; }
     if (P.svar.st !== 0) kontakt = true;
     else if (!kontakt && i >= 1) break;   // tva forsok utan nagon kontakt alls -> servern nas inte, sluta leta
   }
@@ -414,7 +414,9 @@ async function hamtaRegister(tvinga) {
   if (!P.dtg) return [];
   const dtgF = dtgText(new Date(dtgDatum(P.dtg).getTime() - ENS_LAGG_H * 3600e3)), nyckel = P.dtg + "," + dtgF;
   if (!tvinga && REG.nyckel === nyckel && Date.now() - REG.t < 60e3) return REG.rader;
-  try { const r = await fetch(REG_URL + "?dtg=" + nyckel, { cache: "no-store" }); if (r.ok) REG = { t: Date.now(), nyckel, rader: await r.json() }; } catch (e) {}
+  // 21/11: max 10 s - svarar registret inte hoppar vi over snabbfasen i stallet for att vanta
+  try { const c = new AbortController(), tm = setTimeout(() => c.abort(), 10000);
+    const r = await fetch(REG_URL + "?dtg=" + nyckel, { cache: "no-store", signal: c.signal }); clearTimeout(tm); if (r.ok) REG = { t: Date.now(), nyckel, rader: await r.json() }; } catch (e) {}
   return REG.rader;
 }
 // cachade omraden for vald parameter/upplosning i korningen dtg (en rad per anrop)
@@ -424,7 +426,8 @@ function hamtaRegRad(r) {
   const k = r.fil + r.fraga; if (regDelar.has(k)) return regDelar.get(k);
   const pr = (async () => {
     const nt = Math.floor((r.t1 - r.t0) / r.st) + 1, nm = r.m1 - r.m0 + 1, ny = (r.y1 - r.y0) / r.s + 1, nx = (r.x1 - r.x0) / r.s + 1, n = ny * nx;
-    const res = await hamta(BAS + r.fil + r.fraga, false, true);
+    // 21/11: cachade bitar far max 20 s och byter aldrig vag - svarar de inte hamtas omradet som vanligt i stallet
+    const res = await hamta(BAS + r.fil + r.fraga, false, true, 20);
     const v = res.st === 200 && res.buf ? lasDods(res.buf, nt * nm * n) : null; if (!v) return null;
     const data = new Map(); for (let k2 = 0; k2 < nt; k2++) data.set(r.t0 + k2 * r.st, v.subarray(k2 * nm * n, (k2 + 1) * nm * n));
     return { rad: r, data, cache: res.cache, kb: res.buf.byteLength / 1024 };
@@ -522,8 +525,19 @@ let SVIDX = null, SVT = 0;
 async function svIndex() {
   if (SVIDX !== null && Date.now() - SVT < 300e3) return SVIDX;
   try { const r = await fetch("forhamtat/ens/index.json", { cache: "no-store" }); SVIDX = r.ok ? await r.json() : false; } catch (e) { SVIDX = false; }
-  SVT = Date.now(); return SVIDX;
+  SVT = Date.now(); nyKorningInfo(); return SVIDX;
 }
+// NYTT 21/11: skylt nar en ny korning finns hos met.no men den forhamtade oversikten pa GitHub annu ar fran forra.
+// Da hamtas nya korningens falt fran met.no (segare), och just medan korningen skrivs kan thredds hanga en stund.
+function nyKorningInfo() {
+  const e = $("nyKorning"); if (!e) return;
+  const ny = P.senast, gh = SVIDX && SVIDX.dtg;
+  if (!ny || !gh || dtgDatum(ny) <= dtgDatum(gh)) { e.hidden = true; return; }
+  e.hidden = false;
+  e.textContent = "Ny körning " + ny.slice(9, 12) + " har kommit hos met.no. Den förhämtade översikten (Favoriter, snabba Sverigefält) är från " + gh.slice(9, 12) +
+    " och uppdateras nu på GitHub – det brukar ta 10–45 min. Under tiden hämtas nya körningens fält från met.no och kan gå segare; just när en körning skrivs kan thredds dessutom hänga en stund (sidan försöker då igen). Du kan välja körning " + gh.slice(9, 12) + " under Körning för att få det förhämtade direkt.";
+}
+setInterval(() => { if (SVIDX && P.senast && dtgDatum(P.senast) > dtgDatum(SVIDX.dtg)) { SVT = 0; svIndex(); } }, 120e3);   // titta efter ny GitHub-korning
 async function svFil(dtg, v, t) {
   try { const r = await fetch("forhamtat/ens/" + dtg + "/" + v + "_" + t + ".bin.gz"); if (!r.ok) return null;
     const gz = await r.arrayBuffer(), ds = new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"));

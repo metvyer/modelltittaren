@@ -140,6 +140,8 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .taftab .ute { color: #6b7280; font-weight: 700; border: 1px dashed #6b7280; border-radius: 3px; padding: 0 3px; font-size: 10.5px; }
 .taftab .tafx { border: 0; background: none; cursor: pointer; color: var(--dim); font-size: 14px; padding: 0 3px; }
 .taftab .dim { color: var(--dim); }
+.nykorning { margin: 6px 0 8px; padding: 6px 10px; border: 1px solid #f59e0b; background: #fffbeb; color: #78350f; border-radius: 6px; font-size: 13px; }
+@media (prefers-color-scheme: dark) { .nykorning { background: #3a2a07; color: #fde68a; } }
 body.p .arbete { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); }
 /* Sannolikhet: kartan sa stor som skarmen tillater (hogst ca 78 % av hojden), samma proportioner */
 body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }   /* 20/11 kvall: fyller rutan, se satVb */
@@ -247,6 +249,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button>
 </div>
 
+<div class="nykorning" id="nyKorning" hidden role="status"></div>
 <div class="kontroller ejTaf">
   <div class="falt"><label for="punkt">Punkt</label><select id="punkt"></select></div>
   <div class="falt"><label for="lat">Lat</label><input id="lat" class="koord" inputmode="decimal"></div>
@@ -630,6 +633,13 @@ async function hamta(url, medRetry = true, binar = false, maxS = 0) {
     clearTimeout(tid);
     if (st === 0 && maxS) return { st: 0, txt: "", buf: null, cache: null, tidsgrans: true };
     if (st === 0 && VAG === "direkt") { VAG = null; vagLofte = null; }   // natet bytt? prova vagen igen nasta anrop
+    // 21/11: ingen svar inom tidsgransen via mellanservern. Svarar mellanservern (och thredds) pa ett litet
+    // kontrollanrop ar det just den har filen som hanger - typiskt medan met.no skriver en ny korning (20/11 16:11
+    // och 21/11 07:15). Da vantar vi och provar igen i stallet for att byta till direkt (som hanger lika mycket).
+    if (st === 0 && url !== orig && VAG === "mellan" && f < 3 && await svarar(MELLAN, PROV_MELLAN_S)) {
+      status("thredds.met.no svarar inte på just den här frågan – det händer ofta medan en ny körning skrivs. Försöker igen om 30 s …");
+      await new Promise(r => setTimeout(r, 30000)); continue;
+    }
     // mellanservern svarar inte alls mitt i en hamtning -> resten av besoket direkt till thredds
     if (st === 0 && url !== orig && VAG === "mellan") {
       VAG = "direkt"; vagLofte = Promise.resolve("direkt"); visaVag(); url = orig;
@@ -637,7 +647,7 @@ async function hamta(url, medRetry = true, binar = false, maxS = 0) {
     }
     // NYTT 19/11: mellanservern svarar 5xx (morgnarna 18-19/11 svarade thredds GitHub men inte Cloudflare)
     // -> kolla en gang per besok om thredds nas direkt harifran; i sa fall resten av besoket direkt.
-    if (st >= 500 && url !== orig && VAG === "mellan") {
+    if (st >= 500 && url !== orig && VAG === "mellan" && !maxS) {
       if (direktNas === null) { status("Mellanservern svarade " + st + " – provar direkt mot thredds.met.no …"); direktNas = await svarar(BAS, PROV_DIREKT_S); }
       if (direktNas) {
         VAG = "direkt"; vagLofte = Promise.resolve("direkt"); url = orig;
@@ -2509,7 +2519,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261121-0030"></script>
+<script src="sannolikhet.js?v=20261121-0840"></script>
 <script src="taf.js?v=20261121-0820"></script>
 </body>
 </html>
