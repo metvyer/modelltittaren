@@ -37,6 +37,9 @@ Inga personuppgifter sparas. <a href="./">← Tillbaka till Modelltittaren</a></
 <div class="tab"><table id="dagar"><tr><td class="v">Hämtar …</td></tr></table></div>
 
 <h2>Senaste hämtningarna från källan</h2>
+<p id="nyckelRad">Listan visar vad som hämtats (områden och punkter) och kräver därför en nyckel.
+  <input type="password" id="nyckel" placeholder="Nyckel" autocomplete="off" style="width:180px"> <button id="nyckelOk">Visa</button>
+  <button id="nyckelGlom" hidden>Glöm nyckeln</button> <span id="nyckelInfo"></span></p>
 <div class="tab" style="max-height: 480px"><table id="senaste"></table></div>
 
 <h2>GitHub-förhämtning (tid-höjd för de förvalda flygplatserna)</h2>
@@ -58,7 +61,9 @@ const lokal = iso => new Date(iso.length <= 17 ? iso.replace("Z", ":00Z") : iso)
 
 async function mellan() {
   let d;
-  try { const r = await fetch(STAT_URL, { cache: "no-store" }); d = await r.json(); }
+  // 21/11 kvall: detaljerna kraver nyckeln (sparas bara i den har webblasaren, i localStorage)
+  const nyckel = localStorage.getItem("mt:statNyckel") || "";
+  try { const r = await fetch(STAT_URL, { cache: "no-store", headers: nyckel ? { "X-Mt-Nyckel": nyckel } : {} }); d = await r.json(); }
   catch (e) { $("dagar").innerHTML = '<tr><td class="v fel">Kunde inte nå mellanservern.</td></tr>'; return; }
   // per dag
   const dagar = new Map();
@@ -79,7 +84,10 @@ async function mellan() {
   // senaste
   let s = '<tr><th class="v">Tid (lokal)</th><th class="v">Typ</th><th class="v">Vad</th><th>Status</th><th>MB</th><th>Sek</th></tr>';
   for (const r of d.senaste) s += `<tr><td class="v">${lokal(r.tid)}</td><td class="v">${TYP[r.typ] || esc(r.typ)}</td><td class="vad">${esc(r.vad)}</td><td class="${r.status === 200 ? "" : "fel"}">${r.status}</td><td>${mb(r.byte)}</td><td>${(r.ms / 1000).toFixed(1)}</td></tr>`;
-  if (!d.senaste.length) s += '<tr><td class="v" colspan="6">Inga hämtningar registrerade än.</td></tr>';
+  if (!d.detaljer) s = '<tr><td class="v">' + (d.felnyckel ? '<span class="fel">Fel nyckel.</span>' : 'Ange nyckeln ovan för att se listan.') + '</td></tr>';
+  else if (!d.senaste.length) s += '<tr><td class="v" colspan="6">Inga hämtningar registrerade än.</td></tr>';
+  $("nyckelGlom").hidden = !nyckel; $("nyckel").hidden = $("nyckelOk").hidden = !!d.detaljer;
+  $("nyckelInfo").textContent = d.detaljer ? "Nyckeln är sparad i den här webbläsaren." : "";
   $("senaste").innerHTML = s;
 }
 async function github() {
@@ -90,6 +98,9 @@ async function github() {
   if (!d.length) h += '<tr><td class="v" colspan="6">Ingen förhämtning registrerad än (loggen startar 19/11).</td></tr>';
   $("github").innerHTML = h;
 }
+$("nyckelOk").addEventListener("click", () => { const v = $("nyckel").value.trim(); if (v) { localStorage.setItem("mt:statNyckel", v); $("nyckel").value = ""; mellan(); } });
+$("nyckel").addEventListener("keydown", e => { if (e.key === "Enter") $("nyckelOk").click(); });
+$("nyckelGlom").addEventListener("click", () => { localStorage.removeItem("mt:statNyckel"); mellan(); });
 mellan(); github();
 </script>
 </body>

@@ -170,7 +170,7 @@ export default {
                    "Access-Control-Expose-Headers": "Cf-Cache-Status" };
 
     if (req.method === "OPTIONS")
-      return new Response(null, { headers: { ...cors, "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400" } });
+      return new Response(null, { headers: { ...cors, "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "Content-Type, X-Mt-Nyckel", "Access-Control-Max-Age": "86400" } });
 
     // Testsida: öppna adressen i webbläsaren för att se att mellanservern nås
     if (url.pathname === "/" || url.pathname === "")
@@ -289,13 +289,17 @@ export default {
 
     if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
 
-    // Statistik: senaste 31 dagarna per typ + senaste hämtningarna från källorna
+    // Statistik: senaste 31 dagarna per typ (oppet) + senaste hamtningarna fran kallorna.
+    // NYTT 21/11 kvall: listan med VAD som hamtats (omraden/punkter = spar av var folk tittar) kraver nyckeln
+    // STAT_NYCKEL (hemlighet i Cloudflare), skickad i huvudet X-Mt-Nyckel. Utan nyckel: bara dagssiffror.
     if (url.pathname === "/statistik") {
-      const ut = { dagar: [], senaste: [] };
+      const ut = { dagar: [], senaste: [], detaljer: false };
+      const giltig = !!env.STAT_NYCKEL && (req.headers.get("X-Mt-Nyckel") || "") === env.STAT_NYCKEL;
       if (env.DB) {
         ut.dagar = (await env.DB.prepare("SELECT * FROM dag WHERE datum >= date('now', '-31 day') ORDER BY datum DESC, typ").all()).results;
-        ut.senaste = (await env.DB.prepare("SELECT tid, typ, vad, status, byte, ms FROM senaste ORDER BY id DESC LIMIT 200").all()).results;
+        if (giltig) { ut.detaljer = true; ut.senaste = (await env.DB.prepare("SELECT tid, typ, vad, status, byte, ms FROM senaste ORDER BY id DESC LIMIT 200").all()).results; }
       }
+      if (req.headers.get("X-Mt-Nyckel") && !giltig) ut.felnyckel = true;
       return new Response(JSON.stringify(ut), { headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
     }
 

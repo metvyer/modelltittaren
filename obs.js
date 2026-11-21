@@ -199,15 +199,22 @@ function obsVy() {
 // ---------------- ritning ----------------
 function obsVisa() {
   const g = $("kObs"); if (!g) return;
-  const r = OBS.ramar[OBS.i]; if (!r || !OBS.lage) { g.textContent = ""; return; }
+  const r = OBS.ramar[OBS.i]; if (!r || !OBS.lage) { g.textContent = ""; obsPrognosSkylt(null); return; }
   const v = r.bild;
   $("obsTid").textContent = obsTidTxt(r.t) + (r.prognos ? "  PROGNOS +" + Math.round((r.t - OBS.ramar.filter(x => !x.prognos).pop().t) / 60e3) + " min" : "") + "  ·  " + obsSen(r.t);
   $("obsTid").classList.toggle("prognos", !!r.prognos);
+  obsPrognosSkylt(r);
   $("obsReglage").max = Math.max(0, OBS.ramar.length - 1); $("obsReglage").value = OBS.i;
   if (!v) return;   // behall forra bilden tills denna ar klar
   const lag = v.lager || [];   // [bas, ev. blixtar]
   g.textContent = "";
   for (const b of [v.under, v, ...lag]) if (b && b.href) g.appendChild(el("image", { href: b.href, x: b.vy.x, y: b.vy.y, width: b.vy.w, height: b.vy.h, preserveAspectRatio: "none" }));
+}
+// 21/11 kvall: rod skylt i kartans hörn + rod ram nar loopen visar met.no:s prognos (fast, foljer inte zoom)
+function obsPrognosSkylt(r) {
+  const p = !!(r && r.prognos && OBS.lage === "rad"), sk = $("obsPrognosSkylt"); if (!sk) return;
+  sk.hidden = !p; document.querySelector(".kartram").classList.toggle("prognosram", p);
+  if (p) { const sist = OBS.ramar.filter(x => !x.prognos).pop(); sk.textContent = "PROGNOS +" + Math.round((r.t - (sist ? sist.t : r.t)) / 60e3) + " min · " + obsTidTxt(r.t); }
 }
 const obsSen = t => { const m = Math.round((Date.now() - t) / 60e3); return m < 0 ? "om " + -m + " min" : m < 90 ? m + " min sedan" : Math.round(m / 6) / 10 + " h sedan"; };
 function obsStatus(txt) { const s = $("obsStatus"); if (s) s.textContent = txt; }
@@ -299,7 +306,7 @@ function obsTillampa(o) {
 // ---------------- flikbyte ----------------
 function obsLage(nytt) {
   const var_ = OBS.lage; OBS.lage = nytt === "sat" || nytt === "rad" ? nytt : null;
-  if (!OBS.lage) { obsSpela(false); clearInterval(obsAutoTimer); $("kObs").textContent = ""; OBS.gen++; return; }
+  if (!OBS.lage) { obsSpela(false); clearInterval(obsAutoTimer); $("kObs").textContent = ""; OBS.gen++; obsPrognosSkylt(null); return; }
   if (OBS.lage === "sat" && typeof tafLaddaEuropa === "function") tafLaddaEuropa().then(() => satVb(vb.x, vb.y, vb.w));
   obsFyllVal();
   if (var_ !== OBS.lage) { OBS.ramar = []; OBS.i = 0; $("kObs").textContent = ""; }
@@ -344,4 +351,33 @@ function obsFyllForkl() {
     if (!OBS.lage || ev.altKey || ev.ctrlKey || ev.metaKey) return; const t = ev.target.tagName; if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;
     if (ev.key === "ArrowLeft") { obsStega(-1); ev.preventDefault(); } else if (ev.key === "ArrowRight") { obsStega(1); ev.preventDefault(); } else if (ev.key === " ") { obsSpela(); ev.preventDefault(); }
   });
+})();
+
+// ===================================================================
+//  LEGEND I KARTAN (NYTT 21/11 kvall) - fliken Sannolikhet och Karta m0
+// ===================================================================
+// Fargrutorna fran forklaringen under kartan (pForkl / m0Forkl) visas aven inne i kartan, staende vid
+// vansterkanten, hogsta vardet overst. Fast i kartramen - foljer inte med nar man zoomar eller flyttar.
+// Byggs om automatiskt nar forklaringen under kartan andras (MutationObserver) eller fliken byts.
+function kartLegend() {
+  const L = $("kartLegend"); if (!L) return;
+  const kalla = lage === "p" ? $("pForkl") : lage === "m0" ? $("m0Forkl") : null;
+  const rader = kalla ? [...kalla.children].filter(sp => sp.querySelector("i")) : [];
+  if (!rader.length) { L.hidden = true; return; }
+  let rub = "";
+  if (lage === "p") { const pa = PPARAM[$("pParam").value]; rub = typeof visaLage === "function" && visaLage() === "sannolikhet" ? "Sannolikhet" : pa ? pa.namn.split(",")[0] : ""; }
+  else if (typeof M0P !== "undefined" && M0P[M0F.v]) rub = M0P[M0F.v].namn;
+  L.textContent = ""; const b = document.createElement("b"); b.textContent = rub; L.appendChild(b);
+  for (const sp of rader.slice().reverse()) {
+    const d = document.createElement("div"), i = document.createElement("i"), src = sp.querySelector("i");
+    i.style.background = src.style.background; d.append(i, sp.textContent.trim()); L.appendChild(d);
+  }
+  L.hidden = false;
+}
+(function kartLegendInit() {
+  let t = 0; const omrita = () => { clearTimeout(t); t = setTimeout(kartLegend, 30); };
+  const mo = new MutationObserver(omrita);
+  for (const id of ["pForkl", "m0Forkl"]) { const e = $(id); if (e) mo.observe(e, { childList: true, subtree: true, characterData: true }); }
+  new MutationObserver(omrita).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  omrita();
 })();
