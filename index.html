@@ -399,6 +399,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <button class="sek liten" id="pMeteo" title="Hela körningen (+0 till +61 h) för vald parameter i den valda punkten">Meteogram här</button>
     <span id="pMeteoInfo" class="dim"></span>
     <div id="pMeteoRuta" hidden><div class="meteohuvud"><b id="pMeteoTitel"></b><span><button class="sek liten" id="pMeteoStor" title="Lägg meteogrammet under allt annat, över hela sidans bredd – då syns hela körningen">⤢ Expandera</button> <button class="sek liten" id="pMeteoStang" title="Stäng meteogrammet">✕</button></span></div>
+      <div class="meteonb" id="pMeteoExtra">Jämför med: <button class="sek liten" id="pMeteoX_aifs" aria-pressed="false" title="ECMWF AIFS (AI-modell), ensemble 51 medlemmar – grönt band 10–90 % och streckad median. Via Open-Meteo.">AIFS</button> <button class="sek liten" id="pMeteoX_nordic" aria-pressed="false" title="MET Nordic 1 km (met.no, MEPS justerad mot observationer, deterministisk) – lila linje. Via Open-Meteo.">MET Nordic</button> <button class="sek liten" id="pMeteoX_nc" aria-pressed="false" title="met.no nowcast var 5:e minut ca 2 h framåt (radar + modell) – orange linje. Nederbörd visas som mm/h i läget Per timme.">Nowcast</button> <span class="dim" id="pMeteoExtraInfo"></span></div>
       <div class="meteonb" id="pMeteoNbRad" hidden><label for="pMeteoNb">Nederbörd:</label> <select id="pMeteoNb"></select></div>
       <div class="meteoskroll"><svg id="pMeteoSvg"></svg></div>
       <div class="dim" id="pMeteoForkl"></div></div>
@@ -425,6 +426,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <div class="falt"><label for="obsKalla" id="obsKallaEtikett">Bild</label><select id="obsKalla"></select></div>
     <div class="falt"><label for="obsLangd">Loop</label><select id="obsLangd"></select></div>
     <button class="sek liten" id="obsBlixt" aria-pressed="false" title="Lägg blixtar från MTG:s blixtkamera (LI, senaste 5 min före bildens tid) ovanpå">Blixtar</button>
+    <span id="obsUnderRad" class="falt"><label for="obsUnder">Satellit under</label><select id="obsUnder"><option value="">Ingen</option><option value="ir105">IR 10,5</option><option value="geocolour">Geocolour</option><option value="vis06">VIS (dag)</option></select></span>
     <span id="obsPrognosRad"><button class="sek liten" id="obsPrognos" aria-pressed="true" title="met.no:s radarprognos (nowcast) ca 2 h framåt efter senaste bilden – markeras PROGNOS">Prognos 2 h</button></span>
     <button class="sek liten" id="obsAuto" aria-pressed="true" title="Automatisk uppdatering: nya bilder hämtas av sig själva (kollar varannan minut). Står du på senaste bilden följer den med.">Auto-uppdatera</button>
     <div class="falt"><label for="obsFps">Tid per bild</label><select id="obsFps"><option value="0.1">0,1 s</option><option value="0.2">0,2 s</option><option value="0.3">0,3 s</option><option value="0.4">0,4 s</option><option value="0.5">0,5 s</option><option value="0.6">0,6 s</option><option value="0.7">0,7 s</option><option value="0.8">0,8 s</option><option value="0.9">0,9 s</option><option value="1.0">1,0 s</option></select></div>
@@ -2558,13 +2560,14 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261121-1830"></script>
+<script src="sannolikhet.js?v=20261121-2030"></script>
 <script src="kombo.js?v=20261121-1330"></script>
 <script src="m0karta.js?v=20261121-1830"></script>
 <script src="taf.js?v=20261121-1945"></script>
 <script src="rita.js?v=20261121-1300"></script>
-<script src="dela.js?v=20261121-1330"></script>
+<script src="dela.js?v=20261121-2030"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261121-2000"></script>
+<script src="obs.js?v=20261121-2030"></script>
+<script src="extra.js?v=20261121-2030"></script>
 </body>
 </html>

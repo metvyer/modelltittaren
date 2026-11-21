@@ -1111,6 +1111,7 @@ async function visaMeteogram() {
   ritaMeteogram();
   // NYTT 20/11 kvall: vindriktning varje timme (byvind) och METAR-observationer (flygplatser) - ritas nar de kommit
   const M1 = P.meteo;
+  if (typeof extraHamta === "function") extraHamta(M1);   // 21/11 kvall: AIFS / MET Nordic / nowcast om de ar pa
   if (v === "by") try { M1.u = await meteoHamta(dtg, "u10", r.iy, r.ix); M1.w = await meteoHamta(dtg, "v10", r.iy, r.ix); if (P.meteo === M1) ritaMeteogram(); } catch (e) {}
   if (["by", "sikt", "bas", "t2"].includes(v) && typeof narmasteICAO === "function") try {
     const icao = narmasteICAO(lat, lon), tim = Math.min(72, Math.ceil((Date.now() - dtgDatum(dtg).getTime()) / 3600e3) + 1);
@@ -1154,6 +1155,9 @@ function ritaMeteogram() {
   }
   const tak = METEO_TAK[M0.v];
   let ymax = 0, ymin = 0; for (const p of poster) for (const w of p.v) if (isFinite(w)) { ymax = Math.max(ymax, tak ? Math.min(w, tak) : w); ymin = Math.min(ymin, w); }
+  // 21/11 kvall: andra modeller (AIFS, MET Nordic, nowcast) - extra.js - tas med i skalan
+  const EX = typeof extraSerier === "function" ? extraSerier(M0, nb ? lage : null, start, bas, nt) : [];
+  for (const w of typeof extraVarden === "function" ? extraVarden(EX) : []) if (isFinite(w)) { ymax = Math.max(ymax, tak ? Math.min(w, tak) : w); ymin = Math.min(ymin, w); }
   const trosk = parseFloat($("pTrosk").value.replace(",", "."));
   const visaTrosk = isFinite(trosk) && !nb;
   if (visaTrosk) { ymax = Math.max(ymax, trosk); ymin = Math.min(ymin, trosk); }
@@ -1219,6 +1223,7 @@ function ritaMeteogram() {
     if (dd) g("path", { d: dd, fill: "none", stroke: farg, "stroke-width": br, "stroke-dasharray": streck || "" }); };
   linje(0, "#d62828", 1.6);
   if (vm !== null && vm !== 0) linje(vm, c("--fg"), 1.4, "4 2");
+  if (EX.length) extraRita(svg, EX, h => VM + (h + 0.5) * KOL, y, h => { const d = new Date(bas + h * 3600e3); return p2(d.getUTCHours()) + ":" + p2(d.getUTCMinutes()) + "Z"; });
   if (visaTrosk) { g("line", { x1: VM, x2: VM + B, y1: y(trosk), y2: y(trosk), stroke: "#f97316", "stroke-width": 1.4, "stroke-dasharray": "6 3" });
     g("text", { x: VM + B - 2, y: y(trosk) - 3, "font-size": 9.5, "text-anchor": "end", fill: "#c2410c" }, "tröskel " + trosk.toLocaleString("sv-SE") + " " + pa.enhet); }
   // NYTT 20/11 kvall: METAR-observationer (svarta prickar) for passerade timmar, narmaste flygplats
@@ -1286,6 +1291,7 @@ function ritaMeteogram() {
     (METEO_TAK[M0.v] ? " Skalan slutar vid " + METEO_TAK[M0.v].toLocaleString("sv-SE") + " " + pa.enhet + "." : "") +
     (obsAntal ? " Svarta prickar = METAR " + M0.icao + (M0.v === "by" ? " (ihålig = medelvind, ingen by rapporterad)" : M0.v === "bas" ? " (lägsta SCT/BKN/OVC/VV)" : "") + "." : "") +
     (harVind ? " Pilarna = vindriktning 10 m (ensemblens medel), blekare = medlemmarna oense." : "") + (harObsVind ? " Röda pilar = observerad vindriktning (METAR)." : "") +
+    (typeof extraForkl === "function" ? extraForkl(EX) : "") +
     (medlemmar().length < ENS_MEDL ? " Bara " + ($("pMedl").value === "nya" ? "de 15 nya medlemmarna (0–14)" : "de 15 gamla medlemmarna (15–29, förra körningen)") + "." : "");
   ruta_.hidden = false;
 }

@@ -42,6 +42,8 @@ function vyFanga() {
       skew: skewT !== null && !$("skewRuta").hidden ? skewT : null });
   } else if (lage === "m0") {   // 21/11: fliken Karta m0
     Object.assign(v, { dtg: M0F.dtg, m0v: M0F.v, m0l: M0F.v2, m0t: M0F.t });
+  } else if ((lage === "sat" || lage === "rad") && typeof obsFanga === "function") {   // 21/11 kvall: satellit och radar
+    v.ob = obsFanga();
   }
   return v;
 }
@@ -115,6 +117,8 @@ async function vyTillampa(v) {
       if (v.m0t !== null && v.m0t !== undefined) M0F.t = v.m0t;
       if (v.dtg && $("korning")) { $("korning").value = v.dtg; if ($("korning").value !== v.dtg) $("korning").value = "senaste"; M0F.koll = 0; }
       ritaMarkorer(); m0Uppdatera();
+    } else if ((lage === "sat" || lage === "rad") && v.ob && typeof obsTillampa === "function") {
+      await new Promise(r => setTimeout(r, 50)); obsTillampa(v.ob);
     }
     // zoomen: bara nar delaren sjalv zoomat om (annars far tittaren behalla sin egen zoom)
     const vbT = JSON.stringify(v.vb || null);
