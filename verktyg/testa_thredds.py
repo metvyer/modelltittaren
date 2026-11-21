@@ -493,6 +493,17 @@ def flerPunkter(iy, ix):
     mol = lambda p: f"cloud_area_fraction_ml[0:23][{ks}:{F.NIV - 1}][{p[0]}][{p[1]}]"
     kor("bara moln, 1 punkt", [mol(pkt[0])])
     kor("bara moln, 3 punkter i en fråga", [mol(p) for p in pkt])
+    # thredds vagrar samma variabel flera ganger -> testa i stallet en ruta som tacker ESCM+ESSA,
+    # och om .nc (utan ncml-aggregering) ar snabbare an .ncml
+    (ay, ax), (by_, bx) = pkt[0], pkt[1]
+    y0, y1, x0, x1 = min(ay, by_), max(ay, by_), min(ax, bx), max(ax, bx)
+    skriv(f"Ruta ESCM+ESSA: y {y0}-{y1}, x {x0}-{x1} ({(y1 - y0 + 1) * (x1 - x0 + 1)} punkter)")
+    kor("bara moln, ruta ESCM+ESSA", [f"cloud_area_fraction_ml[0:23][{ks}:{F.NIV - 1}][{y0}:{y1}][{x0}:{x1}]"])
+    sy, sx = max(1, y1 - y0), max(1, x1 - x0)
+    kor("bara moln, ruta med steg (bara hörnen)", [f"cloud_area_fraction_ml[0:23][{ks}:{F.NIV - 1}][{y0}:{sy}:{y1}][{x0}:{sx}:{x1}]"])
+    kor("bara moln, hela Sverige steg 40", [f"cloud_area_fraction_ml[0:23][{ks}:{F.NIV - 1}][0:40:1000][150:40:850]"])
+    st, txt, sek, by = hamta(BAS + "meps_det_2_5km_" + dtg + ".nc.ascii?" + urllib.parse.quote(mol(pkt[0]), safe=""), tidsgrans=300)
+    skriv(f"| bara moln, 1 punkt, .nc i stället för .ncml | {st} | {sek:.1f} | {by / 1024:.0f} |" + (f" {txt[:120]!r}" if st != 200 else ""))
     skriv()
 
 
