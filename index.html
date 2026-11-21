@@ -358,7 +358,8 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
     <button class="sek liten" id="tafAvis" aria-pressed="false" title="Systemavisering (notis) vid larm – webbläsaren frågar om lov första gången">Avisering</button>
   </div>
   <div class="tafinst">
-    <span class="grp">Lägg till <input type="text" id="tafNy" size="5" maxlength="4" placeholder="ESNQ"><button class="sek liten" id="tafLagg">Lägg till</button></span>
+    <span class="grp">Sök <input type="search" id="tafNy" size="16" list="tafSokLista" placeholder="ICAO eller namn" autocomplete="off"><datalist id="tafSokLista"></datalist><button class="sek liten" id="tafLagg">Lägg till</button></span>
+    <button class="sek liten" id="tafIcao" aria-pressed="false" title="Skriv ICAO-koden vid alla flygplatser på kartan (klicka på en för att lägga till den)">Visa ICAO</button>
     <button class="sek liten" id="tafStd" title="Tillbaka till de 11 förvalda flygplatserna">Förvalda 11</button>
     <span class="grp">Ordna efter <select id="tafOrdning"></select></span>
     <button class="sek liten" id="tafNu">Uppdatera nu</button>
@@ -2508,6 +2509,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 })();
 </script>
 <script src="sannolikhet.js?v=20261121-0030"></script>
-<script src="taf.js?v=20261121-0750"></script>
+<script src="taf.js?v=20261121-0805"></script>
 </body>
 </html>
