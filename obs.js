@@ -66,7 +66,16 @@ const obsMetT = f => { const m = f.match(/\.(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\
 // kan lasa utan ett stort bibliotek). Loopen byggs darfor upp medan sidan ar oppen: varje ny bild sparas i minnet.
 const OBS_SMHI = "https://opendata-download-radar.smhi.se/api/version/latest/area/sweden/product/comp";
 const obsSmhiArkiv = new Map();   // tid -> blob-url for bilden
+// 21/11 natt: mellanservern samlar SMHI:s bilder var 5:e minut (senaste 6 h) - hela loopen direkt.
+// Svarar den inte anvands det gamla sattet (bara senaste, loopen byggs medan sidan ar oppen).
 async function obsSmhiLista(n) {
+  try {
+    const bas = MELLAN.replace(/mepslatest\/$/, ""), r = await fetch(bas + "radar/smhi/lista", { cache: "no-store" });
+    if (r.ok) { const l = await r.json(); if (Array.isArray(l) && l.length) return l.slice(-n).map(t => ({ t, url: bas + "radar/smhi/" + t + ".png" })); }
+  } catch (e) {}
+  return obsSmhiListaSjalv(n);
+}
+async function obsSmhiListaSjalv(n) {
   const j = await (await fetch(OBS_SMHI + ".json", { cache: "no-store" })).json();
   const f = (j.lastFiles || []).find(x => (x.formats || []).some(y => y.key === "png"));
   if (f) { const m = String(f.valid || "").match(/(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)/), t = m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]) : NaN;
@@ -329,7 +338,7 @@ function obsFyllVal() {
 function obsFyllForkl() {
   $("obsForkl").innerHTML = OBS.lage === "rad" ? (OBS.rad === "metno"
     ? "Nederbördsintensitet mm/h (met.no, logaritmisk skala 0,1–50). " + (obsMetCat.filer.length ? "<img alt='' src='https://thredds.met.no/thredds/wms/" + obsMetCat.filer.slice(-1)[0] + "?request=GetLegendGraphic&layer=lwe_precipitation_rate&colorbaronly=true&vertical=false&width=200&height=12&palette=metnoprecipitation&colorscalerange=0.1,50&logscale=true&numcolorbands=250' style='height:12px;vertical-align:middle' onerror='this.remove()'> 0,1 – 50 mm/h" : "")
-    : "Radarreflektivitet med SMHI:s färgskala. OBS: SMHI lägger bara ut den senaste bilden öppet – loopen byggs upp medan sidan är öppen (" + obsSmhiArkiv.size + " bilder hittills). För loop direkt: välj met.no.")
+    : "Radarreflektivitet med SMHI:s färgskala. Mellanservern sparar SMHI:s bilder var 5:e minut (senaste 6 h).")
     : OBS_SAT[OBS.sat].genom ? "Genomskinligt lager – kartan syns under." : "";
 }
 (function obsInit() {

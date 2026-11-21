@@ -161,7 +161,31 @@ export class Kalla extends WorkerEntrypoint {
 }
 
 // ---- Ingången (ingen cache): kontroller + CORS ----
+// ---- SMHI-radarn samlas (NYTT 21/11 natt) ----
+// SMHI lagger bara ut SENASTE kompositbilden oppet som png (aldre bara som h5). Var 5:e minut (cron i
+// wrangler.toml) hamtar mellanservern den senaste och sparar den i D1-tabellen radar_smhi (t = bildens tid,
+// ms; png = bilden). Bilder aldre an 6 h tas bort. Sidan laser /radar/smhi/lista och /radar/smhi/<t>.png
+// och far darmed en hel loop direkt. Bara SMHI:s oppna data - inget om vem som tittar.
+const SMHI_RADAR = "https://opendata-download-radar.smhi.se/api/version/latest/area/sweden/product/comp";
+const SMHI_SPARA_H = 6;
+async function smhiSamla(env) {
+  if (!env.DB) return;
+  const j = await (await fetch(SMHI_RADAR + ".json", { headers: UA })).json();
+  const f = (j.lastFiles || []).find(x => (x.formats || []).some(y => y.key === "png"));
+  if (!f) return;
+  const m = String(f.valid || "").match(/(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)/); if (!m) return;
+  const t = Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]);
+  const finns = await env.DB.prepare("SELECT 1 FROM radar_smhi WHERE t = ?").bind(t).first();
+  if (!finns) {
+    const r = await fetch(SMHI_RADAR + "/latest.png", { headers: UA, cf: { cacheTtl: 0 } });
+    if (r.ok) { const b = new Uint8Array(await r.arrayBuffer());
+      if (b.length > 1000) await env.DB.prepare("INSERT OR IGNORE INTO radar_smhi (t, png, byte, hamtad) VALUES (?, ?, ?, ?)").bind(t, b, b.length, new Date().toISOString()).run(); }
+  }
+  await env.DB.prepare("DELETE FROM radar_smhi WHERE t < ?").bind(Date.now() - SMHI_SPARA_H * 3600e3).run();
+}
+
 export default {
+  async scheduled(event, env, ctx) { ctx.waitUntil(smhiSamla(env).catch(e => console.log("smhiSamla", e))); },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const ursprung = req.headers.get("Origin") || "";
@@ -288,6 +312,18 @@ export default {
     }
 
     if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
+
+    // SMHI-radarn: lista med tider och bilderna (se smhiSamla)
+    if (url.pathname === "/radar/smhi/lista") {
+      const rad = env.DB ? (await env.DB.prepare("SELECT t FROM radar_smhi ORDER BY t").all()).results : [];
+      return new Response(JSON.stringify(rad.map(r => r.t)), { headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=60" } });
+    }
+    const rm = url.pathname.match(/^\/radar\/smhi\/(\d{13})\.png$/);
+    if (rm) {
+      const rad = env.DB ? await env.DB.prepare("SELECT png FROM radar_smhi WHERE t = ?").bind(+rm[1]).first() : null;
+      if (!rad) return new Response("Finns inte", { status: 404, headers: cors });
+      return new Response(new Uint8Array(rad.png), { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400, immutable" } });
+    }
 
     // Statistik: senaste 31 dagarna per typ (oppet) + senaste hamtningarna fran kallorna.
     // NYTT 21/11 kvall: listan med VAD som hamtats (omraden/punkter = spar av var folk tittar) kraver nyckeln
