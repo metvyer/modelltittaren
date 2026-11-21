@@ -106,6 +106,18 @@ def main():
     tabell("SMHI – öppna data")
     def lankar_json(t):
         j = json.loads(t); s = json.dumps(j)[:400]; return s
+    # rattade adresser (21/11): nya API:erna SNOW1gv1 (prognos) och Mesan2g v3 (analys)
+    SN = "https://opendata-download-metfcst.smhi.se/api/category/snow1g/version/1/"
+    rad("SMHI SNOW1g punkt (Arlanda)", SN + f"geotype/point/lon/{LON:.2f}/lat/{LAT:.2f}/data.json",
+        lambda t: (lambda j: f"{len(j.get('timeSeries', []))} tider, första {j['timeSeries'][0].get('time')}, andra {j['timeSeries'][1].get('time')} · parametrar: " + ", ".join(list(j['timeSeries'][0].get('data', {}).keys())[:40]))(json.loads(t)))
+    rad("SMHI SNOW1g giltiga tider", SN + "geotype/multipoint/validtime.json", lambda t: t[:300])
+    rad("SMHI SNOW1g hela Sverige, en parameter", SN + "geotype/multipoint/time/" + (nu.replace(minute=0, second=0) + timedelta(hours=3)).strftime("%Y%m%dT%H0000Z") + "/parameter/air_temperature/data.json?with-geo=false&downsample=1",
+        lambda t: (lambda j: f"{len(j.get('values', []))} punkter (hela Sverige, en tid)")(json.loads(t)), maxbyte=20_000_000)
+    rad("SMHI SNOW1g geometri", SN + "geotype/multipoint.json?downsample=20", lambda t: t[:200], maxbyte=20_000_000)
+    rad("SMHI Mesan2g v3 punkt", f"https://opendata-download-metanalys.smhi.se/api/category/mesan2g/version/3/geotype/point/lon/{LON:.2f}/lat/{LAT:.2f}/data.json",
+        lambda t: (lambda j: f"{len(j.get('timeSeries', []))} tider · parametrar: " + ", ".join(list(j['timeSeries'][0].get('data', {}).keys())[:40]) if 'timeSeries' in j else t[:200])(json.loads(t)))
+    rad("SMHI radar, produkter", "https://opendata-download-radar.smhi.se/api/version/latest/area/sweden/product/comp", lambda t: t[:300])
+    rad("SMHI blixtar, senaste dag", "https://opendata-download-lightning.smhi.se/api/version/latest/year/" + nu.strftime("%Y/month/%m/day/%d") + "/data.json", lambda t: t[:200])
     rad("SMHI metfcst (prognoser) rot", "https://opendata-download-metfcst.smhi.se/api", lankar_json)
     rad("SMHI metfcst snow1g (ny?)", "https://opendata-download-metfcst.smhi.se/api/category/snow1g/version/1.json", lankar_json)
     rad("SMHI metfcst pmp3g v2 punkt (gammal)", f"https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/{LON}/lat/{LAT}/data.json", lambda t: t[:200])
