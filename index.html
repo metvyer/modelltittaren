@@ -143,6 +143,12 @@ body.taf #kProb, body.taf #kM0, body.taf #kSiff, body.taf #kOmr { display: none;
 .flikar .delaknapp { margin-left: auto; color: var(--acc); }
 .flikar .delaknapp[aria-pressed="true"] { color: #dc2626; }
 .delarad { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 6px 0 8px; padding: 6px 10px; border: 1px solid var(--acc); border-radius: 6px; font-size: 13px; }
+/* 21/11: som tittare syns raden hela tiden (fast overst) - gron = foljer, orange = pausad */
+.delarad.foljer, .delarad.pausad { position: sticky; top: 0; z-index: 50; font-weight: 500; box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+.delarad.foljer { background: #dcfce7; border-color: #16a34a; color: #14532d; }
+.delarad.pausad { background: #ffedd5; border-color: #ea580c; color: #7c2d12; }
+@media (prefers-color-scheme: dark) { .delarad.foljer { background: #0f3d22; color: #bbf7d0; } .delarad.pausad { background: #4a2408; color: #fed7aa; } }
+.delarad .delanamn { font-weight: 700; }
 .delarad .delalank { width: 300px; max-width: 100%; font-size: 12px; }
 .delarad .delasand { color: #dc2626; }
 .delarad .delafel { color: #b45309; }
@@ -252,7 +258,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Dela det du tittar på: ger en länk som kollegor kan öppna. När du ändrar följer deras sida med (inom ca 15 s).">Dela</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Dela det du tittar på: ger en länk som kollegor kan öppna. När du ändrar följer deras sida med (inom några sekunder).">Dela</button>
 </div>
 
 <div class="nykorning" id="nyKorning" hidden role="status"></div>
@@ -2528,6 +2534,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 </script>
 <script src="sannolikhet.js?v=20261121-0840"></script>
 <script src="taf.js?v=20261121-1010"></script>
-<script src="dela.js?v=20261121-1010"></script>
+<script src="dela.js?v=20261121-1025"></script>
 </body>
 </html>

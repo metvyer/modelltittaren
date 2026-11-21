@@ -4,13 +4,18 @@
 // så den som öppnar länken ser samma karta "levande" (hovra, meteogram, zooma) och hämtar data själv
 // (oftast ur mellanserverns cache eftersom delaren just hämtat samma sak).
 // Levande: så länge ägaren har "Sänd ändringar" på skickas varje ändring (högst var 3:e s). Den som tittar frågar
-// var 15:e sekund och följer med. Rör tittaren själv kartan/valen pausas följandet ("Följ igen").
+// var 15:e sekund och följer med. Ändrar tittaren själv ett val (parameter, tid, punkt ...) pausas följandet
+// ("Följ igen"). 21/11: att skrolla, zooma eller flytta kartan pausar INTE - tittarens zoom behålls tills delaren zoomar.
 // Ägarnyckeln ligger bara i ägarens webbläsare (mt:delning). Inga namn eller meddelanden sparas.
 
 const DELA_URL = "https://modelltittaren.metvyer.workers.dev/dela";
-const DELA_SKICKA_MS = 3000, DELA_FOLJ_MS = 15000, DELA_KOLL_MS = 1000;
+// 21/11: snabbare. Tittaren fragar var 3:e s medan delaren ar aktiv (andrat nagot de senaste 3 min), annars var 12:e s.
+// Gomd flik fragar inte alls. 10 tittare en arbetsdag ryms gott inom gratisgransen (100 000 anrop/dygn).
+const DELA_SKICKA_MS = 1500, DELA_FOLJ_SNABB_MS = 3000, DELA_FOLJ_LUGN_MS = 12000, DELA_AKTIV_MS = 180000, DELA_KOLL_MS = 1000;
 const DELA = { agare: null, sander: false, senastSkickat: "", skickadTid: 0, skickar: false,
-               folj: null, foljer: false, andrad: 0, tillampar: false, fel: "" };
+               folj: null, foljer: false, andrad: 0, tillampar: false, fel: "", tillampad: "", vbSenast: "" };
+// jamforelse "har tittaren andrat nagot sjalv": utan zoom och utan korning (korningen kan bytas av sidan sjalv)
+const utanVb = v => { const k = { ...v }; delete k.vb; delete k.dtg; return JSON.stringify(k); };
 
 // ---------- Vad som sparas ----------
 function vyFanga() {
@@ -39,7 +44,11 @@ async function vyTillampa(v) {
   DELA.tillampar = true;
   try {
     const flik = v.l === "f" ? "f" : v.l;
-    if (flik !== (fav ? "f" : lage)) bytLage(flik);
+    if (flik !== (fav ? "f" : lage)) {
+      bytLage(flik);
+      // Favoriter satter sjalv tid och troskel nar fliken oppnas (efter att oversikten lasts) - vanta in det forst
+      if (flik === "f") { try { await svIndex(); } catch (e) {} await new Promise(r => setTimeout(r, 400)); }
+    }
     // punkt (tid-hojd) / omradets mitt (sannolikhet)
     const nyPunkt = $("lat").value !== v.lat || $("lon").value !== v.lon;
     $("punkt").value = v.pk; if (!$("punkt").value) $("punkt").value = "egen";
@@ -73,9 +82,12 @@ async function vyTillampa(v) {
       if (v.skew !== null && v.skew !== undefined && M && M.stat) { if (skewT !== v.skew || $("skewRuta").hidden) oppnaSkewT(v.skew); }
       else if (skewT !== null && !$("skewRuta").hidden) $("skewStang").click();
     }
-    if (v.vb) satVb(v.vb[0], v.vb[1], v.vb[2]);
+    // zoomen: bara nar delaren sjalv zoomat om (annars far tittaren behalla sin egen zoom)
+    const vbT = JSON.stringify(v.vb || null);
+    if (v.vb && vbT !== DELA.vbSenast) satVb(v.vb[0], v.vb[1], v.vb[2]);
+    DELA.vbSenast = vbT;
   } catch (e) { console.log("[dela] tillampa", e); }
-  finally { setTimeout(() => { DELA.tillampar = false; }, 300); }
+  finally { setTimeout(() => { DELA.tillampar = false; DELA.tillampad = utanVb(vyFanga()); }, 1500); }
 }
 // vanta tills punkten hamtats (hogst 2 min); ar inget pa gang efter 3 s har hamtningen misslyckats eller inte startat
 async function vantaTH() { for (let i = 0; i < 240 && (upptagen || ((!M || !M.stat) && i < 6)); i++) await new Promise(r => setTimeout(r, 500)); }
@@ -116,13 +128,10 @@ async function delaHamtaVy(forsta) {
   } catch (e) { DELA.fel = e.message === "finns inte" ? "Länken finns inte längre (delade vyer sparas 30 dagar)." : "Kunde inte hämta den delade vyn (" + e.message + ")."; if (e.message === "finns inte") DELA.foljer = false; }
   delaRitaRad();
 }
-// Tittaren rör sjalv kartan eller valen -> pausa foljandet
-function delaEgenAtgard(ev) {
-  if (!DELA.foljer || DELA.tillampar || !ev.isTrusted) return;
-  const m = ev.target && ev.target.closest ? ev.target.closest(".kartpanel, .kontroller, .pkontroller, .favpanel, .flikar, #vyTH") : null;
-  if (!m || (ev.target.closest && ev.target.closest("#delaRad"))) return;
-  if (ev.type === "pointerdown" && ev.target.closest && ev.target.closest("#karta") && ev.button !== 0) return;
-  DELA.foljer = false; delaRitaRad();
+// 21/11: Tittaren har SJALV andrat ett val (inte zoom/skroll) -> pausa foljandet. Kollas varje sekund.
+function delaKollaEgen() {
+  if (!DELA.folj || !DELA.foljer || DELA.tillampar || !DELA.tillampad) return;
+  if (utanVb(vyFanga()) !== DELA.tillampad) { DELA.foljer = false; delaRitaRad(); }
 }
 
 // ---------- Utseende ----------
@@ -132,15 +141,17 @@ function delaRitaRad() {
   const s = (text, kl) => { const e = document.createElement("span"); e.textContent = text; if (kl) e.className = kl; rad.appendChild(e); return e; };
   if (DELA.folj) {
     rad.hidden = false;
-    s(DELA.foljer ? "👁 Du följer en delad vy – den ändras när delaren ändrar (kollas var 15:e s)." : "⏸ Du styr själv – den delade vyn följs inte just nu.");
+    rad.classList.toggle("foljer", DELA.foljer); rad.classList.toggle("pausad", !DELA.foljer);
+    s((DELA.foljer ? "👁 Följer delad vy " : "⏸ Följer inte – du styr själv · ") + "«" + DELA.folj + "»", "delanamn");
+    s(DELA.foljer ? "Ändras inom några sekunder när delaren ändrar. Zooma och skrolla fritt." : "Du har ändrat något själv. Tryck Följ igen för att gå tillbaka.");
     if (DELA.foljer) b("Styr själv", () => { DELA.foljer = false; delaRitaRad(); }, "Sluta följa och titta fritt", true);
-    else b("Följ igen", () => { DELA.foljer = true; DELA.andrad = 0; delaHamtaVy(true); delaRitaRad(); }, "Gå tillbaka till delarens vy och följ med igen");
+    else b("Följ igen", () => { DELA.foljer = true; DELA.andrad = 0; DELA.vbSenast = ""; delaHamtaVy(true); delaRitaRad(); }, "Gå tillbaka till delarens vy och följ med igen");
     b("Lämna", () => { DELA.folj = null; DELA.foljer = false; history.replaceState(null, "", location.pathname); delaRitaRad(); }, "Sluta titta på den delade vyn", true);
   } else if (DELA.agare && DELA.panel) {
-    rad.hidden = false;
+    rad.hidden = false; rad.classList.remove("foljer", "pausad");
     const l = document.createElement("input"); l.readOnly = true; l.value = delaLank(DELA.agare.id); l.className = "delalank"; l.addEventListener("focus", () => l.select()); rad.appendChild(l);
     b("Kopiera länk", async e => { try { await navigator.clipboard.writeText(l.value); e.target.textContent = "Kopierad ✓"; } catch (x) { l.select(); document.execCommand && document.execCommand("copy"); e.target.textContent = "Kopierad ✓"; } setTimeout(delaRitaRad, 2000); });
-    if (DELA.sander) { s("● Sänder: de som har länken ser dina ändringar inom ca 15 s.", "delasand"); b("Pausa", () => { DELA.sander = false; delaRitaRad(); }, "Sluta skicka ändringar – länken visar då vyn som den är nu", true); }
+    if (DELA.sander) { s("● Sänder: de som har länken ser dina ändringar inom några sekunder.", "delasand"); b("Pausa", () => { DELA.sander = false; delaRitaRad(); }, "Sluta skicka ändringar – länken visar då vyn som den är nu", true); }
     else { s("Pausad: länken visar vyn som den var när du pausade."); b("Sänd ändringar", () => { DELA.sander = true; DELA.senastSkickat = ""; DELA.skickadTid = 0; delaSkicka(); delaRitaRad(); }); }
     b("Ny länk", async () => { if (!confirm2()) return; try { await delaSkapa(); } catch (e) { DELA.fel = "Kunde inte skapa länk (" + e.message + ")."; } delaRitaRad(); }, "Skapa en ny länk (den gamla slutar uppdateras)", true);
     b("Stäng", () => { DELA.panel = false; delaRitaRad(); }, "Dölj raden (sändningen fortsätter om den är på)", true);
@@ -161,9 +172,12 @@ async function delaKnappKlick() {
 (function delaInit() {
   DELA.agare = delaLasAgare();   // en tidigare delning fran denna webblasare (sander inte forran man trycker Dela)
   $("delaKnapp").addEventListener("click", delaKnappKlick);
-  ["pointerdown", "keydown", "wheel"].forEach(t => document.addEventListener(t, delaEgenAtgard, true));
-  setInterval(delaSkicka, DELA_KOLL_MS);
-  setInterval(() => delaHamtaVy(false), DELA_FOLJ_MS);
+  setInterval(() => { delaKollaEgen(); delaSkicka(); }, DELA_KOLL_MS);
+  let senastFragat = 0;
+  setInterval(() => {
+    const aktiv = DELA.andrad && Date.now() - DELA.andrad < DELA_AKTIV_MS;
+    if (Date.now() - senastFragat >= (aktiv ? DELA_FOLJ_SNABB_MS : DELA_FOLJ_LUGN_MS)) { senastFragat = Date.now(); delaHamtaVy(false); }
+  }, 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden && DELA.foljer) delaHamtaVy(false); });
   const m = location.hash.match(/[#&]v=([a-z0-9]{6,12})/);
   if (m) {
