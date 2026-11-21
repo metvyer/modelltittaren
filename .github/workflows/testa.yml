@@ -15,12 +15,12 @@ on:
         default: "ESCM"
         required: false
       delar:
-        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), G = vilka medlemmar (lagged), V = stort prov av datakällor"
+        description: "Delar: ABCDE = standard, F = mät T + fukt i tid-höjd (~4 min), G = vilka medlemmar (lagged), V = stort prov av datakällor, Y = djupare prov (bilder i grenen matprov)"
         default: "ABCDE"
         required: false
 
 permissions:
-  contents: read
+  contents: write   # 21/11: delar=Y lagger bilder i grenen "matprov" (inget annat skrivs)
 
 concurrency:
   group: testa-thredds
@@ -48,6 +48,21 @@ jobs:
       - name: Testa polska TAF
         if: contains(inputs.delar, 'W')
         run: python3 verktyg/testa_taf_pl.py
+
+      - name: Djupare prov av datakällor
+        if: contains(inputs.delar, 'Y')
+        run: python3 verktyg/testa_kallor2.py
+
+      - name: Spara bilder i grenen matprov
+        if: contains(inputs.delar, 'Y')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan matprov-tmp
+          git rm -rq --cached .
+          git add -f matprov kallor2.md
+          git commit -qm "Mätprov $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf origin HEAD:matprov
 
       - name: Testa IMGW:s flyg-API
         if: contains(inputs.delar, 'X')
