@@ -255,7 +255,8 @@ function tafLaddaEuropa() {
       for (const [n, w, d] of [["land", 0.7], ["sjo", 0.5], ["grans", 1, "5 2"], ["grad", 0.6, "4 4"]]) {
         const a = { d: k[n], class: n, "vector-effect": "non-scaling-stroke", "stroke-width": w }; if (d) a["stroke-dasharray"] = d; g.appendChild(el("path", a)); }
       if (typeof kustOverst === "function") kustOverst($("kKustEU"), k);   // 21/11 kvall: kust/granser overst
-      KARTA_EU = { x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1 }; if (lage === "taf") satVb(vb.x, vb.y, vb.w);
+      KARTA_EU = { x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1 };
+      { const v = $("klipEUv"); if (v) v.setAttribute("d", "M" + (k.x0 + 1) + " " + (k.y0 + 1) + "H" + (k.x1 - 1) + "V" + (k.y1 - 1) + "H" + (k.x0 + 1) + "Z M0 0H949V1069H0Z"); }   /* Europakusten bara utanfor MEPS-rutan och utan ytterram */ if (lage === "taf") satVb(vb.x, vb.y, vb.w);
     }).catch(() => {})]).then(() => { if (lage === "taf") { tafRita(); ritaMarkorer(); } });
   return euLaddad;
 }

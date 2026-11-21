@@ -33,9 +33,9 @@ const OBS_LANGD = [[1, "Senaste"], [6, "1 h"], [12, "2 h"], [18, "3 h"], [36, "6
 let OBS_SMHI_PROJ = null;   // satts i obsSmhiProj() nar vi vet - se nedan
 
 let OBS = (() => { let o = {}; try { o = JSON.parse(lasa("mt:obs") || "{}"); } catch (e) {}
-  return { sat: o.sat || "geocolour", rad: o.rad || "smhi", langd: o.langd || 12, opac: o.opac || 90, blixt: !!o.blixt, prognos: o.prognos !== false, auto: o.auto !== false,
+  return { sat: o.sat || "geocolour", rad: o.rad || "smhi", langd: o.langd || 12, opac: o.opac || 90, fps: o.fps || 2, paus: o.paus || 2, blixt: !!o.blixt, prognos: o.prognos !== false, auto: o.auto !== false,
     lage: null, ramar: [], i: 0, spelar: false, cache: new Map(), gen: 0, bytes: 0, senast: 0 }; })();
-const obsSpara = () => lagra("mt:obs", JSON.stringify({ sat: OBS.sat, rad: OBS.rad, langd: OBS.langd, opac: OBS.opac, blixt: OBS.blixt, prognos: OBS.prognos, auto: OBS.auto }));
+const obsSpara = () => lagra("mt:obs", JSON.stringify({ fps: OBS.fps, paus: OBS.paus, sat: OBS.sat, rad: OBS.rad, langd: OBS.langd, opac: OBS.opac, blixt: OBS.blixt, prognos: OBS.prognos, auto: OBS.auto }));
 const obsTidTxt = t => { const d = new Date(t); return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0") + "Z"; };
 const obsIso = t => new Date(t).toISOString().slice(0, 19) + "Z";
 
@@ -257,7 +257,7 @@ function obsSpela(pa) {
   const steg = () => { if (!OBS.spelar) return; const n = OBS.ramar.length; if (!n) return;
     // hoppa over bilder som inte ar klara
     let k = OBS.i; for (let f = 0; f < n; f++) { k = (k + 1) % n; if (OBS.ramar[k].bild) break; }
-    OBS.i = k; obsVisa(); obsSpelTimer = setTimeout(steg, k === n - 1 || (OBS.ramar[k + 1] && OBS.ramar[k + 1].prognos && !OBS.ramar[k].prognos) ? 1400 : 450); };
+    OBS.i = k; obsVisa(); obsSpelTimer = setTimeout(steg, k === n - 1 ? OBS.paus * 1000 : (OBS.ramar[k + 1] && OBS.ramar[k + 1].prognos && !OBS.ramar[k].prognos) ? Math.max(1000 / OBS.fps, 800) : 1000 / OBS.fps); };
   obsSpelTimer = setTimeout(steg, 300);
 }
 function obsStega(d) { if (!OBS.ramar.length) return; obsSpela(false); OBS.i = Math.max(0, Math.min(OBS.ramar.length - 1, OBS.i + d)); obsVisa(); }
@@ -302,6 +302,9 @@ function obsFyllForkl() {
   knapp("obsAuto", "auto", obsAuto);
   knapp("obsBlixt", "blixt", () => { for (const r of OBS.ramar) r.bild = null; obsLadda(false); });
   knapp("obsPrognos", "prognos", () => obsLadda(true));
+  const fps = $("obsFps"), pau = $("obsPaus"); fps.value = OBS.fps; pau.value = OBS.paus;   /* 21/11 kvall: loopens fart och stopp pa sista bilden */
+  fps.addEventListener("change", () => { OBS.fps = +fps.value; obsSpara(); });
+  pau.addEventListener("change", () => { OBS.paus = +pau.value; obsSpara(); });
   const op = $("obsOpac"); op.value = OBS.opac; $("kObs").style.opacity = OBS.opac / 100;
   op.addEventListener("input", () => { OBS.opac = +op.value; $("kObs").style.opacity = OBS.opac / 100; obsSpara(); });
   document.addEventListener("keydown", ev => {
