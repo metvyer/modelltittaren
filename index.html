@@ -411,7 +411,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <button class="sek liten" id="pMeteo" title="Hela körningen (+0 till +61 h) för vald parameter i den valda punkten">Meteogram här</button>
     <span id="pMeteoInfo" class="dim"></span>
     <div id="pMeteoRuta" hidden><div class="meteohuvud"><b id="pMeteoTitel"></b><span><button class="sek liten" id="pMeteoStor" title="Lägg meteogrammet under allt annat, över hela sidans bredd – då syns hela körningen">⤢ Expandera</button> <button class="sek liten" id="pMeteoStang" title="Stäng meteogrammet">✕</button></span></div>
-      <div class="meteonb" id="pMeteoExtra">Jämför med: <button class="sek liten" id="pMeteoX_aifs" aria-pressed="false" title="ECMWF AIFS (AI-modell), ensemble 51 medlemmar – grönt band 10–90 % och streckad median. Via Open-Meteo.">AIFS</button> <button class="sek liten" id="pMeteoX_nordic" aria-pressed="false" title="MET Nordic 1 km (met.no, MEPS justerad mot observationer, deterministisk) – lila linje. Via Open-Meteo.">MET Nordic</button> <button class="sek liten" id="pMeteoX_nc" aria-pressed="false" title="met.no nowcast var 5:e minut ca 2 h framåt (radar + modell) – orange linje. Nederbörd visas som mm/h i läget Per timme.">Nowcast</button> <span class="dim" id="pMeteoExtraInfo"></span></div>
+      <div class="meteonb" id="pMeteoExtra">Jämför med: <button class="sek liten" id="pMeteoX_aifs" aria-pressed="false" title="ECMWF AIFS (AI-modell), ensemble 51 medlemmar – grönt band 10–90 % och streckad median. Via Open-Meteo.">AIFS</button> <button class="sek liten" id="pMeteoX_nordic" aria-pressed="false" title="MET Nordic 1 km (met.no, MEPS justerad mot observationer, deterministisk) – lila linje. Via Open-Meteo.">MET Nordic</button> <button class="sek liten" id="pMeteoX_nc" aria-pressed="false" title="met.no nowcast var 5:e minut ca 2 h framåt (radar + modell) – orange linje. Nederbörd visas som mm/h i läget Per timme.">Nowcast</button> <button class="sek liten" id="pMeteoMetar" aria-pressed="true" title="METAR från närmaste flygplats: svarta prickar (och röda vindpilar för byvind). Tänd/släck.">METAR</button> <span class="dim" id="pMeteoExtraInfo"></span></div>
       <div class="meteonb" id="pMeteoNbRad" hidden><label for="pMeteoNb">Nederbörd:</label> <select id="pMeteoNb"></select></div>
       <div class="meteoskroll"><svg id="pMeteoSvg"></svg></div>
       <div class="dim" id="pMeteoForkl"></div></div>
@@ -2575,7 +2575,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261121-2030"></script>
+<script src="sannolikhet.js?v=20261121-2300"></script>
 <script src="kombo.js?v=20261121-1330"></script>
 <script src="m0karta.js?v=20261121-1830"></script>
 <script src="taf.js?v=20261121-1945"></script>

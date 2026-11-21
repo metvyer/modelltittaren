@@ -1126,6 +1126,10 @@ async function visaMeteogram() {
 const NB_LAGE_NAMN = { ack: "Ackumulerat från start", h1: "Per timme", h3: "Per 3 h (00, 03, 06 … UTC)", h6: "Per 6 h (00, 06, 12, 18 UTC)" };
 let nbLage = NB_LAGE_NAMN[lasa("mt:meteoNb")] ? lasa("mt:meteoNb") : "ack";
 let meteoGeo = null;   // senaste ritningens matt (for att dra startlinjen)
+(function metarKnapp() {
+  const b = $("pMeteoMetar"); if (!b) return; b.setAttribute("aria-pressed", String(lasa("mt:meteoMetar") !== "av"));
+  b.addEventListener("click", () => { const pa = lasa("mt:meteoMetar") === "av"; lagra("mt:meteoMetar", pa ? "pa" : "av"); b.setAttribute("aria-pressed", String(pa)); if (P.meteo) ritaMeteogram(); });
+})();
 function meteoAxelFlytta() { const ax = $("meteoAxel"), sk = document.querySelector(".meteoskroll"); if (ax && sk) ax.setAttribute("transform", "translate(" + sk.scrollLeft + ",0)"); }
 // 21/11: Expandera - meteogrammet flyttas under allt annat, hela sidans bredd (och tillbaka)
 function meteoExpandera() {
@@ -1166,7 +1170,8 @@ function ritaMeteogram() {
   const steg = (() => { const r = spann / 5, e = 10 ** Math.floor(Math.log10(r)); for (const f of [1, 2, 2.5, 5, 10]) if (f * e >= r) return f * e; })();
   ymax = Math.ceil((tak || Math.max(1, ymax * 1.05)) / steg) * steg; ymin = Math.floor(ymin * 1.05 / steg) * steg;
   const nSteg = Math.round((ymax - ymin) / steg);
-  const harObsVind = M0.v === "by" && M0.obs && M0.obs.some(o => isFinite(o.dd));
+  const visaMetar = lasa("mt:meteoMetar") !== "av";   /* 21/11 kvall: knappen METAR (pa som standard) */
+  const harObsVind = visaMetar && M0.v === "by" && M0.obs && M0.obs.some(o => isFinite(o.dd));
   const harVind = M0.v === "by" && M0.u && M0.w, KOL = 14, VM = 46, H = 210, TOPP = 10, UNDER = 34 + (harVind ? 22 : 0) + (harObsVind ? 16 : 0), B = nt * KOL, W = VM + B + 8;
   meteoGeo = { KOL, VM, nt, TOPP, H };
   const y = w => TOPP + H - (Math.max(ymin, Math.min(w, ymax)) - ymin) / (ymax - ymin) * H;
@@ -1228,7 +1233,7 @@ function ritaMeteogram() {
     g("text", { x: VM + B - 2, y: y(trosk) - 3, "font-size": 9.5, "text-anchor": "end", fill: "#c2410c" }, "tröskel " + trosk.toLocaleString("sv-SE") + " " + pa.enhet); }
   // NYTT 20/11 kvall: METAR-observationer (svarta prickar) for passerade timmar, narmaste flygplats
   let obsAntal = 0;
-  if (M0.obs && !nb) for (const o of M0.obs) {
+  if (visaMetar && M0.obs && !nb) for (const o of M0.obs) {
     const h = (o.t - bas) / 3600e3; if (h < -0.5 || h > nt - 0.5) continue;
     let w = NaN, ihalig = false, txt = "";
     if (M0.v === "by") { if (isFinite(o.gg)) w = o.gg; else if (isFinite(o.ff)) { w = o.ff; ihalig = true; txt = " (ingen by – medelvind)"; } }
