@@ -4,6 +4,10 @@
 // Klicka på en linje för att ändra eller ta bort den. Linjerna sparas som lat/lon (följer kartan vid zoom),
 // syns i alla kartflikar, sparas i webbläsaren (mt:ritlinjer) och följer med i Dela.
 // Den som följer en delad vy ser delarens linjer (kan inte ändra dem) ovanpå sina egna.
+// NYTT 21/11: DRA. Texten kan dras vart som helst (egen plats L.tp = [lat, lon]; långt från linjen visas en streckad
+// hänvisningslinje; dubbelklick på texten = tillbaka till linjens mitt). Dra i en linje = flytta hela (med text).
+// Vald linje: ringar på punkterna (dra = flytta punkten, högerklick = ta bort punkten) och små ringar mitt på varje
+// sträcka (dra = ny punkt där). Kort klick utan att dra = välj linjen som förut.
 
 const RIT_FARGER = { svart: "#111827", rod: "#dc2626", bla: "#2563eb", lila: "#9333ea" };
 const RIT_MAX_LINJER = 30, RIT_MAX_PUNKTER = 60;
@@ -32,12 +36,22 @@ function ritRita() {
       const t = el("polyline", { points: d, fill: "none", stroke: "transparent", "stroke-width": 14, "vector-effect": "non-scaling-stroke", class: "ritlinje", "data-i": i, style: "cursor:pointer" });
       const ti = el("title"); ti.textContent = (L.text ? L.text + "\n" : "") + "Klicka för att ändra eller ta bort linjen"; t.appendChild(ti); g.appendChild(t);
     }
-    if (L.text) {   // texten vid linjens mitt, lite ovanfor
-      let tot = 0; const seg = []; for (let k = 1; k < pts.length; k++) { const s = Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y); seg.push(s); tot += s; }
-      let kvar = tot / 2, k = 0; while (k < seg.length - 1 && kvar > seg[k]) { kvar -= seg[k]; k++; }
-      const f = seg[k] ? kvar / seg[k] : 0, mx = pts[k].x + (pts[k + 1].x - pts[k].x) * f, my = pts[k].y + (pts[k + 1].y - pts[k].y) * f;
-      g.appendChild(el("text", { x: mx, y: my - px(10), "font-size": px(13), "font-weight": 700, "text-anchor": "middle", fill: farg, stroke: "#fff", "stroke-width": px(3.5),
-        "paint-order": "stroke", "pointer-events": "none" }, (delad ? "👁 " : "") + L.text));
+    if (L.text) {   // texten: egen plats (dragen) eller vid linjens mitt, lite ovanfor
+      let mx, my;
+      if (L.tp) { const q = tillKarta(L.tp[0], L.tp[1]); mx = q.x; my = q.y;
+        const n = narmastPaLinje(pts, mx, my);   // hanvisningslinje om texten ligger en bit fran linjen
+        if (n.d > px(28)) g.appendChild(el("line", { x1: mx, y1: my - px(4), x2: n.x, y2: n.y, stroke: farg, "stroke-width": 1.3, "vector-effect": "non-scaling-stroke", "stroke-dasharray": "3 3", "pointer-events": "none" })); }
+      else { let tot = 0; const seg = []; for (let k = 1; k < pts.length; k++) { const s = Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y); seg.push(s); tot += s; }
+        let kvar = tot / 2, k = 0; while (k < seg.length - 1 && kvar > seg[k]) { kvar -= seg[k]; k++; }
+        const f = seg[k] ? kvar / seg[k] : 0; mx = pts[k].x + (pts[k + 1].x - pts[k].x) * f; my = pts[k].y + (pts[k + 1].y - pts[k].y) * f - px(10); }
+      const te = el("text", { x: mx, y: my, "font-size": px(13), "font-weight": 700, "text-anchor": "middle", fill: farg, stroke: "#fff", "stroke-width": px(3.5),
+        "paint-order": "stroke", "pointer-events": delad ? "none" : "all", class: delad ? "" : "rittext", "data-i": i, style: delad ? "" : "cursor:move" }, (delad ? "👁 " : "") + L.text);
+      if (!delad) { const ti = el("title"); ti.textContent = "Dra texten vart du vill. Dubbelklick = tillbaka till linjens mitt."; te.appendChild(ti); }
+      g.appendChild(te);
+    }
+    if (vald && !RIT.ritar) {   // handtag: punkterna + mitt pa varje stracka
+      for (let k = 1; k < pts.length; k++) g.appendChild(el("circle", { cx: (pts[k - 1].x + pts[k].x) / 2, cy: (pts[k - 1].y + pts[k].y) / 2, r: px(3.5), fill: farg, "fill-opacity": 0.35, stroke: "#fff", "stroke-width": px(1), class: "ritmitt", "data-i": i, "data-k": k, style: "cursor:copy" }));
+      pts.forEach((q, k) => g.appendChild(el("circle", { cx: q.x, cy: q.y, r: px(5.5), fill: "#fff", stroke: farg, "stroke-width": px(2.2), class: "ritpunkt", "data-i": i, "data-k": k, style: "cursor:grab" })));
     }
   };
   (RIT.delade || []).forEach((L, i) => enLinje(L, i, true));
@@ -47,6 +61,46 @@ function ritRita() {
     if (pts.length > 1) g.appendChild(el("polyline", { points: pts.map(q => q.x + "," + q.y).join(" "), fill: "none", stroke: farg, "stroke-width": 2.5, "vector-effect": "non-scaling-stroke", "stroke-dasharray": "4 3", "pointer-events": "none" }));
     for (const q of pts) g.appendChild(el("circle", { cx: q.x, cy: q.y, r: px(4), fill: "#fff", stroke: farg, "stroke-width": px(2), "pointer-events": "none" }));
   }
+}
+
+// narmaste punkt pa en bruten linje (kartkoordinater)
+function narmastPaLinje(pts, x, y) {
+  let b = { d: Infinity, x: pts[0].x, y: pts[0].y };
+  for (let k = 1; k < pts.length; k++) { const a = pts[k - 1], c = pts[k], dx = c.x - a.x, dy = c.y - a.y, l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / l2)) : 0, px_ = a.x + t * dx, py = a.y + t * dy, d = Math.hypot(x - px_, y - py);
+    if (d < b.d) b = { d, x: px_, y: py }; }
+  return b;
+}
+const tillLL = (x, y) => { const ll = franRuta(x, KY - 1 - y); return [rund3(ll.lat), rund3(ll.lon)]; };
+
+// Dra i linjer, punkter och text. Fangas fore kartans egen hantering (capture) sa att kartan inte flyttas.
+function ritDraStart(e) {
+  if (RIT.ritar || e.button > 0) return;
+  const t = e.target, typ = t.classList ? ["ritpunkt", "ritmitt", "rittext", "ritlinje"].find(c => t.classList.contains(c)) : null;
+  if (!typ) return;
+  e.stopPropagation(); e.preventDefault();
+  const i = +t.dataset.i, L = RIT.linjer[i]; if (!L) return;
+  let k = t.dataset.k !== undefined ? +t.dataset.k : -1;
+  const start = kartPunkt(e), sx = e.clientX, sy = e.clientY, orig = JSON.parse(JSON.stringify(L));
+  let flyttat = false;
+  const flytta = ev => {
+    if (!flyttat && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 4) return;
+    if (!flyttat) { flyttat = true; RIT.vald = i; if (typ === "ritmitt") { L.p.splice(k, 0, orig.p[k]); } }
+    const p = kartPunkt(ev), dx = p.x - start.x, dy = p.y - start.y;
+    if (typ === "ritpunkt" || typ === "ritmitt") L.p[k] = tillLL(p.x, p.y);
+    else if (typ === "rittext") L.tp = tillLL(p.x, p.y + 0);
+    else {   // hela linjen (och texten om den har egen plats)
+      L.p = orig.p.map(([la, lo]) => { const q = tillKarta(la, lo); return tillLL(q.x + dx, q.y + dy); });
+      if (orig.tp) { const q = tillKarta(orig.tp[0], orig.tp[1]); L.tp = tillLL(q.x + dx, q.y + dy); }
+    }
+    ritRita();
+  };
+  const slut = () => {
+    removeEventListener("pointermove", flytta); removeEventListener("pointerup", slut); removeEventListener("pointercancel", slut);
+    if (flyttat) { ritSpara(); ritRita(); ritRad(); }
+    else { RIT.vald = i; ritRita(); ritRad(); }   // kort klick = valj linjen
+  };
+  addEventListener("pointermove", flytta); addEventListener("pointerup", slut); addEventListener("pointercancel", slut);
 }
 
 // Anropas forst i kartKlick: true = klicket ar taget om hand har
@@ -104,7 +158,15 @@ function ritRad(info) {
 
 (function ritInit() {
   $("ritKnapp").addEventListener("click", () => { if (RIT.ritar) ritKlar(); else ritBorja(); });
-  $("karta").addEventListener("dblclick", e => { if (RIT.ritar) { e.preventDefault(); ritKlar(); } });
+  $("karta").addEventListener("dblclick", e => {
+    if (RIT.ritar) { e.preventDefault(); ritKlar(); return; }
+    const t = e.target; if (t.classList && t.classList.contains("rittext")) { const L = RIT.linjer[+t.dataset.i]; if (L) { delete L.tp; ritSpara(); ritRita(); } }
+  });
+  $("karta").addEventListener("pointerdown", ritDraStart, true);   // fore kartans egen (panorering)
+  $("karta").addEventListener("contextmenu", e => {   // hogerklick pa en punkt = ta bort den
+    const t = e.target; if (RIT.ritar || !t.classList || !t.classList.contains("ritpunkt")) return;
+    e.preventDefault(); const L = RIT.linjer[+t.dataset.i]; if (L && L.p.length > 2) { L.p.splice(+t.dataset.k, 1); ritSpara(); ritRita(); }
+  });
   // 21/11: hogerklick = klar (ingen meny medan man ritar)
   $("karta").addEventListener("contextmenu", e => { if (RIT.ritar) { e.preventDefault(); ritKlar(); } });
   document.addEventListener("keydown", e => {
