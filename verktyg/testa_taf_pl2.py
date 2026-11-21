@@ -17,3 +17,11 @@ for u in ["/data/last?params=taf&format=json&count=1", "/data/last?params=taf&fo
     m = re.search(r"TAF[^\"]{0,10}EPMM[^\"]{0,250}", t)
     if m: print("   EPMM: " + re.sub(r"\s+", " ", m.group(0)), flush=True)
     if st == 200 and not icao: print("   " + re.sub(r"\s+", " ", t[:300]), flush=True)
+# struktur (21/11): forsta posterna i svaren
+for u in ["/data/last?params=taf&format=json&count=1", "/data/last?params=metar&format=json&count=1"]:
+    st, t, c, ty, s = f(A + u)
+    try:
+        j = json.loads(t); print("STRUKTUR", u, type(j).__name__, (list(j.keys())[:20] if isinstance(j, dict) else len(j)), flush=True)
+        x = j if isinstance(j, list) else next(iter(j.values()))
+        print("FORSTA", json.dumps(x[:2] if isinstance(x, list) else x, ensure_ascii=False)[:1500], flush=True)
+    except Exception as e: print("STRUKTUR fel", e, t[:500], flush=True)
