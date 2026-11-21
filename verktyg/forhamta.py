@@ -196,8 +196,8 @@ def dela_par(txt, j, i, ny, nx):
         m = _HUV.match(r.strip())
         if m:
             namn, dims = m.group(1), re.findall(r"\d+", m.group(2))
-            if namn.endswith(".y") and dims == [str(ny)]: akt = ("y", None)
-            elif namn.endswith(".x") and dims == [str(nx)]: akt = ("x", None)
+            if namn.endswith(".y") and dims == [str(ny)]: akt = ("y", None); r = namn + "[1]"
+            elif namn.endswith(".x") and dims == [str(nx)]: akt = ("x", None); r = namn + "[1]"
             elif len(dims) >= 2 and dims[-2:] == [str(ny), str(nx)]:
                 akt = ("falt", len(dims)); dims[-2:] = ["1", "1"]
                 r = namn + "".join(f"[{d}]" for d in dims)

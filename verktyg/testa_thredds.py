@@ -517,7 +517,7 @@ def parKoll():
     skriv(f"Körning {dtg}, ks {ks}. Paret ESCM+ESSA +0..+23: {tp:.1f} s")
     for k, r in enumerate(pkt):
         t0 = time.time(); en = F.par_bitar(dtg, 24, [r], ks); te = time.time() - t0
-        a_, b_ = par[0][k][3] if par else "", en[0][0][3] if en else ""
+        a_, b_ = par[k][0][3] if par else "", en[0][0][3] if en else ""
         lika = a_ == b_
         skriv(f"- punkt {r}: ensam {te:.1f} s, svaren {'IDENTISKA' if lika else 'OLIKA'} ({len(a_)} / {len(b_)} tecken)")
         if not lika:
