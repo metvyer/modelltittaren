@@ -296,7 +296,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <h2 id="testskyltRubrik">Testsida – inte för operativt bruk</h2>
     <p>Modelltittaren är under utveckling och testas fortfarande. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
     <p><b>Använd inte sidan som underlag för operativa beslut eller prognoser.</b> Använd ordinarie verktyg och produkter.</p>
-    <p><b>Det du tittar på kan andra se.</b> Sidan är öppen och data delas via en gemensam mellanserver (cache), så andra användare kan se vilka områden, punkter och flygplatser som hämtats – och en delad vy ser alla som har länken. Vill du inte dela var du tittar: välj <i>Av</i> under ”Hämta MEPS via mellanservern” längst ner och använd inte Dela. Även då går trafiken öppet till met.no och andra källor. Mata aldrig in något hemligt.</p>
+    <p><b>Det du tittar på kan andra se.</b> Sidan är öppen och data delas via en gemensam mellanserver (cache), så andra användare kan se vilka områden, punkter och flygplatser som hämtats – och en delad vy ser alla som har länken. Vill du inte dela var du tittar: välj <i>Osynligt</i> under ”Hämta MEPS via mellanservern” längst ner (fungerar även på jobbet) och använd inte Dela. Även då ser met.no, Cloudflare och övriga källor vad som hämtas. Mata aldrig in något hemligt.</p>
     <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo.</p>
     <button id="testskyltOk">Jag förstår</button>
   </div>
@@ -542,8 +542,9 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
 <div class="vagval"><label for="vagVal">Hämta MEPS via mellanservern (Cloudflare):</label>
   <select id="vagVal">
     <option value="alltid">Alltid (standard) – delar cache med kollegorna, avlastar met.no; direkt om den inte svarar</option>
+    <option value="dold">Osynligt – via mellanservern men syns inte för andra (registreras inte i cachelistan)</option>
     <option value="auto">Auto – bara när thredds inte nås direkt (t.ex. jobbnätet)</option>
-    <option value="av">Av – alltid direkt till thredds.met.no (andra ser inte via cachen var du tittar)</option>
+    <option value="av">Av – alltid direkt till thredds.met.no (fungerar inte på jobbnätet)</option>
   </select>
   <span class="lagetips" title="Gäller MEPS-data. METAR/TAF går alltid via mellanservern när de inte kan hämtas direkt.">ⓘ</span>
 </div>
@@ -683,10 +684,10 @@ let direktNas = null;   // NYTT 19/11: null = inte provat, true/false = thredds 
 // Installning (sparas i webblasaren): auto = direkt forst, mellanservern om thredds inte svarar;
 // alltid = via mellanservern (delad cache), direkt bara om mellanservern inte svarar; av = alltid direkt.
 // Standard (18/11): alltid via mellanservern - delad cache, avlastar met.no; direkt om den inte svarar.
-let VAG_LAGE = ["auto", "alltid", "av"].includes(lasa("mt:vag")) ? lasa("mt:vag") : "alltid";
+let VAG_LAGE = ["auto", "alltid", "av", "dold"].includes(lasa("mt:vag")) ? lasa("mt:vag") : "alltid";
 function visaVag() {
   const e = $("vagInfo"); if (!e) return;
-  e.textContent = VAG !== "mellan" ? "" : VAG_LAGE === "alltid" ? " Hämtar via mellanserver (Cloudflare), enligt inställningen."
+  e.textContent = VAG !== "mellan" ? "" : VAG_LAGE === "dold" ? " Hämtar osynligt via mellanserver (Cloudflare) – registreras inte för andra." : VAG_LAGE === "alltid" ? " Hämtar via mellanserver (Cloudflare), enligt inställningen."
     : " Hämtar via mellanserver (Cloudflare), eftersom thredds.met.no inte nås direkt från det här nätet.";
 }
 async function svarar(bas, sek) {
@@ -698,7 +699,7 @@ function valjVag() {
   if (VAG) return Promise.resolve(VAG);
   if (!vagLofte) vagLofte = (async () => {
     if (VAG_LAGE === "av") { VAG = "direkt"; visaVag(); return VAG; }
-    if (VAG_LAGE === "alltid") {
+    if (VAG_LAGE === "alltid" || VAG_LAGE === "dold") {
       if (await svarar(MELLAN, PROV_MELLAN_S)) { VAG = "mellan"; visaVag(); return VAG; }
       status("Mellanservern svarar inte – hämtar direkt från thredds.met.no …");
       VAG = "direkt"; visaVag(); return VAG;
@@ -717,7 +718,7 @@ function valjVag() {
 // inom maxS returneras st 0 direkt - utan omforsok och utan att byta vag till thredds.
 async function hamta(url, medRetry = true, binar = false, maxS = 0) {
   const orig = url;
-  if ((await valjVag()) === "mellan" && url.startsWith(BAS)) url = MELLAN + url.slice(BAS.length);
+  if ((await valjVag()) === "mellan" && url.startsWith(BAS)) { url = MELLAN + url.slice(BAS.length); if (VAG_LAGE === "dold") url += (url.includes("?") ? "&" : "?") + "mtdold=1"; }
   for (let f = 1; f <= 4; f++) {
     if (stoppad) throw new Error("stoppad");
     avbryt = new AbortController();

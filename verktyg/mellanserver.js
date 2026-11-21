@@ -120,6 +120,8 @@ async function bokfor(db, fil, sok, byte, tid) {
 export class Kalla extends WorkerEntrypoint {
   async fetch(req) {
     const url = new URL(req.url), start = Date.now();
+    // NYTT 21/11 kvall: "osynligt" val i sidan - hamtningen bokfors inte i cachereg och syns inte i statistiken
+    const dold = req.headers.get("X-Mt-Dold") === "1";
     let kalla, tid;
     if (url.pathname === "/metar" || url.pathname === "/taf") {
       kalla = AWC + url.pathname.slice(1) + url.search; tid = url.pathname === "/taf" ? CACHE_TAF : CACHE_METAR;
@@ -150,8 +152,8 @@ export class Kalla extends WorkerEntrypoint {
       flush() { klar(); },
     });
     this.ctx.waitUntil(fardig.then(async () => {
-      await loggaHamtning(this.env.DB, typAv(url), vadAv(url) + feltext, svar.status, byte, Date.now() - start);
-      if (svar.status === 200 && url.pathname.startsWith("/mepslatest/") && url.search !== "?time") await bokfor(this.env.DB, url.pathname.replace(/^\/mepslatest\//, ""), url.search, byte, tid);
+      await loggaHamtning(this.env.DB, typAv(url), dold ? "(osynlig hämtning)" + feltext : vadAv(url) + feltext, svar.status, byte, Date.now() - start);
+      if (!dold && svar.status === 200 && url.pathname.startsWith("/mepslatest/") && url.search !== "?time") await bokfor(this.env.DB, url.pathname.replace(/^\/mepslatest\//, ""), url.search, byte, tid);
     }));
     if (!svar.body) klar();
     return new Response(svar.body ? svar.body.pipeThrough(raknare) : null, { status: svar.status, headers: h });
@@ -329,12 +331,15 @@ export default {
       if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
       vidare = url.origin + url.pathname + url.search;
     }
+    // 21/11 kvall: sidans "osynliga" lage skickar mtdold=1 sist i adressen - tas bort innan cachen (samma cachenyckel)
+    let dold = false;
+    if (/[?&]mtdold=1$/.test(vidare)) { dold = true; vidare = vidare.replace(/[?&]mtdold=1$/, ""); }
 
     // Räkna anropet (oavsett om cachen eller källan svarar)
     ctx.waitUntil(raknaAnrop(env.DB, typAv(new URL(vidare))));
     // Ren förfrågan utan webbläsarens huvuden -> alla kollegor delar samma cachade svar
     let svar;
-    try { svar = await ctx.exports.Kalla.fetch(new Request(vidare)); }
+    try { svar = await ctx.exports.Kalla.fetch(new Request(vidare, dold ? { headers: { "X-Mt-Dold": "1" } } : undefined)); }
     catch (e) { return new Response("Källan svarar inte", { status: 502, headers: cors }); }
     const hm = new Headers(svar.headers);
     for (const [k, v] of Object.entries(cors)) hm.set(k, v);
