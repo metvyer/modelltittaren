@@ -76,7 +76,9 @@ jobs:
       # 21/11 kvall: prov K - radar (SMHI/met.no) och satellit (verktyg/testa_radar.py)
       - name: Prov radar och satellit
         if: contains(inputs.delar, 'K')
-        run: python3 verktyg/testa_radar.py
+        run: |
+          python3 -m pip install -q h5py pillow || python3 -m pip install -q --break-system-packages h5py pillow
+          python3 verktyg/testa_radar.py
 
       - name: Spara resultatet
         if: always()

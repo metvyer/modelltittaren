@@ -36,7 +36,6 @@ for u in [R + nu.strftime("/%Y/%m/%d.json"), R + nu.strftime("/%Y/%m/%d"), R + n
     skriv(f"- `{u}` {st}, {len(d)} B, CORS {hd.get('Access-Control-Allow-Origin', '-')}: {t[:500]}")
 # h5-filen
 try:
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "h5py"], check=True)
     import h5py
     lank = None
     for f in j.get("lastFiles", [{}])[0].get("formats", []):
@@ -54,7 +53,6 @@ except Exception as e:
     skriv(f"h5-fel: {e}")
 # png: farger
 try:
-    subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pillow"], check=True)
     from PIL import Image
     st, d, hd = h(R + "/latest.png")
     im = Image.open(io.BytesIO(d)); skriv(f"png {im.size} mode {im.mode} info {im.info}")
@@ -102,7 +100,7 @@ E = "https://view.eumetsat.int/geoserver/wms?service=WMS&version=1.3.0&request=G
 tt = (nu.replace(second=0, microsecond=0)).strftime("%Y-%m-%dT%H:") + "%02d:00Z" % (nu.minute // 10 * 10 - 20 if nu.minute >= 20 else 0)
 for lay, fmt in [("mtg_fd:ir105_hrfi", "image/png"), ("mtg_fd:rgb_geocolour", "image/jpeg"), ("mtg_fd:rgb_geocolour", "image/png"), ("mtg_fd:li_afa", "image/png&transparent=true"), ("mtg_fd:h40b", "image/png&transparent=true")]:
     u = E + f"&layers={lay}&format={fmt}&time={tt}"
-    st, d, hd = h(u); skriv(f"- {lay} {fmt} time={tt}: {st}, {len(d)//1024} kB, {hd.get('Content-Type')}, CORS {hd.get('Access-Control-Allow-Origin','-')} {d[:150] if st != 200 else ''}")
+    st, d, hd = h(u); skriv(f"- {lay} {fmt} time={tt}: {st}, {len(d)//1024} kB, {hd.get('Content-Type')}, CORS {{k.lower(): v for k, v in hd.items()}.get('access-control-allow-origin','-')} {d[:150] if st != 200 else ''}")
 # overlager kust/grans?
 st, d, hd = h("https://view.eumetsat.int/geoserver/wms?service=WMS&version=1.3.0&request=GetCapabilities", 8000000)
 t = d.decode("utf-8", "replace")
