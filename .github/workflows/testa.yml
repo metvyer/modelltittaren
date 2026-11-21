@@ -109,6 +109,14 @@ jobs:
         if: contains(inputs.delar, 'N')
         run: python3 verktyg/testa_extra.py
 
+      # 21/11 kvall: prov O - osynligt lage i mellanservern (en dold och en vanlig punktfraga)
+      - name: Prov osynlig hämtning
+        if: contains(inputs.delar, 'O')
+        run: |
+          M=https://modelltittaren.metvyer.workers.dev/mepslatest/meps_det_2_5km_20261121T15Z.ncml.ascii
+          curl -s -o /dev/null -w "dold %{http_code} %{size_download}\n" -H "Origin: https://metvyer.github.io" "$M?air_temperature_2m%5B0:1%5D%5B0%5D%5B333%5D%5B444%5D&mtdold=1"
+          curl -s -o /dev/null -w "vanlig %{http_code} %{size_download}\n" -H "Origin: https://metvyer.github.io" "$M?air_temperature_2m%5B0:1%5D%5B0%5D%5B334%5D%5B445%5D"
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
