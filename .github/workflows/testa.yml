@@ -117,6 +117,14 @@ jobs:
           curl -s -o /dev/null -w "dold %{http_code} %{size_download}\n" -H "Origin: https://metvyer.github.io" "$M?air_temperature_2m%5B0:1%5D%5B0%5D%5B333%5D%5B444%5D&mtdold=1"
           curl -s -o /dev/null -w "vanlig %{http_code} %{size_download}\n" -H "Origin: https://metvyer.github.io" "$M?air_temperature_2m%5B0:1%5D%5B0%5D%5B334%5D%5B445%5D"
 
+      - name: Prov statistiknyckel
+        if: contains(inputs.delar, 'P')
+        run: |
+          S=https://modelltittaren.metvyer.workers.dev/statistik
+          curl -s -H "Origin: https://metvyer.github.io" -H "X-Mt-Nyckel: fel-test" $S | python3 -c "import json,sys; d=json.load(sys.stdin); print({k: (v if not isinstance(v, list) else len(v)) for k, v in d.items()})"
+          curl -s -H "Origin: https://metvyer.github.io" $S | python3 -c "import json,sys; d=json.load(sys.stdin); print({k: (v if not isinstance(v, list) else len(v)) for k, v in d.items()})"
+          curl -s -i -X OPTIONS -H "Origin: https://metvyer.github.io" -H "Access-Control-Request-Method: GET" -H "Access-Control-Request-Headers: x-mt-nyckel" $S | head -12
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
