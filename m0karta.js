@@ -15,12 +15,15 @@ const K_ = v => v - 273.15;
 // 22/11: tata temperaturklasser, 1 grad fran -20 till +20 (blatt under noll, gult-rott over) - farger interpolerade
 const TEMP_1 = Array.from({ length: 41 }, (_, i) => i - 20);
 const PAL_TEMP1 = (() => {
-  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), ut = [];
-  const blanda = (stopp, t) => { const x = t * (stopp.length - 1), i = Math.min(stopp.length - 2, Math.floor(x)), f = x - i, a = hex(stopp[i]), b = hex(stopp[i + 1]);
+  // 22/11 kvall: tydligare kring noll - egna farger for -6..+6 (blatt -> turkos -> ljusgront vid 0 -> gront -> gult),
+  // interpolerat utanfor (morkblatt/lila under -6, orange -> morkrott over +6)
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const blanda = (stopp, t) => { const x = Math.max(0, Math.min(1, t)) * (stopp.length - 1), i = Math.min(stopp.length - 2, Math.floor(x)), f = x - i, a = hex(stopp[i]), b = hex(stopp[i + 1]);
     return "#" + a.map((c, j) => Math.round(c + (b[j] - c) * f).toString(16).padStart(2, "0")).join(""); };
-  const kall = ["#1e1b4b", "#312e81", "#1d4ed8", "#3b82f6", "#93c5fd", "#dbeafe"], varm = ["#fef9c3", "#fde68a", "#fdba74", "#f97316", "#dc2626", "#7f1d1d"];
-  for (const k of TEMP_1) ut.push(k < 0 ? blanda(kall, (k + 20) / 19) : blanda(varm, k / 20));
-  return ut;
+  const NARA = { "-6": "#1d4ed8", "-5": "#2563eb", "-4": "#3b82f6", "-3": "#0ea5e9", "-2": "#38bdf8", "-1": "#7dd3fc",
+    "0": "#a7f3d0", "1": "#6ee7b7", "2": "#bef264", "3": "#fde047", "4": "#facc15", "5": "#fbbf24", "6": "#f59e0b" };
+  const kall = ["#4a044e", "#6b21a8", "#4338ca", "#1e40af"], varm = ["#fb923c", "#f97316", "#ea580c", "#dc2626", "#b91c1c", "#7f1d1d"];
+  return TEMP_1.map(k => NARA[k] || (k < 0 ? blanda(kall, (k + 20) / 13) : blanda(varm, (k - 7) / 13)));
 })();
 const M0P = {
   // Nederbörd och moln
