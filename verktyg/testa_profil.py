@@ -3,6 +3,7 @@ import re, urllib.request, math
 from datetime import datetime, timezone
 def h(u):
     try:
+        u = u.replace("[", "%5B").replace("]", "%5D")
         with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "modelltittaren-test"}), timeout=120) as r: return r.read().decode()
     except urllib.error.HTTPError as e:
         print("FEL", e.code, u, e.read()[:300]); return ""
@@ -31,3 +32,13 @@ for fil in filer[-2:]:
     ps = vals(h(D + f".ascii?surface_air_pressure[{it}][0][{iy}][{ix}]"))[-1]
     print("antal", len(T), len(ap), len(b), "ps", ps)
     for k in range(38, min(65, len(T))): print(f"niva {k}: p={(ap[k] + b[k] * ps) / 100:7.1f} hPa  T={T[k] - 273.15:6.2f} C")
+
+# graupel/konvektion i ensemblefilen?
+kat2 = h("https://thredds.met.no/thredds/catalog/mepslatest/catalog.xml")
+ens = sorted(set(re.findall(r'(meps_lagged_6_h_subset_2_5km_\d{8}T\d\dZ)\.ncml', kat2)))
+if ens:
+    dds = h("https://thredds.met.no/thredds/dodsC/mepslatest/" + ens[-1] + ".ncml.dds")
+    namn = sorted(set(re.findall(r"\b([a-zA-Z_0-9]+)\[", dds)))
+    print("ensemble", ens[-1], "variabler:", [n for n in namn if re.search("graup|cape|cin|convect|lightn|hail|thunder|precipitation_type|updraft", n, re.I)])
+dds = h("https://thredds.met.no/thredds/dodsC/mepslatest/" + filer[-1] + ".ncml.dds")
+print("det graupel/konv:", sorted(set(n for n in re.findall(r"\b([a-zA-Z_0-9]+)\[", dds) if re.search("graup|cape|cin|convect|lightn|hail|thunder|updraft", n, re.I))))
