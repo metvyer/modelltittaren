@@ -395,11 +395,14 @@ function kartLegend() {
       d.append(sp.textContent.replace(/^Linjer:\s*/, "").trim()); L.appendChild(d); }
   }
   L.hidden = false;
+  // 22/11: strax under rutan med tid och parameter (uppe till vanster), annars overst
+  const kt = lage === "m0" ? $("kartTidM0") : $("kartTid"), synlig = kt && kt.textContent && getComputedStyle(kt).display !== "none";
+  L.style.top = (synlig ? kt.offsetTop + kt.offsetHeight + 6 : 8) + "px";
 }
 (function kartLegendInit() {
   let t = 0; const omrita = () => { clearTimeout(t); t = setTimeout(kartLegend, 30); };
   const mo = new MutationObserver(omrita);
-  for (const id of ["pForkl", "m0Forkl"]) { const e = $(id); if (e) mo.observe(e, { childList: true, subtree: true, characterData: true }); }
+  for (const id of ["pForkl", "m0Forkl", "kartTid", "kartTidM0"]) { const e = $(id); if (e) mo.observe(e, { childList: true, subtree: true, characterData: true }); }
   new MutationObserver(omrita).observe(document.body, { attributes: true, attributeFilter: ["class"] });
   omrita();
 })();

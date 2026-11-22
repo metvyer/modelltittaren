@@ -90,6 +90,15 @@ function m0Omrade() {   // hela den forhamtade rutan (samma som Favoriter), var 
   const s = M0_S, y1 = B.y0 + Math.floor((B.y1 - B.y0) / s) * s, x1 = B.x0 + Math.floor((B.x1 - B.x0) / s) * s;
   return { y0: B.y0, y1, x0: B.x0, x1, s, ny: (y1 - B.y0) / s + 1, nx: (x1 - B.x0) / s + 1 };
 }
+// 22/11: tid och parameter uppe till vanster i kartan (som i Sannolikhet)
+function m0KartTid() {
+  const e = $("kartTidM0"); if (!e) return; e.textContent = "";
+  if (!M0F.t0) return;
+  const d = new Date(M0F.t0 + M0F.t * 3600e3); e.textContent = VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z (+" + M0F.t + ")";
+  const sm = document.createElement("small"), P1 = M0P[M0F.v], P2 = M0F.v2 && M0P[M0F.v2];
+  sm.textContent = (P1 ? P1.namn : "") + (P2 ? " · linjer: " + P2.namn : "") + " · medlem 0" + (M0F.dtg ? " · körning " + String(M0F.dtg).slice(9, 12) : "");
+  e.appendChild(sm);
+}
 function m0TidText(t) { if (!M0F.t0) return "+" + t; const d = new Date(M0F.t0 + t * 3600e3); return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCDate()) + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + "Z (+" + t + ")"; }
 const m0Status = t => { $("m0Status").textContent = t || ""; };
 
@@ -149,7 +158,7 @@ async function m0Uppdatera() {
   if (lage !== "m0") return;
   $("m0Param").value = M0F.v; $("m0Linjer").value = M0F.v2;
   if (!await m0Korning()) return;
-  M0F.t = Math.max(0, Math.min(M0F.nt - 1, M0F.t)); $("m0Tid").textContent = m0TidText(M0F.t); $("m0Reglage").max = M0F.nt - 1; $("m0Reglage").value = M0F.t;
+  M0F.t = Math.max(0, Math.min(M0F.nt - 1, M0F.t)); $("m0Tid").textContent = m0TidText(M0F.t); m0KartTid(); $("m0Reglage").max = M0F.nt - 1; $("m0Reglage").value = M0F.t;
   $("m0Korn").textContent = M0F.dtg + " (MEPS medlem 0, det-körningen)";
   m0Forklaring();
   const t = M0F.t, hamtnr = ++M0F.hamtar;
@@ -225,7 +234,7 @@ function m0In() { m0Uppdatera(); }
   $("m0Linjer").addEventListener("change", () => { M0F.v2 = $("m0Linjer").value; lagra("mt:m0Linje", M0F.v2); m0Uppdatera(); });
   $("m0Bak").addEventListener("click", () => m0Stega(-1)); $("m0Fram").addEventListener("click", () => m0Stega(1));
   $("m0Nu").addEventListener("click", () => { if (M0F.t0) { M0F.t = Math.round((Date.now() - M0F.t0) / 3600e3); m0Stega(0); } });
-  let tim = 0; $("m0Reglage").addEventListener("input", () => { M0F.t = +$("m0Reglage").value; $("m0Tid").textContent = m0TidText(M0F.t); clearTimeout(tim); tim = setTimeout(m0Uppdatera, 250); });
+  let tim = 0; $("m0Reglage").addEventListener("input", () => { M0F.t = +$("m0Reglage").value; $("m0Tid").textContent = m0TidText(M0F.t); m0KartTid(); clearTimeout(tim); tim = setTimeout(m0Uppdatera, 250); });
   document.addEventListener("keydown", ev => {
     if (lage !== "m0" || ev.altKey || ev.ctrlKey || ev.metaKey) return;
     const tag = (document.activeElement && document.activeElement.tagName) || ""; if (["INPUT", "SELECT", "TEXTAREA"].includes(tag)) return;
