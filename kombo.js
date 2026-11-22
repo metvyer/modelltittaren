@@ -13,9 +13,10 @@ const KOMBO = {
   ishalka: { namn: "Ishalka", delar: ["nb", "t0"], A: { namn: "Nederbörd ≥", enhet: "mm/h", std: 0.1 }, B: { namn: "Yttemp <", enhet: "°C", std: 0 },
     text: (A, B) => "nederbörd ≥ " + tal(A) + " mm/h och yttemperatur < " + tal(B) + " °C samtidigt",
     villkor: (h, A, B) => h.nb >= A && h.t0 < B },
-  rimfrost: { namn: "Rimfrost/frost", delar: ["t0", "t2", "rh"], A: null, B: { namn: "Yttemp <", enhet: "°C", std: 0 },
-    text: (A, B) => "yttemperatur < " + tal(B) + " °C och under daggpunkten (2 m)",
-    villkor: (h, A, B) => h.t0 < B && h.t0 < daggpunkt(h.t2, h.rh) },
+  // 22/11: A = marginal - ytan ska vara minst A grader under daggpunkten (0 = bara under)
+  rimfrost: { namn: "Rimfrost/frost", delar: ["t0", "t2", "rh"], A: { namn: "Marginal under daggpunkt ≥", enhet: "°C", std: 0 }, B: { namn: "Yttemp <", enhet: "°C", std: 0 },
+    text: (A, B) => "yttemperatur < " + tal(B) + " °C och minst " + tal(A) + " °C under daggpunkten (2 m)",
+    villkor: (h, A, B) => h.t0 < B && h.t0 <= daggpunkt(h.t2, h.rh) - Math.max(0, A) && (A > 0 || h.t0 < daggpunkt(h.t2, h.rh)) },
   snofok: { namn: "Snödrev", delar: ["sno", "by"], A: { namn: "Snöfall ≥", enhet: "mm/h", std: 0.3 }, B: { namn: "Byvind ≥", enhet: "kt", std: 25 },
     text: (A, B) => "snöfall ≥ " + tal(A) + " mm/h och byvind ≥ " + tal(B) + " kt samtidigt",
     villkor: (h, A, B) => h.sno >= A && h.by >= B }
