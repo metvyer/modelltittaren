@@ -16,9 +16,21 @@ const EXP_NIV = 65, EXP_G = 9.80665;
 const EXP_VIG_K = [0.01, 0.03, 0.1, 0.3, 0.6, 1, 2, 4];            // kg/m2
 const EXP_MAX_K = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 4];           // g/kg
 const EXP_FARG = ["#e0f2fe", "#bae6fd", "#7dd3fc", "#a78bfa", "#8b5cf6", "#7c3aed", "#db2777", "#9f1239"];
+const EXP_TFARG = ["#1e3a8a", "#2563eb", "#60a5fa", "#a5f3fc", "#fde68a", "#fb923c", "#dc2626", "#7f1d1d"];
+// 22/11: kartor att valja i de tva rutorna. Laddningszonen = dar graupel, is och underkylt vatten kan ladda upp
+// (icke-induktiv laddning, -10 till -25 grader). GFX = McCauls blixtproxy: uppvind x graupel vid -15 grader.
+const EXP_FALT = {
+  vig:  { namn: "Integrerad graupel i kolumnen", enh: "kg/m² (= mm vatten)", K: EXP_VIG_K },
+  max:  { namn: "Max graupel i kolumnen", enh: "g/kg", K: EXP_MAX_K },
+  ladd: { namn: "Graupel i laddningszonen (−10 till −25 °C)", enh: "kg/m²", K: [0.003, 0.01, 0.03, 0.1, 0.3, 0.6, 1, 2] },
+  samf: { namn: "Laddningsskikt: graupel + is + underkylt vatten (−10 till −25 °C)", enh: "kg/m² graupel", K: [0.003, 0.01, 0.03, 0.1, 0.3, 0.6, 1, 2] },
+  tmax: { namn: "Temperatur vid graupelmaxet", enh: "°C (där max ≥ 0,01 g/kg)", K: [-60, -30, -25, -20, -15, -10, -5, 0], F: EXP_TFARG, alla: true },
+  gfx:  { namn: "Uppvind × graupel vid −15 °C (McCaul)", enh: "m/s · g/kg", K: [0.01, 0.03, 0.1, 0.3, 0.6, 1, 2, 4] },
+  wmax: { namn: "Max uppvind i kolumnen", enh: "m/s", K: [0.3, 0.6, 1, 2, 3, 5, 8, 12] }
+};
 let EXP = (() => { let o = {}; try { o = JSON.parse(lasa("mt:exp") || "{}"); } catch (e) {}
-  return { lat: o.lat || 59.9, lon: o.lon || 17.6, km: o.km || 150, t: null, ab: null, data: null, o: null, hamtar: 0, cache: new Map(), punkt: null }; })();
-const expSpara = () => lagra("mt:exp", JSON.stringify({ lat: EXP.lat, lon: EXP.lon, km: EXP.km }));
+  return { lat: o.lat || 59.9, lon: o.lon || 17.6, km: o.km || 150, v1: o.v1 || "vig", v2: o.v2 || "max", t: null, ab: null, data: null, o: null, hamtar: 0, cache: new Map(), punkt: null }; })();
+const expSpara = () => lagra("mt:exp", JSON.stringify({ lat: EXP.lat, lon: EXP.lon, km: EXP.km, v1: EXP.v1, v2: EXP.v2 }));
 const expStatus = t => { const e = $("expStatus"); if (e) e.textContent = t || ""; };
 const expFL = p => Math.max(0, Math.round((1 - Math.pow(p / 101325, 0.190284)) * 145366.45 / 100));   // Pa -> flygniva (standardatmosfar)
 
@@ -55,25 +67,37 @@ async function expHamta(t) {
   const o = expOmrade(); if (!o) throw new Error("punkten ligger utanför MEPS");
   const nyckel = [M0F.dtg, t, o.y0, o.y1, o.x0, o.x1].join(":"); if (EXP.cache.has(nyckel)) return EXP.cache.get(nyckel);
   const ab = await expAB(), yx = "[" + o.y0 + ":" + o.y1 + "][" + o.x0 + ":" + o.x1 + "]", n = o.ny * o.nx;
-  const q = await expVar("mass_fraction_of_graupel_in_air_ml", "[" + t + "][0:" + (EXP_NIV - 1) + "]" + yx, n * EXP_NIV);
-  const ps = await expVar("surface_air_pressure", "[" + t + "][0]" + yx, n);
-  const vig = new Float32Array(n), mx = new Float32Array(n), mxP = new Float32Array(n);
+  const rum = "[" + t + "][0:" + (EXP_NIV - 1) + "]" + yx, N = n * EXP_NIV;
+  // graupel, temperatur, is, molnvatten och vertikalvind pa alla nivaer (5 x ca 1 MB for 150 km)
+  const [q, T, qi, qc, W, ps] = await Promise.all([
+    expVar("mass_fraction_of_graupel_in_air_ml", rum, N), expVar("air_temperature_ml", rum, N), expVar("mass_fraction_of_cloud_ice_in_air_ml", rum, N),
+    expVar("mass_fraction_of_cloud_condensed_water_in_air_ml", rum, N), expVar("upward_air_velocity_ml", rum, N), expVar("surface_air_pressure", "[" + t + "][0]" + yx, n)]);
+  const F = {}; for (const k in EXP_FALT) F[k] = new Float32Array(n).fill(NaN);
+  const mxP = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    if (!isFinite(ps[i])) { vig[i] = mx[i] = NaN; continue; }
-    const { p, dp } = expTryck(ab, ps[i]); let s = 0, m = 0, mp = NaN;
-    for (let k = 0; k < EXP_NIV; k++) { const w = q[k * n + i]; if (!isFinite(w) || w <= 0) continue; s += w * dp[k] / EXP_G; if (w > m) { m = w; mp = p[k]; } }
-    vig[i] = s; mx[i] = m * 1000; mxP[i] = mp;
+    if (!isFinite(ps[i])) continue;
+    const { p, dp } = expTryck(ab, ps[i]); let s = 0, m = 0, mp = NaN, mT = NaN, ld = 0, sf = 0, wm = 0, gfx = NaN;
+    for (let k = 0; k < EXP_NIV; k++) {
+      const j = k * n + i, g = q[j], tc = T[j] - 273.15, w = W[j], ms = dp[k] / EXP_G;
+      if (isFinite(w) && w > wm) wm = w;
+      if (k > 0 && isFinite(tc)) { const ta = T[j - n] - 273.15; if ((ta + 15) * (tc + 15) <= 0 && ta !== tc) { const f = (-15 - ta) / (tc - ta);   // -15 grader mellan nivaerna k-1 och k
+        const gg = q[j - n] + (g - q[j - n]) * f, ww = W[j - n] + (w - W[j - n]) * f; if (isFinite(gg) && isFinite(ww)) gfx = Math.max(isFinite(gfx) ? gfx : 0, Math.max(0, ww) * gg * 1000); } }
+      if (!isFinite(g) || g <= 0) continue;
+      s += g * ms; if (g > m) { m = g; mp = p[k]; mT = tc; }
+      if (tc <= -10 && tc >= -25) { ld += g * ms; if ((qi[j] > 1e-6) && (qc[j] > 1e-5)) sf += g * ms; }   // is > 0,001 g/kg och underkylt vatten > 0,01 g/kg
+    }
+    F.vig[i] = s; F.max[i] = m * 1000; mxP[i] = mp; F.ladd[i] = ld; F.samf[i] = sf; F.tmax[i] = m * 1000 >= 0.01 ? mT : NaN; F.gfx[i] = gfx; F.wmax[i] = wm;
   }
-  const ut = { o, vig, mx, mxP, t }; EXP.cache.set(nyckel, ut); if (EXP.cache.size > 30) EXP.cache.delete(EXP.cache.keys().next().value);
+  const ut = { o, F, mxP, t, vig: F.vig, mx: F.max }; EXP.cache.set(nyckel, ut); if (EXP.cache.size > 30) EXP.cache.delete(EXP.cache.keys().next().value);
   return ut;
 }
 
 // ---------------- ritning ----------------
 function expKlass(K, w) { let k = -1; for (let i = 0; i < K.length; i++) if (w >= K[i]) k = i; return k; }
-function expBild(d, o, K) {
+function expBild(d, o, K, FG) {
   const cv = document.createElement("canvas"); cv.width = o.nx; cv.height = o.ny;
   const cx = cv.getContext("2d"), img = cx.createImageData(o.nx, o.ny), px = img.data;
-  const F = EXP_FARG.map(c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
+  const F = (FG || EXP_FARG).map(c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
     const w = d[y * o.nx + x], k = isFinite(w) ? expKlass(K, w) : -1; if (k < 0) continue;
     const i = ((o.ny - 1 - y) * o.nx + x) * 4; px[i] = F[k][0]; px[i + 1] = F[k][1]; px[i + 2] = F[k][2]; px[i + 3] = 235;
@@ -81,11 +105,11 @@ function expBild(d, o, K) {
   cx.putImageData(img, 0, 0); return skarpaRutor(cv);
 }
 // en liten karta: falt + kust/granser (kopierade fran stora kartan) + vald punkt
-function expKarta(svgId, d, K, enh, namn) {
+function expKarta(svgId, d, K, enh, namn, FG) {
   const S = $(svgId), o = EXP.o; if (!S || !o) return;
   const X0 = o.x0 - 0.5, Y0 = KY - 1 - o.y1 - 0.5; S.setAttribute("viewBox", X0 + " " + Y0 + " " + o.nx + " " + o.ny); S.textContent = "";
   for (const p of document.querySelectorAll("#kGeo path.land, #kGeo path.sjo")) S.appendChild(el("path", { d: p.getAttribute("d"), fill: p.classList.contains("sjo") ? "var(--hav)" : "var(--land)", "fill-rule": "evenodd", stroke: "none" }));
-  S.appendChild(el("image", { href: expBild(d, o, K), x: X0, y: Y0, width: o.nx, height: o.ny, preserveAspectRatio: "none", style: "image-rendering:pixelated" }));
+  S.appendChild(el("image", { href: expBild(d, o, K, FG), x: X0, y: Y0, width: o.nx, height: o.ny, preserveAspectRatio: "none", style: "image-rendering:pixelated" }));
   for (const p of document.querySelectorAll("#kKust path")) S.appendChild(el("path", { d: p.getAttribute("d"), fill: "none", stroke: p.classList.contains("ograns") ? "#9b3f3f" : "#4b5f5b",
     "stroke-width": p.classList.contains("osjo") ? 0.6 : 1, "stroke-dasharray": p.classList.contains("ograns") ? "5 3" : null, "vector-effect": "non-scaling-stroke" }));
   // orter och flygplatser i rutan
@@ -94,13 +118,12 @@ function expKarta(svgId, d, K, enh, namn) {
     S.appendChild(el("text", { x: r.ix + 1.4, y: KY - 1 - r.iy + 0.9, "font-size": 2.8, fill: "#111", stroke: "#fff", "stroke-width": 0.6, "paint-order": "stroke" }, p[1])); }
   if (EXP.punkt) S.appendChild(el("path", { d: "M" + (EXP.punkt.ix - 2) + " " + (KY - 1 - EXP.punkt.iy) + "h4M" + EXP.punkt.ix + " " + (KY - 1 - EXP.punkt.iy - 2) + "v4", stroke: "#dc2626", "stroke-width": 2, "vector-effect": "non-scaling-stroke" }));
   // legend
-  const L = $(svgId + "L"); if (L) { L.innerHTML = "<b>" + namn + "</b> "; K.forEach((k, i) => L.insertAdjacentHTML("beforeend", '<span><i style="background:' + EXP_FARG[i] + '"></i>≥ ' + String(k).replace(".", ",") + "</span>")); L.insertAdjacentHTML("beforeend", " <span class='dim'>" + enh + "</span>"); }
+  const L = $(svgId + "L"); if (L) { L.innerHTML = "<b>" + namn + "</b> "; K.forEach((k, i) => L.insertAdjacentHTML("beforeend", '<span><i style="background:' + (FG || EXP_FARG)[i] + '"></i>' + (FG && i === 0 ? "< " + String(K[1]).replace(".", ",") : "≥ " + String(k).replace(".", ",")) + "</span>")); L.insertAdjacentHTML("beforeend", " <span class='dim'>" + enh + "</span>"); }
 }
 function expRita() {
   if (lage !== "exp" || !EXP.data) return;
   EXP.o = EXP.data.o;
-  expKarta("expSvg1", EXP.data.vig, EXP_VIG_K, "kg/m² (= mm vatten)", "Integrerad graupel i kolumnen");
-  expKarta("expSvg2", EXP.data.mx, EXP_MAX_K, "g/kg", "Max graupel i kolumnen");
+  for (const [id, v] of [["expSvg1", EXP.v1], ["expSvg2", EXP.v2]]) { const f = EXP_FALT[v] || EXP_FALT.vig; expKarta(id, EXP.data.F[v] || EXP.data.vig, f.K, f.enh, f.namn, f.F); }
   // ram pa stora kartan
   const g = $("kExp"); if (g) { g.textContent = ""; const o = EXP.o; g.appendChild(el("rect", { x: o.x0 - 0.5, y: KY - 1 - o.y1 - 0.5, width: o.nx, height: o.ny, fill: "none", stroke: "#7c3aed", "stroke-width": 2, "stroke-dasharray": "6 3", "vector-effect": "non-scaling-stroke" })); }
   // sammanfattning
@@ -131,7 +154,7 @@ async function expProfil(pt) {
   const box = $("expProfil"); box.hidden = false; $("expProfilTitel").textContent = "Kolumnen i " + (platsNamn(pt.lat, pt.lon) || "") + " – " + expTidText(EXP.t) + " · hämtar …";
   try {
     const ab = await expAB(), yx = "[" + pt.iy + "][" + pt.ix + "]", rum = "[" + EXP.t + "][0:" + (EXP_NIV - 1) + "]" + yx;
-    const V = { gr: "mass_fraction_of_graupel_in_air_ml", sn: "mass_fraction_of_snow_in_air_ml", is: "mass_fraction_of_cloud_ice_in_air_ml", lw: "mass_fraction_of_cloud_condensed_water_in_air_ml", ta: "air_temperature_ml" };
+    const V = { gr: "mass_fraction_of_graupel_in_air_ml", sn: "mass_fraction_of_snow_in_air_ml", is: "mass_fraction_of_cloud_ice_in_air_ml", lw: "mass_fraction_of_cloud_condensed_water_in_air_ml", ta: "air_temperature_ml", w: "upward_air_velocity_ml" };
     const fraga = Object.values(V).map(v => v + rum).join(",") + ",surface_air_pressure[" + EXP.t + "][0]" + yx;
     const r = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga)); if (r.st !== 200) throw new Error("svar " + r.st);
     const d = tolka(r.txt), ps = d.surface_air_pressure && d.surface_air_pressure[0]; if (!isFinite(ps)) throw new Error("inget marktryck");
@@ -174,7 +197,11 @@ function expRitaProfil(pt, p, dp, K) {
   // varden pa nivaerna (tips)
   for (let i = 0; i < EXP_NIV; i++) { if (p[i] < pTopp) continue; const r = el("rect", { x: VM, y: yP(p[i]) - 2, width: W - VM - HM, height: 4, fill: "transparent" });
     const ti = el("title"); ti.textContent = "Nivå " + i + ", " + (p[i] / 100).toFixed(0) + " hPa ≈ FL" + String(expFL(p[i])).padStart(3, "0") + ", T " + (isFinite(tc[i]) ? tc[i].toFixed(1) : "–") + " °C\n" +
-      serier.map(([k, n]) => n + " " + (isFinite(K[k][i]) ? (K[k][i] * 1000).toFixed(3) : "–") + " g/kg").join(", "); r.appendChild(ti); S.appendChild(r); }
+      serier.map(([k, n]) => n + " " + (isFinite(K[k][i]) ? (K[k][i] * 1000).toFixed(3) : "–") + " g/kg").join(", ") + (K.w && isFinite(K.w[i]) ? "\nUppvind " + K.w[i].toFixed(2) + " m/s" : ""); r.appendChild(ti); S.appendChild(r); }
+  // uppvinden som gra stapel vid hogerkanten (skala 0-5 m/s, 30 px)
+  if (K.w) for (let i = 0; i < EXP_NIV; i++) { const w = K.w[i]; if (p[i] < pTopp || !isFinite(w) || Math.abs(w) < 0.05) continue;
+    S.appendChild(el("rect", { x: w > 0 ? W - HM + 36 : W - HM + 36 - Math.min(30, -w * 6), y: yP(p[i]) - 1.5, width: Math.min(30, Math.abs(w) * 6), height: 3, fill: w > 0 ? "#6b7280" : "#cbd5e1" })); }
+  S.appendChild(el("text", { x: W - HM + 36, y: H - BP + 13, "font-size": 9, "text-anchor": "middle", fill: c("--dim") }, "w"));
   // summor
   let vg = 0, vs = 0, vl = 0, vu = 0; for (let i = 0; i < EXP_NIV; i++) { const m = dp[i] / EXP_G; vg += (K.gr[i] || 0) * m; vs += (K.sn[i] || 0) * m; vl += (K.lw[i] || 0) * m; if (tc[i] < 0) vu += (K.lw[i] || 0) * m; }
   $("expProfilTitel").textContent = "Kolumnen i " + (platsNamn(pt.lat, pt.lon) || "") + " – " + expTidText(EXP.t);
@@ -199,6 +226,8 @@ function expKartKlick(lat, lon) { EXP.lat = lat; EXP.lon = lon; EXP.punkt = null
 (function expInit() {
   if (!$("expStorlek")) return;
   const st = $("expStorlek"); for (const [v, t] of EXP_STORLEK) st.add(new Option(t, v)); st.value = EXP.km;
+  for (const [id, k] of [["expVal1", "v1"], ["expVal2", "v2"]]) { const s_ = $(id); for (const v in EXP_FALT) s_.add(new Option(EXP_FALT[v].namn, v)); s_.value = EXP[k];
+    s_.addEventListener("change", () => { EXP[k] = s_.value; expSpara(); expRita(); }); }
   st.addEventListener("change", () => { EXP.km = +st.value; expSpara(); expUppdatera(); });
   const steg = d => { if (!M0F.nt) return; EXP.t = Math.max(0, Math.min(M0F.nt - 1, (EXP.t || 0) + d)); expUppdatera(); };
   $("expBak").addEventListener("click", () => steg(-1)); $("expFram").addEventListener("click", () => steg(1));
@@ -207,8 +236,9 @@ function expKartKlick(lat, lon) { EXP.lat = lat; EXP.lon = lon; EXP.punkt = null
     const S = $(id);
     S.addEventListener("click", ev => { const pt = expKartPunkt(S, ev); if (pt) expProfil(pt); });
     S.addEventListener("mousemove", ev => { const pt = expKartPunkt(S, ev), D = EXP.data; if (!pt || !D) { $("kTips").hidden = true; return; }
-      const p = D.mxP[pt.i];
-      visaKTips("Integrerat " + (D.vig[pt.i] || 0).toFixed(3).replace(".", ",") + " kg/m²\nMax " + (D.mx[pt.i] || 0).toFixed(3).replace(".", ",") + " g/kg" + (isFinite(p) ? " på ca FL" + String(expFL(p)).padStart(3, "0") + " (" + Math.round(p / 100) + " hPa)" : "") + "\nKlicka för kolumnens profil", ev.clientX + 14, ev.clientY + 14); });
+      const p = D.mxP[pt.i], f = (k, d) => isFinite(D.F[k][pt.i]) ? D.F[k][pt.i].toFixed(d).replace(".", ",") : "–";
+      visaKTips("Integrerat " + f("vig", 3) + " kg/m², i laddningszonen " + f("ladd", 3) + " (med is + underkylt vatten " + f("samf", 3) + ")\nMax " + f("max", 3) + " g/kg" + (isFinite(p) ? " på ca FL" + String(expFL(p)).padStart(3, "0") + ", " + f("tmax", 1) + " °C" : "") +
+        "\nUppvind × graupel vid −15 °C: " + f("gfx", 3) + "\nMax uppvind " + f("wmax", 1) + " m/s\nKlicka för kolumnens profil", ev.clientX + 14, ev.clientY + 14); });
     S.addEventListener("mouseleave", () => { $("kTips").hidden = true; });
   }
   document.addEventListener("keydown", ev => { if (lage !== "exp" || ev.altKey || ev.ctrlKey || ev.metaKey) return; const t = ev.target.tagName; if (t === "INPUT" || t === "SELECT" || t === "TEXTAREA") return;

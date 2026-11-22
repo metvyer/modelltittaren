@@ -10,6 +10,7 @@ async def main():
         await pg.evaluate("bytLage('exp'); document.getElementById('testskylt').hidden = true")
         await pg.evaluate("EXP.lat = 59.9; EXP.lon = 17.6; expUppdatera()"); await pg.wait_for_timeout(40000)
         print("status:", await pg.evaluate("$('expStatus').textContent + ' | ' + $('expSam').textContent"))
+        print("falt:", await pg.evaluate("Object.keys(EXP.data.F).map(k => { let m = -1e9, n = 0; for (const v of EXP.data.F[k]) if (isFinite(v)) { n++; if (v > m) m = v; } return k + ' max ' + m.toFixed(3) + ' (' + n + ' rutor)'; }).join('; ')"))
         await pg.evaluate("const o = EXP.o; expProfil({ ix: Math.round((o.x0+o.x1)/2), iy: Math.round((o.y0+o.y1)/2), lat: 59.9, lon: 17.6 })"); await pg.wait_for_timeout(20000)
         print("profil:", await pg.evaluate("$('expProfilTitel').textContent + ' | ' + $('expProfilSum').textContent"))
         el = await pg.query_selector("#expRuta"); await el.screenshot(path="matprov/sida_exp.png")

@@ -144,7 +144,7 @@ body.exp #kProb, body.exp #kM0, body.exp #kSiff, body.exp #kOmr { display: none;
 .expkarta svg { width: 100%; aspect-ratio: 1; display: block; border: 1px solid var(--line); border-radius: 6px; background: var(--hav); cursor: crosshair; }
 .expleg { font-size: 11.5px; margin-top: 4px; display: flex; flex-wrap: wrap; gap: 3px 8px; align-items: center; }
 .expleg i { display: inline-block; width: 12px; height: 10px; margin-right: 3px; border: 1px solid rgba(0,0,0,.2); vertical-align: -1px; }
-.expprofil { margin-top: 10px; } .expprofil svg { width: 100%; max-width: 620px; display: block; }
+.expval { width: 100%; margin-bottom: 4px; } .expprofil { margin-top: 10px; } .expprofil svg { width: 100%; max-width: 620px; display: block; }
 body.obs #kProb, body.obs #kM0, body.obs #kSiff, body.obs #kOmr, body.obs .vagval { display: none; } body.obs #siffror { display: none; }
 @media (max-width: 860px) { body.obs .arbete { grid-template-columns: minmax(0, 1fr); } }
 #kObs image { image-rendering: auto; } #obsTid.prognos { color: #b45309; font-weight: 700; }
@@ -588,11 +588,11 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
 <!-- NYTT 22/11: Experiment - graupel i kolumnen (exp.js) -->
 <section id="expRuta" class="expruta" hidden>
   <div class="expkartor">
-    <div class="expkarta"><svg id="expSvg1" preserveAspectRatio="xMidYMid meet"></svg><div class="expleg" id="expSvg1L"></div></div>
-    <div class="expkarta"><svg id="expSvg2" preserveAspectRatio="xMidYMid meet"></svg><div class="expleg" id="expSvg2L"></div></div>
+    <div class="expkarta"><select id="expVal1" class="expval" title="Vilket fält som visas i den vänstra kartan"></select><svg id="expSvg1" preserveAspectRatio="xMidYMid meet"></svg><div class="expleg" id="expSvg1L"></div></div>
+    <div class="expkarta"><select id="expVal2" class="expval" title="Vilket fält som visas i den högra kartan"></select><svg id="expSvg2" preserveAspectRatio="xMidYMid meet"></svg><div class="expleg" id="expSvg2L"></div></div>
   </div>
   <div class="expprofil" id="expProfil" hidden><b id="expProfilTitel"></b><svg id="expProfilSvg"></svg><div class="expleg" id="expProfilSum"></div></div>
-  <p class="karttips">Integrerad mängd = summan av graupel över alla nivåer gånger luftlagrets massa (kg/m² = mm vatten) – som radarns VIL. Max = högsta halten någonstans i kolumnen (g/kg) – som radarns max-CAPPI; höjden står i tipsrutan. Klicka i en karta för kolumnens profil. MEPS medlem 0, inget annat räknat än det modellen ger.</p>
+  <p class="karttips">Integrerad mängd = summan av graupel över alla nivåer gånger luftlagrets massa (kg/m² = mm vatten) – som radarns VIL. Max = högsta halten någonstans i kolumnen (g/kg) – som radarns max-CAPPI. Laddningszonen = −10 till −25 °C, där graupel, is och underkylt vatten laddar upp molnet. Uppvind × graupel vid −15 °C = McCauls blixtproxy (GFX). Värdena för alla fält står i tipsrutan. Klicka i en karta för kolumnens profil. MEPS medlem 0, inget annat räknat än det modellen ger.</p>
 </section>
 <div class="tips" id="tips" hidden></div>
 <div class="tips ktips" id="kTips" hidden></div>
@@ -2642,7 +2642,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="dela.js?v=20261121-2030"></script>
 <script src="bild.js?v=20261121-1900"></script>
 <script src="obs.js?v=20261122-0710"></script>
-<script src="exp.js?v=20261122-0850"></script>
+<script src="exp.js?v=20261122-0920"></script>
 <script src="extra.js?v=20261122-0715"></script>
 </body>
 </html>
