@@ -1141,6 +1141,8 @@ async function visaMeteogram() {
   if (!P.meteo || P.meteo.dtg !== dtg) P.meteoStart = 0;   // ny korning -> ackumuleringen borjar om fran +0
   P.meteo = { dtg, v, iy: r.iy, ix: r.ix, d, lat, lon };
   ritaMeteogram();
+  // 22/11: syns inte meteogrammet (expanderat under allt, eller liten skarm) - skrolla dit nar det ar klart
+  { const R = $("pMeteoRuta"), q = R.getBoundingClientRect(); if (q.top > innerHeight - 80 || q.bottom < 60) R.scrollIntoView({ behavior: "smooth", block: "start" }); }
   // NYTT 20/11 kvall: vindriktning varje timme (byvind) och METAR-observationer (flygplatser) - ritas nar de kommit
   const M1 = P.meteo;
   if (typeof extraHamta === "function") extraHamta(M1);   // 21/11 kvall: AIFS / MET Nordic / nowcast om de ar pa
