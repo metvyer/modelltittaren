@@ -12,6 +12,15 @@ const PAL_SEK = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626
 const PAL_TEMP = ["#312e81", "#1d4ed8", "#3b82f6", "#93c5fd", "#e0f2fe", "#fef3c7", "#fdba74", "#f97316", "#dc2626", "#7f1d1d"];
 const PAL_MOLN = ["#f1f5f9", "#cbd5e1", "#94a3b8", "#64748b", "#475569", "#334155"];
 const K_ = v => v - 273.15;
+// 22/11 kvall: LINJER I m0. "Linjer ovanpå" kan vara "=" (samma som fältet). Standardlinjerna tänds/släcks per värde
+// (knappar under valet, sparas per parameter mt:m0Iso:<v>), en färg, tjocklek/streck svag -> kraftig som i Sannolikhet.
+// Upp till två egna tröskellinjer (mt:m0Tr:<v>) i magenta. Parametrar med isoSteg (tryck, 500 hPa) har automatiska linjer.
+const m0Lv = () => M0F.v2 === "=" ? M0F.v : M0F.v2;
+const M0_TR_FARG = "#c026d3";
+const m0IsoKand = v => { const pa = M0P[v]; if (!pa || pa.isoSteg) return [];
+  const k = pa.isoVal || (pa.klass.length <= 12 ? pa.klass : []); return [...new Set([...(pa.iso || []), ...k])].sort((a, b) => a - b); };
+const m0IsoVal = v => { try { const a = JSON.parse(lasa("mt:m0Iso:" + v)); if (Array.isArray(a)) return a; } catch (e) {} return (M0P[v] && M0P[v].iso) || []; };
+const m0TrVal = v => String(lasa("mt:m0Tr:" + v) || "").split(";").map(x => parseFloat(x.replace(",", "."))).filter(isFinite).slice(0, 2);
 // 22/11: tata temperaturklasser, 1 grad fran -20 till +20 (blatt under noll, gult-rott over) - farger interpolerade
 const TEMP_1 = Array.from({ length: 41 }, (_, i) => i - 20);
 const PAL_TEMP1 = (() => {
@@ -29,7 +38,7 @@ const M0P = {
   // Nederbörd och moln
   nb:     { g: "Nederbörd och moln", namn: "Nederbörd", var: "precipitation_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, pal: typeof PAL_NB !== "undefined" ? PAL_NB : undefined, konv: v => v, iso: [0.1, 1, 4] },
   regn:   { g: "Nederbörd och moln", namn: "Regn", var: "integral_of_rainfall_amount_wrt_time", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, pal: typeof PAL_NB !== "undefined" ? PAL_NB : undefined, konv: v => v, iso: [0.1, 1] },
-  sno:    { g: "Nederbörd och moln", namn: "Snöfall (snö + graupel + hagel, vatten)", var: "snowfall_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 0.5, 1, 2, 4], diff: true, konv: v => v, iso: [0.1, 1] },
+  sno:    { g: "Nederbörd och moln", namn: "Snöfall (snö + graupel + hagel, vatten)", var: "snowfall_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 0.5, 1, 2, 4], diff: true, pal: typeof PAL_SNO !== "undefined" ? PAL_SNO : undefined, konv: v => v, iso: [0.1, 1] },
   graupel:{ g: "Nederbörd och moln", namn: "Graupel", var: "integral_of_graupelfall_amount_wrt_time", enh: "mm/h", klass: [0.05, 0.1, 0.3, 1], diff: true, konv: v => v, iso: [0.1] },
   tot:    { g: "Nederbörd och moln", namn: "Total molnmängd", var: "cloud_area_fraction", enh: "/8", klass: [1, 3, 5, 7, 8], pal: PAL_MOLN, konv: v => Math.min(8, (v > 1.5 ? v / 100 : v) * 8), iso: [4, 7] },
   lag:    { g: "Nederbörd och moln", namn: "Låga moln", var: "low_type_cloud_area_fraction", enh: "/8", klass: [1, 3, 5, 7, 8], pal: PAL_MOLN, konv: v => Math.min(8, (v > 1.5 ? v / 100 : v) * 8), iso: [5] },
@@ -52,11 +61,11 @@ const M0P = {
   jet:    { g: "Vind", namn: "Max vind i pelaren", var: ["x_wind_at_maximum_wind_speed_level", "y_wind_at_maximum_wind_speed_level"], enh: "kt", klass: [40, 60, 80, 100, 120, 150], konv: v => v * KT, iso: [80, 120] },
   jetniv: { g: "Vind", namn: "Höjd för max vind", var: "atmosphere_level_of_max_wind_speed", enh: "ft", klass: [10000, 20000, 25000, 30000, 35000, 40000], konv: v => v * FOT, iso: [30000] },
   // Temperatur och fukt
-  t2:     { g: "Temperatur och fukt", namn: "Temperatur 2 m", var: "air_temperature_2m", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, konv: K_, iso: [-10, -5, 0, 5, 10, 15, 20] },
-  t0:     { g: "Temperatur och fukt", namn: "Yttemperatur 0 m", var: "air_temperature_0m", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, konv: K_, iso: [-5, 0, 5] },
+  t2:     { g: "Temperatur och fukt", namn: "Temperatur 2 m", var: "air_temperature_2m", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, isoVal: [-20, -15, -10, -5, -2, 0, 2, 5, 10, 15, 20], konv: K_, iso: [-10, -5, 0, 5, 10, 15, 20] },
+  t0:     { g: "Temperatur och fukt", namn: "Yttemperatur 0 m", var: "air_temperature_0m", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, isoVal: [-20, -15, -10, -5, -2, 0, 2, 5, 10, 15, 20], konv: K_, iso: [-5, 0, 5] },
   tmax:   { g: "Temperatur och fukt", namn: "Högsta temperatur senaste timmen", var: "air_temperature_max", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10, 15, 20], pal: PAL_TEMP, konv: K_, iso: [0, 10, 20] },
   tmin:   { g: "Temperatur och fukt", namn: "Lägsta temperatur senaste timmen", var: "air_temperature_min", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10, 15, 20], pal: PAL_TEMP, konv: K_, iso: [-10, 0] },
-  td:     { g: "Temperatur och fukt", namn: "Daggpunkt 2 m", var: ["air_temperature_2m", "relative_humidity_2m"], typ: "dagg", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, konv: v => v, iso: [-5, 0, 5, 10] },
+  td:     { g: "Temperatur och fukt", namn: "Daggpunkt 2 m", var: ["air_temperature_2m", "relative_humidity_2m"], typ: "dagg", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, isoVal: [-20, -15, -10, -5, -2, 0, 2, 5, 10, 15, 20], konv: v => v, iso: [-5, 0, 5, 10] },
   spread: { g: "Temperatur och fukt", namn: "Yttemp minus daggpunkt (rimfrost < 0)", var: ["air_temperature_0m", "air_temperature_2m", "relative_humidity_2m"], typ: "rimfrost", enh: "°C", klass: [-3, -2, -1, -0.5, 0], lagre: true, konv: v => v, iso: [0] },
   rh:     { g: "Temperatur och fukt", namn: "Relativ fukt 2 m", var: "relative_humidity_2m", enh: "%", klass: [50, 70, 80, 90, 95, 98], konv: v => Math.min(100, v > 1.5 ? v : v * 100), iso: [90] },
   t850:   { g: "Temperatur och fukt", namn: "Temperatur 850 hPa", var: "air_temperature_pl", niv: "p850", enh: "°C", klass: [-20, -15, -10, -5, -2, 0, 2, 5, 10, 15], pal: PAL_TEMP, konv: K_, iso: [-10, -5, 0, 5] },
@@ -93,7 +102,7 @@ const M0P = {
   olr:    { g: "Strålning", namn: "Utgående långvågig (som IR-satellit: lågt = höga kalla moln)", var: "toa_outgoing_longwave_flux", enh: "W/m²", klass: [240, 220, 200, 180, 160, 140], lagre: true, pal: PAL_MOLN.concat(["#1e293b"]), konv: v => v, iso: [180] },
 };
 const M0_S = 2;   // var 2:a ruta (5 km)
-let M0F = { v: M0P[lasa("mt:m0Param")] ? lasa("mt:m0Param") : "nb", v2: M0P[lasa("mt:m0Linje")] ? lasa("mt:m0Linje") : "", t: null, data: null, data2: null, o: null,
+let M0F = { v: M0P[lasa("mt:m0Param")] ? lasa("mt:m0Param") : "nb", v2: M0P[lasa("mt:m0Linje")] || lasa("mt:m0Linje") === "=" ? lasa("mt:m0Linje") : "", t: null, data: null, data2: null, o: null,
             nyckel: "", nyckel2: "", hamtar: 0, dtg: null, nt: 0, t0: null, tryck: null };
 const m0Cache = new Map();
 const m0Farger = v => { const p = M0P[v].pal || PAL_SEK; return p.slice(Math.max(0, p.length - M0P[v].klass.length)); };
@@ -108,7 +117,7 @@ function m0KartTid() {
   const e = $("kartTidM0"); if (!e) return; e.textContent = "";
   if (!M0F.t0) return;
   const d = new Date(M0F.t0 + M0F.t * 3600e3); e.textContent = VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z (+" + M0F.t + ")";
-  const sm = document.createElement("small"), P1 = M0P[M0F.v], P2 = M0F.v2 && M0P[M0F.v2];
+  const sm = document.createElement("small"), P1 = M0P[M0F.v], P2 = M0F.v2 && M0P[m0Lv()];
   sm.textContent = (P1 ? P1.namn : "") + (P2 ? " · linjer: " + P2.namn : "") + " · medlem 0" + (M0F.dtg ? " · körning " + String(M0F.dtg).slice(9, 12) : "");
   e.appendChild(sm);
 }
@@ -175,14 +184,15 @@ async function m0Uppdatera() {
   $("m0Korn").textContent = M0F.dtg + " (MEPS medlem 0, det-körningen)";
   m0Forklaring();
   const t = M0F.t, hamtnr = ++M0F.hamtar;
-  m0Status("Hämtar " + M0P[M0F.v].namn.toLowerCase() + (M0F.v2 ? " och " + M0P[M0F.v2].namn.toLowerCase() : "") + " …");
+  m0Status("Hämtar " + M0P[M0F.v].namn.toLowerCase() + (M0F.v2 && M0F.v2 !== "=" ? " och " + M0P[M0F.v2].namn.toLowerCase() : "") + " …");
   try {
     const a = await m0Falt(M0F.v, t); if (hamtnr !== M0F.hamtar) return;
     M0F.data = a.d; M0F.o = a.o; M0F.nyckel = a.nyckel; m0Rita();
-    if (M0F.v2) { const b = await m0Falt(M0F.v2, t); if (hamtnr !== M0F.hamtar) return; M0F.data2 = b.d; M0F.nyckel2 = b.nyckel; } else M0F.data2 = null;
+    if (M0F.v2 === "=") { M0F.data2 = M0F.data; M0F.nyckel2 = M0F.nyckel; }
+    else if (M0F.v2) { const b = await m0Falt(M0F.v2, t); if (hamtnr !== M0F.hamtar) return; M0F.data2 = b.d; M0F.nyckel2 = b.nyckel; } else M0F.data2 = null;
     m0Rita(); m0Status("");
     // nasta timme i forvag (sa att stegning gar fort)
-    if (t + 1 < M0F.nt) setTimeout(() => { if (hamtnr === M0F.hamtar) { m0Falt(M0F.v, t + 1).catch(() => {}); if (M0F.v2) m0Falt(M0F.v2, t + 1).catch(() => {}); } }, 300);
+    if (t + 1 < M0F.nt) setTimeout(() => { if (hamtnr === M0F.hamtar) { m0Falt(M0F.v, t + 1).catch(() => {}); if (M0F.v2 && M0F.v2 !== "=") m0Falt(M0F.v2, t + 1).catch(() => {}); } }, 300);
   } catch (e) { if (hamtnr === M0F.hamtar) m0Status("Kunde inte hämta (" + e.message + ")."); }
 }
 function m0Rita() {
@@ -201,15 +211,24 @@ function m0Rita() {
     preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   // isolinjer fran det andra faltet
   if (M0F.v2 && M0F.data2) {
-    const p2_ = M0P[M0F.v2], f2 = M0F.data2, oo = { ...o, ny: o.ny, nx: o.nx };
-    let nivaer = p2_.iso || [];
+    const lv = m0Lv(), p2_ = M0P[lv], f2 = M0F.data2, oo = { ...o, ny: o.ny, nx: o.nx };
+    let nivaer;
     if (p2_.isoSteg) { let mn = Infinity, mx = -Infinity; for (const w of f2) if (isFinite(w)) { if (w < mn) mn = w; if (w > mx) mx = w; }
       nivaer = []; for (let v = Math.ceil(mn / p2_.isoSteg) * p2_.isoSteg; v <= mx; v += p2_.isoSteg) nivaer.push(v); }
-    for (const nv of nivaer) {
+    else nivaer = m0IsoVal(lv).slice().sort((a, b) => a - b);
+    const tr = m0TrVal(lv);
+    nivaer.forEach((nv, i) => {
+      if (tr.includes(nv)) return;   // ritas som egen linje nedan
+      const dd = isoSegment(f2, oo, nv); if (!dd) return;
+      const st = p2_.isoSteg ? { streck: "", bredd: 1.4 } : ISO_STIL[isoStilIndex(i, nivaer.length)];
+      g.appendChild(el("path", { d: dd, fill: "none", stroke: c_isoKant(), "stroke-width": st.bredd + 2.6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.85 }));
+      g.appendChild(el("path", { d: dd, fill: "none", stroke: c_iso(), "stroke-width": st.bredd + 0.2, "stroke-dasharray": st.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": st.streck ? "butt" : "round" }));
+      isoEtiketter(g, dd, String(nv).replace(".", ","));
+    });
+    for (const nv of tr) {   // egna troskellinjer - magenta, tjockare
       const dd = isoSegment(f2, oo, nv); if (!dd) continue;
-      const tjock = nv === 0 && p2_.enh === "°C";
-      g.appendChild(el("path", { d: dd, fill: "none", stroke: c_isoKant(), "stroke-width": tjock ? 5 : 3.6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.85 }));
-      g.appendChild(el("path", { d: dd, fill: "none", stroke: tjock ? "#dc2626" : c_iso(), "stroke-width": tjock ? 2.4 : 1.4, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+      g.appendChild(el("path", { d: dd, fill: "none", stroke: "#ffffff", "stroke-width": 6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.9 }));
+      g.appendChild(el("path", { d: dd, fill: "none", stroke: M0_TR_FARG, "stroke-width": 3, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
       isoEtiketter(g, dd, String(nv).replace(".", ","));
     }
   }
@@ -220,7 +239,26 @@ function m0Forklaring() {
   const f = $("m0Forkl"), pa = M0P[M0F.v], fa = m0Farger(M0F.v); f.textContent = "";
   pa.klass.forEach((k, i) => { const sp = document.createElement("span"), ii = document.createElement("i"); ii.style.background = fa[i];
     sp.append(ii, pa.tat && k % pa.tat ? "" : (pa.lagre ? "< " : "≥ ") + k.toLocaleString("sv-SE") + (pa.enh ? " " + pa.enh : "")); if (pa.tat) sp.className = "tat"; f.appendChild(sp); });
-  if (M0F.v2) { const sp = document.createElement("span"); sp.textContent = "Linjer: " + M0P[M0F.v2].namn.toLowerCase() + (M0P[M0F.v2].enh ? " (" + M0P[M0F.v2].enh + ")" : ""); f.appendChild(sp); }
+  if (M0F.v2) { const lv = m0Lv(), P2 = M0P[lv], sp = document.createElement("span"); sp.textContent = "Linjer: " + P2.namn.toLowerCase() + (P2.enh ? " (" + P2.enh + ")" : ""); f.appendChild(sp);
+    for (const nv of m0TrVal(lv)) { const s2 = document.createElement("span"), sv = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      sv.setAttribute("width", 26); sv.setAttribute("height", 10); sv.style.verticalAlign = "middle"; sv.style.marginRight = "4px";
+      const l = document.createElementNS("http://www.w3.org/2000/svg", "line"); for (const [k, w] of Object.entries({ x1: 1, x2: 25, y1: 5, y2: 5, stroke: M0_TR_FARG, "stroke-width": 3 })) l.setAttribute(k, w);
+      sv.append(l); s2.append(sv, "egen " + String(nv).replace(".", ",") + (P2.enh ? " " + P2.enh : "")); f.appendChild(s2); } }
+  m0IsoRad();
+}
+// knapparna for standardlinjerna och rutorna for egna linjer (under "Linjer ovanpa")
+function m0IsoRad() {
+  const rad = $("m0IsoRad"), ch = $("m0IsoChips"); if (!rad || !ch) return;
+  const lv = M0F.v2 ? m0Lv() : ""; rad.hidden = !lv; if (!lv) return;
+  const pa = M0P[lv], kand = m0IsoKand(lv), val = m0IsoVal(lv); ch.textContent = "";
+  if (!kand.length) { const sp = document.createElement("span"); sp.className = "dim"; sp.textContent = pa.isoSteg ? "var " + pa.isoSteg + " " + pa.enh + " (automatiskt)" : "–"; ch.appendChild(sp); }
+  for (const x of kand) { const b = document.createElement("button"); b.className = "sek liten"; b.textContent = String(x).replace(".", ",");
+    b.setAttribute("aria-pressed", String(val.includes(x)));
+    b.addEventListener("click", () => { const nu = m0IsoVal(lv), i = nu.indexOf(x); if (i >= 0) nu.splice(i, 1); else nu.push(x);
+      lagra("mt:m0Iso:" + lv, JSON.stringify(nu)); m0IsoRad(); m0Rita(); m0Forklaring(); });
+    ch.appendChild(b); }
+  const tr = m0TrVal(lv); $("m0Tr1").value = tr[0] !== undefined ? String(tr[0]).replace(".", ",") : ""; $("m0Tr2").value = tr[1] !== undefined ? String(tr[1]).replace(".", ",") : "";
+  $("m0TrEnh").textContent = pa.enh || "";
 }
 function m0Tips(e) {
   const o = M0F.o, d = M0F.data; if (!o || !d) return false;
@@ -229,7 +267,7 @@ function m0Tips(e) {
   const fmt = (w, pa) => isFinite(w) ? (pa.enh === "ft" || pa.enh === "m" || Math.abs(w) >= 100 ? Math.round(w) : w.toFixed(1).replace(".", ",")) + (pa.enh ? " " + pa.enh : "") : "–";
   const i = y * o.nx + x, pa = M0P[M0F.v];
   let t = pa.namn + ": " + (isFinite(d[i]) ? fmt(d[i], pa) : M0F.v === "bas" ? "inga moln" : "–");
-  if (M0F.v2 && M0F.data2) t += "\n" + M0P[M0F.v2].namn + ": " + fmt(M0F.data2[i], M0P[M0F.v2]);
+  if (M0F.v2 && M0F.v2 !== "=" && M0F.data2) t += "\n" + M0P[M0F.v2].namn + ": " + fmt(M0F.data2[i], M0P[M0F.v2]);
   const ll = franRuta(o.x0 + x * o.s, o.y0 + y * o.s);
   visaKTips(t + "\nMedlem 0, " + m0TidText(M0F.t) + "\n" + ll.lat.toFixed(2) + "N " + ll.lon.toFixed(2) + "E", e.clientX + 14, e.clientY + 14);
   return true;
@@ -242,6 +280,11 @@ function m0In() { m0Uppdatera(); }
     const grp = {}; for (const k in M0P) { const g = M0P[k].g; if (!grp[g]) { grp[g] = document.createElement("optgroup"); grp[g].label = g; sel.appendChild(grp[g]); }
       grp[g].appendChild(new Option(M0P[k].namn + (M0P[k].enh ? " (" + M0P[k].enh + ")" : ""), k)); } };
   fyll($("m0Param"), false); fyll($("m0Linjer"), true);
+  $("m0Linjer").add(new Option("= samma som fältet", "="), 1);   // 22/11 kvall
+  { let tm = 0; const tr = () => { clearTimeout(tm); tm = setTimeout(() => { const lv = m0Lv(); if (!lv) return;
+      const v = [$("m0Tr1").value, $("m0Tr2").value].map(x => x.trim().replace(",", ".")).filter(x => x !== "" && isFinite(parseFloat(x)));
+      lagra("mt:m0Tr:" + lv, v.join(";")); m0Rita(); m0Forklaring(); }, 400); };
+    $("m0Tr1").addEventListener("input", tr); $("m0Tr2").addEventListener("input", tr); }
   $("m0Param").value = M0F.v; $("m0Linjer").value = M0F.v2;
   $("m0Param").addEventListener("change", () => { M0F.v = $("m0Param").value; lagra("mt:m0Param", M0F.v); m0Uppdatera(); });
   $("m0Linjer").addEventListener("change", () => { M0F.v2 = $("m0Linjer").value; lagra("mt:m0Linje", M0F.v2); m0Uppdatera(); });

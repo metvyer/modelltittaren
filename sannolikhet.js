@@ -101,7 +101,9 @@ const VKLASS = {
 const VFARG_ALLA = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
 // 22/11: nederbord (och regn) i gront - ljust = lite, morkt = mycket, allra mest lila. Anvands aven av Karta m0.
 const PAL_NB = ["#dcfce7", "#bbf7d0", "#86efac", "#22c55e", "#15803d", "#14532d", "#a21caf"];
-const VPAL = { nb: PAL_NB };
+// 22/11 kvall: snofall likadant men i blatt (ljust = lite, morkt = mycket, mest = lila)
+const PAL_SNO = ["#e0f2fe", "#bae6fd", "#7dd3fc", "#38bdf8", "#0284c7", "#1e3a8a", "#a21caf"];
+const VPAL = { nb: PAL_NB, sno: PAL_SNO };
 const vfarg = v => { const p = VPAL[v] || VFARG_ALLA; return p.slice(Math.max(0, p.length - VKLASS[v].length)); };   // farger for parameterns klasser (de morkaste sist)
 const visaLage = () => ($("pVisa") && $("pVisa").value) || "sannolikhet";
 // NYTT 20/11 kvall: vilka medlemmar som raknas - alla 30, de 15 nya (0-14 = senaste korningen) eller de 15 gamla

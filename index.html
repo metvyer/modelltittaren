@@ -318,6 +318,8 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .meteovarn { font-size: 12px; margin: 3px 0; }
 #pMeteoRuta.meteoLaddar > :not(.meteohuvud) { visibility: hidden; }
 #pMeteoRuta.meteoLaddar::before { content: attr(data-laddar); display: block; color: #c2410c; font-weight: 600; padding: 8px 2px; }
+.m0isorad { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0; font-size: 12.5px; } .m0isorad[hidden] { display: none; }
+.m0isorad .chips button { padding: 2px 7px; } .m0tr { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; } .m0tr input { width: 58px; }
 .meteoxforkl { font-size: 12px; margin: 4px 0 6px; padding: 5px 8px; border-left: 3px solid var(--line); background: var(--panel); } .meteoxforkl > div { margin: 2px 0; } .meteoxforkl[hidden] { display: none; }
 /* 22/11: omraden (omr.js) */
 .omrvalj { position: relative; display: inline-block; }
@@ -503,6 +505,8 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <div class="falt"><label for="m0Param">Fält i färg</label><select id="m0Param"></select></div>
     <div class="falt"><label for="m0Linjer">Linjer ovanpå</label><select id="m0Linjer"></select></div>
   </div>
+  <div class="m0isorad" id="m0IsoRad" hidden><span class="dim">Linjer:</span> <span class="chips" id="m0IsoChips" title="Tänd eller släck varje linje"></span>
+    <label class="m0tr" title="Upp till två egna linjer (magenta), t.ex. 0 °C eller 25 kt">Egna: <input id="m0Tr1" class="koord" inputmode="decimal" placeholder="–"> <input id="m0Tr2" class="koord" inputmode="decimal" placeholder="–"> <span id="m0TrEnh" class="dim"></span></label></div>
   <div class="pkontroller m0tidrad">
     <button class="sek" id="m0Bak" title="En timme bakåt (vänsterpil)">◀</button>
     <div class="m0tidmitt"><div id="m0Tid" class="tidsvald"></div><input type="range" id="m0Reglage" min="0" max="66" value="0" title="Dra för att välja timme"></div>
@@ -2723,9 +2727,9 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261122-2230"></script>
+<script src="sannolikhet.js?v=20261122-2245"></script>
 <script src="kombo.js?v=20261122-2120"></script>
-<script src="m0karta.js?v=20261122-2230"></script>
+<script src="m0karta.js?v=20261122-2245"></script>
 <script src="taf.js?v=20261122-0800"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261122-2130"></script>
