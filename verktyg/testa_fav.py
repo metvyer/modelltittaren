@@ -18,6 +18,13 @@ async def main():
             skriv(f"snodrev {(i+1)*5}s: " + str(await pg.evaluate("$('pStatus').textContent.slice(0,140) + ' | upptagen ' + P.upptagen + ' kh ' + window._kh + ' khUpp ' + window._khUpp + ' tom ' + P.komboTom")))
         skriv('PH ' + str(await pg.evaluate('JSON.stringify(window._ph)')))
         skriv('ST ' + str(await pg.evaluate('JSON.stringify(window._st)')))
+        skriv("DIAG " + str(await pg.evaluate("""(async () => { const K = komboAktiv(); if (!K) return 'ingen K';
+          const kand = P.index.filter(e => e.dtg === P.dtg && e.v === K.delar[0]); const ut = ['kand ' + kand.length + ' ' + JSON.stringify(kand.map(e => [e.s, e.y0, e.y1, e.x0, e.x1, e.tider.join(',')]))];
+          ut.push('by ' + JSON.stringify(P.index.filter(e => e.dtg === P.dtg && e.v === 'by').map(e => [e.s, e.y0, e.y1, e.x0, e.x1, e.tider.length])));
+          let a = +$('pFran').value, b = +$('pTill').value; ut.push('period ' + a + '-' + b + ' dt ' + $('pDt').value);
+          for (const e of kand) { const o = { ...e, ny: (e.y1 - e.y0) / e.s + 1, nx: (e.x1 - e.x0) / e.s + 1 };
+            for (let t = Math.min(a, b); t <= Math.max(a, b); t++) for (const p of K.delar) { const d = await timData({ ...o, v: p }, t); if (!d) ut.push('saknas ' + p + ' t' + t); } }
+          return ut.join(' || '); })()""")))
         await pg.evaluate("favVal('by', 32); if (!visaIso) $('visaIso').click()"); await pg.wait_for_timeout(5000)
         await pg.evaluate("$('testskylt') && ($('testskylt').hidden = true)")
         k = await pg.query_selector("#karta")
