@@ -1168,6 +1168,13 @@ function platsNamn(lat, lon) {
   for (const [n, la, lo] of lista) { const dy = (la - lat) * 111.2, dx = (lo - lon) * 111.2 * Math.cos(lat * Math.PI / 180), d = Math.hypot(dx, dy); if (d < bd) { bd = d; bast = n; } }
   return bd <= 3 ? bast : lat.toFixed(2) + "N " + lon.toFixed(2) + "E";
 }
+// 22/11: namnet pa platsen (egna orter och flygplatser) om punkten ligger inom 3 km, annars ""
+function platsNamn(lat, lon) {
+  const lista = PUNKTER.map(p => [p[0] + (p[1] ? " " + p[1] : ""), p[2], p[3]]).concat(FLYG.map(f => [f[1] + " " + f[0], f[2], f[3]]));
+  let bast = "", bd = 3;
+  for (const [n, la, lo] of lista) { const d = Math.hypot((la - lat) * 111.2, (lo - lon) * 111.2 * Math.cos(lat * Math.PI / 180)); if (d < bd) { bd = d; bast = n; } }
+  return bast;
+}
 function narmasteICAO(lat, lon) {
   const lista = PUNKTER.map(p => [p[1], p[2], p[3]]).concat(FLYG.map(f => [f[0], f[2], f[3]]));
   if (lage === "taf" && typeof FLYG_EU !== "undefined") for (const f of FLYG_EU) lista.push([f[0], f[2], f[3]]);   // 21/11: hela Europa
@@ -2586,7 +2593,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261122-0710"></script>
+<script src="sannolikhet.js?v=20261122-0720"></script>
 <script src="kombo.js?v=20261121-1330"></script>
 <script src="m0karta.js?v=20261122-0715"></script>
 <script src="taf.js?v=20261121-1945"></script>

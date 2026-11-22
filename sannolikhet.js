@@ -1322,7 +1322,7 @@ function ritaMeteogram() {
     g("text", { x: xs + 12, y: TOPP + 13, "font-size": 10, fill: "#0f766e" }, "start " + tidText(start));
   }
   const lageText = !nb ? "" : lage === "ack" ? " (ackumulerad från " + tidText(start) + ")" : lage === "h1" ? " (per timme)" : lage === "h3" ? " (per 3 h)" : " (per 6 h)";
-  $("pMeteoTitel").textContent = "Meteogram " + pa.namn.split(",")[0].toLowerCase() + lageText + " – " + M0.lat.toFixed(2) + "N " + M0.lon.toFixed(2) + "E, körning " + M0.dtg;
+  $("pMeteoTitel").textContent = "Meteogram " + pa.namn.split(",")[0].toLowerCase() + lageText + " – " + (typeof platsNamn === "function" && platsNamn(M0.lat, M0.lon) ? platsNamn(M0.lat, M0.lon) + ", " : "") + M0.lat.toFixed(2) + "N " + M0.lon.toFixed(2) + "E, körning " + M0.dtg;
   $("pMeteoForkl").textContent = "Bred låda = 25–75 % av medlemmarna, smal låda = 10–90 %, mörkt streck = median, tunt streck = min–max. Röd linje = medlem 0" +
     (vm !== null && vm !== 0 ? ", svart streckad = medlem " + vm : "") + (visaTrosk ? ", orange = tröskel" : "") + ". Blå skuggning = vald period. Håll musen över en stapel för värden." +
     (lage === "ack" ? " Grön linje = start för ackumuleringen: dra i handtaget eller klicka på tidsaxeln, dubbelklicka för +0." : "") +
