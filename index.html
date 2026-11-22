@@ -479,6 +479,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   </div>
   <div class="tafinst">
     <span class="grp">Sök <input type="search" id="tafNy" size="16" list="tafSokLista" placeholder="ICAO eller namn" autocomplete="off"><datalist id="tafSokLista"></datalist><button class="sek liten" id="tafVisa" title="Visa var flygplatsen ligger (röd ring), utan att lägga till">Visa</button><button class="sek liten" id="tafLagg">Lägg till</button></span>
+    <button class="sek liten" id="tafBaraMed" aria-pressed="false" title="Släck flygplatser utan giltig TAF på kartan (TAF:en har gått ut, t.ex. stängt i helgen). Tabellen visar dem fortfarande.">Bara med TAF</button>
     <button class="sek liten" id="tafIcao" aria-pressed="false" title="Skriv ICAO-koden vid alla flygplatser på kartan (klicka på en för att lägga till den)">Visa ICAO</button>
     <button class="sek liten" id="tafStd" title="Tillbaka till de 11 förvalda flygplatserna">Förvalda 11</button>
     <span class="grp">Ordna efter <select id="tafOrdning"></select></span>
@@ -2601,7 +2602,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="sannolikhet.js?v=20261122-0745"></script>
 <script src="kombo.js?v=20261121-1330"></script>
 <script src="m0karta.js?v=20261122-0715"></script>
-<script src="taf.js?v=20261121-1945"></script>
+<script src="taf.js?v=20261122-0800"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261121-2030"></script>
 <script src="bild.js?v=20261121-1900"></script>

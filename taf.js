@@ -20,6 +20,7 @@ const TAF_GRANS_STD = { gulSikt: 3000, gulBas: 500, rodSikt: 1000, rodBas: 200, 
 const TAF_GRANS_GAMMAL = { gulSikt: 5000, gulBas: 1500, rodSikt: 1500, rodBas: 500 };
 const TAF_METAR_GAMMAL_MIN = 40, TAF_UTE_MIN = 10;   // 21/11: utgangen TAF visas som "TAF ute" i 10 min, sedan bort
 // Giltig TAF just nu (null om ingen eller om den gick ut for mer an 10 min sedan); .ute = gick nyss ut
+const tafBaraMed = () => lasa("mt:tafBaraMed") === "ja";
 function tafNu(icao) { const T = TAFS.data[icao]; if (!T) return null; const nu = Date.now(); if (nu >= T.till + TAF_UTE_MIN * 60e3) return null; T.ute = nu >= T.till; return T; }   // 21/11: aldre METAR -> svart prick
 const kmText = m => !isFinite(m) ? "–" : m >= 9999 ? "≥10 km" : (m / 1000).toLocaleString("sv-SE", { maximumFractionDigits: 1 }) + " km";
 // 21/11: tid pa kartan - bara HH om den ar i dag eller i morgon (UTC), annars DDHH
@@ -352,7 +353,8 @@ function tafRitaKarta() {
   // NYTT 21/11: linjalerna glider isar. Varje flygplats ritas i tabellens ordning; krockar dess linjal (eller etikett/tider)
   // med en redan placerad - eller med en annan flygplats prick - flyttas den upp/ned till narmaste lediga plats och
   // en tunn gra linje visar vilken prick den hor till. Hogst 3 steg bort (annars star den kvar - zooma in). Gors om vid varje omritning.
-  const ordning = typeof tafSorterad === "function" ? tafSorterad() : TAFS.lista;
+  // 22/11: knappen "Bara med TAF" doljer flygplatser utan giltig TAF (utgangen/stangd) pa kartan
+  const ordning = (typeof tafSorterad === "function" ? tafSorterad() : TAFS.lista).filter(ic => !tafBaraMed() || (tafNu(ic) && !tafNu(ic).ute));
   const gLinjer = el("g", { "pointer-events": "none" }), gd = el("g", {}); g.appendChild(gLinjer);
   const lagda = [];
   for (const ic of ordning) { const [, la, lo] = tafPlats(ic); if (!isFinite(la)) continue; const q = tillKarta(la, lo);
@@ -449,6 +451,7 @@ function tafInit() {
     b.addEventListener("click", () => { TAFS[flagga] = !TAFS[flagga]; lagra(nyck, TAFS[flagga] ? "ja" : "nej"); b.setAttribute("aria-pressed", String(TAFS[flagga])); if (efter) efter(); tafRita(); }); };
   kn("tafVind", "mt:tafVind", "vind");
   kn("tafIcao", "mt:tafIcao", "icao");
+  TAFS.baraMed = tafBaraMed(); kn("tafBaraMed", "mt:tafBaraMed", "baraMed");   // 22/11
   // 21/11: sok pa ICAO eller namn (lista med alla kanda flygplatser); valj -> laggs till och kartan zoomar dit
   // flygplatslistan laddas efter start -> bygg sokningen nar den behovs
   let kandaN = -1, kandaL = [];
