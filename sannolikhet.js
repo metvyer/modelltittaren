@@ -1449,7 +1449,11 @@ function favVinter(k) {
   // (5 km for hela Sverige blir for stort, ca 400 MB for en halv dag). Perioden = den valda i tidslinjen.
   if (+$("pUppl").value < 4) { $("pUppl").value = "4"; $("pUppl").dispatchEvent(new Event("change")); }
   komboVal(k); favMarkera();
-  ritaOmrade(); P.komboTom = true; probVisa().then(() => { if (P.komboTom) komboHamta(false); });   // 22/11: P.komboTom i stallet for !P.varden (forsta trycket gjorde inget)
+  // 22/11: P.komboTom i stallet for !P.varden, och vanta tills en pagaende hamtning (bytet till 10 km startar en) ar klar
+  // - annars gjorde forsta trycket ingenting.
+  ritaOmrade(); P.komboTom = true;
+  probVisa().then(async () => { for (let i = 0; i < 240 && P.upptagen; i++) await new Promise(r => setTimeout(r, 500));
+    if ($("pKombo").value !== k) return; await probVisa(); if (P.komboTom) komboHamta(false); });
 }
 function favKnappar() {
   const vb_ = $("favVinter"); vb_.textContent = "";

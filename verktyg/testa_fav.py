@@ -11,10 +11,11 @@ async def main():
         await pg.goto("https://metvyer.github.io/modelltittaren/?prov=" + str(int(time.time()))); await pg.wait_for_timeout(3000)
         await pg.evaluate("bytLage('f')"); await pg.wait_for_timeout(10000)
         await pg.evaluate("favVal('by', 32)"); await pg.wait_for_timeout(5000)
+        await pg.evaluate("window._kh = 0; const o = komboHamta; komboHamta = function(a) { window._kh++; window._khUpp = P.upptagen; return o(a); }")
         await pg.evaluate("document.querySelector('#favVinter button[data-k=snofok]').click()")
         for i in range(6):
             await pg.wait_for_timeout(5000)
-            skriv(f"snodrev {(i+1)*5}s: " + str(await pg.evaluate("$('pStatus').textContent.slice(0,140) + ' | upptagen ' + P.upptagen")))
+            skriv(f"snodrev {(i+1)*5}s: " + str(await pg.evaluate("$('pStatus').textContent.slice(0,140) + ' | upptagen ' + P.upptagen + ' kh ' + window._kh + ' khUpp ' + window._khUpp + ' tom ' + P.komboTom")))
         await pg.evaluate("favVal('by', 32); if (!visaIso) $('visaIso').click()"); await pg.wait_for_timeout(5000)
         await pg.evaluate("$('testskylt') && ($('testskylt').hidden = true)")
         k = await pg.query_selector("#karta")
