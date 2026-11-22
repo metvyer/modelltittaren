@@ -59,6 +59,7 @@ async def main():
         await pg.evaluate("$('m0Param').value='t2'; $('m0Param').dispatchEvent(new Event('change'))"); await pg.wait_for_timeout(12000)
         await pg.evaluate("$('m0Linjer').value='='; $('m0Linjer').dispatchEvent(new Event('change'))"); await pg.wait_for_timeout(5000)
         await pg.evaluate("$('m0Tr1').value='0'; $('m0Tr1').dispatchEvent(new Event('input'))"); await pg.wait_for_timeout(1500)
+        skriv("m0 diag: " + str(await pg.evaluate("(() => { let r = 'status ' + ($('m0Status') ? $('m0Status').textContent : '?') + ' data ' + !!M0F.data + ' data2 ' + !!M0F.data2; try { m0Rita(); r += ' rita ok'; } catch (e) { r += ' FEL ' + e + ' ' + (e.stack||'').slice(0, 300); } return r; })()")))
         skriv("m0 linjer: " + str(await pg.evaluate("[...document.querySelectorAll('#m0IsoChips button')].map(b => b.textContent + (b.getAttribute('aria-pressed')==='true'?'*':'')).join(' ') + ' | vägar ' + document.querySelectorAll('#kM0 path').length + ' | legend ' + $('kartLegend').textContent.slice(-60)")))
         await pg.evaluate("$('testskylt') && ($('testskylt').hidden = true)")
         await (await pg.query_selector("#karta")).screenshot(path="matprov/m0linjer.png")

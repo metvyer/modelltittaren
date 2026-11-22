@@ -115,7 +115,7 @@ async function vyTillampa(v) {
       // 21/11: vanta INTE ut hamtningen har (da kom delarens nasta byte forst nar den var klar) - gor resten efterat
       if (nyPunkt || nyKorning || !M || !M.stat) { valjOchHamta(); vantaTH().then(efter); } else efter();
     } else if (lage === "m0") {
-      if (v.m0v && M0P[v.m0v]) M0F.v = v.m0v; M0F.v2 = v.m0l && M0P[v.m0l] ? v.m0l : "";
+      if (v.m0v && M0P[v.m0v]) M0F.v = v.m0v; M0F.v2 = v.m0l && (M0P[v.m0l] || v.m0l === "=") ? v.m0l : "";
       if (v.m0t !== null && v.m0t !== undefined) M0F.t = v.m0t;
       if (v.dtg && $("korning")) { $("korning").value = v.dtg; if ($("korning").value !== v.dtg) $("korning").value = "senaste"; M0F.koll = 0; }
       ritaMarkorer(); m0Uppdatera();
