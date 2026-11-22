@@ -216,8 +216,52 @@ async function smhiSamla(env) {
   return ut;
 }
 
+// NYTT 22/11: STARTA FORHAMTNINGEN DIREKT NAR EN NY MEPS-KORNING FINNS.
+// GitHubs schema ("var 10:e minut") startar i praktiken bara ca en gang i timmen. Var 5:e minut (cron) kollar vi
+// om det-filen (>= 67 tider) eller ensemblefilen (>= 62 tider) for senaste 3-timmarskorningen ar klar pa met.no.
+// Ar nagon av dem ny (inte redan startad, tabellen gh_start) -> workflow_dispatch av forhamta.yml.
+// Nyckeln GH_NYCKEL (fine-grained, bara Actions read/write i detta repo) ligger som Secret i Cloudflare - aldrig i koden.
+// /gh/status visar de senaste starterna (bara korningstider, inget hemligt).
+const GH_REPO = "metvyer/modelltittaren", GH_FLODE = "forhamta.yml";
+const MEPS_KOLL = [["det", d => "meps_det_2_5km_" + d + ".ncml", 67], ["ens", d => "meps_lagged_6_h_subset_2_5km_" + d + ".ncml", 62]];
+const dtgAv = t => { const d = new Date(t); return d.getUTCFullYear() + String(d.getUTCMonth() + 1).padStart(2, "0") + String(d.getUTCDate()).padStart(2, "0") + "T" + String(d.getUTCHours()).padStart(2, "0") + "Z"; };
+async function antalTider(fil) {
+  try { const r = await fetch(THREDDS + fil + ".ascii?time", { headers: UA, cf: { cacheTtl: 0 } }); if (!r.ok) return 0;
+    const m = (await r.text()).match(/(?:^|\n)time\[(\d+)\]/); return m ? +m[1] : 0; } catch (e) { return 0; }
+}
+async function ghForhamta(env, tvinga) {
+  if (!env.GH_NYCKEL) return "ingen GH_NYCKEL";
+  if (!env.DB) return "ingen DB";
+  const DB = env.DB;
+  await DB.prepare("CREATE TABLE IF NOT EXISTS gh_start (nyckel TEXT PRIMARY KEY, tid TEXT, status INTEGER, svar TEXT)").run();
+  const nu = Date.now(), t3 = Math.floor(nu / 3600e3 / 3) * 3 * 3600e3, nya = [];
+  for (const [typ, fil, krav] of MEPS_KOLL) {
+    for (const t of [t3, t3 - 3 * 3600e3]) {           // senaste och forra 3-timmarskorningen
+      const nyckel = typ + ":" + dtgAv(t);
+      if (await DB.prepare("SELECT 1 FROM gh_start WHERE nyckel = ? AND status = 204").bind(nyckel).first()) break;   // redan startad
+      if (await antalTider(fil(dtgAv(t))) >= krav) { nya.push(nyckel); break; }
+    }
+  }
+  if (!nya.length && !tvinga) return "inget nytt";
+  const senast = await DB.prepare("SELECT tid FROM gh_start WHERE status = 204 ORDER BY tid DESC LIMIT 1").first();
+  if (!tvinga && senast && nu - Date.parse(senast.tid) < 4 * 60e3) return "startade nyss, väntar";
+  const start = Date.now();
+  const r = await fetch("https://api.github.com/repos/" + GH_REPO + "/actions/workflows/" + GH_FLODE + "/dispatches", { method: "POST",
+    headers: { "Authorization": "Bearer " + env.GH_NYCKEL, "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "Content-Type": "application/json", ...UA },
+    body: JSON.stringify({ ref: "main" }) });
+  const svar = r.status === 204 ? "" : (await r.text()).slice(0, 200);
+  const tid = new Date().toISOString();
+  for (const k of (nya.length ? nya : ["manuell:" + tid])) await DB.prepare("INSERT OR REPLACE INTO gh_start (nyckel, tid, status, svar) VALUES (?, ?, ?, ?)").bind(k, tid, r.status, svar).run();
+  await DB.prepare("DELETE FROM gh_start WHERE tid < ?").bind(new Date(nu - 7 * 86400e3).toISOString()).run();
+  await loggaHamtning(DB, "github", "starta förhämtning " + (nya.join(", ") || "manuellt") + (svar ? " || " + svar : ""), r.status, 0, Date.now() - start);
+  return (r.status === 204 ? "startade " : "FEL " + r.status + " ") + (nya.join(", ") || "manuellt") + (svar ? " " + svar : "");
+}
+
 export default {
-  async scheduled(event, env, ctx) { ctx.waitUntil(smhiSamla(env).catch(e => console.log("smhiSamla", e))); },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(smhiSamla(env).catch(e => console.log("smhiSamla", e)));
+    ctx.waitUntil(ghForhamta(env).catch(e => console.log("ghForhamta", e)));
+  },
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const ursprung = req.headers.get("Origin") || "";
@@ -351,6 +395,13 @@ export default {
       // reserv om cron inte gatt: ar senaste bilden aldre an 7 min hamtas en ny i bakgrunden
       if (!rad.length || Date.now() - rad[rad.length - 1].t > 7 * 60e3) ctx.waitUntil(smhiSamla(env).catch(() => {}));
       return new Response(JSON.stringify(rad.map(r => r.t)), { headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=60" } });
+    }
+    if (url.pathname === "/gh/status") {
+      const rad = env.DB ? (await env.DB.prepare("SELECT nyckel, tid, status FROM gh_start ORDER BY tid DESC LIMIT 20").all().catch(() => ({ results: [] }))).results : [];
+      return new Response(JSON.stringify({ nyckel: !!env.GH_NYCKEL, starter: rad }), { headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+    }
+    if (url.pathname === "/gh/koll") {      // kor kollen nu (startar bara om nagot ar nytt - samma regler som cron)
+      return new Response(String(await ghForhamta(env).catch(e => "fel: " + e)), { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
     }
     if (url.pathname === "/radar/smhi/samla") return new Response(String(await smhiSamla(env).catch(e => "fel: " + e)), { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
     const rm = url.pathname.match(/^\/radar\/smhi\/(\d{13})\.png$/);
