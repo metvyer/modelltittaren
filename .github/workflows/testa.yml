@@ -145,6 +145,19 @@ jobs:
         if: contains(inputs.delar, 'D2')
         run: python3 verktyg/testa_dds.py
 
+      # 22/11: fallstudie (verktyg/fall.py) - text + bilder i grenen matprov-fall
+      - name: Fallstudie
+        if: contains(inputs.delar, 'FALL')
+        run: |
+          python3 verktyg/fall.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan matprov-fall
+          git rm -rq --cached .
+          git add -f fall fall.md
+          git commit -qm "Fall $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf origin HEAD:matprov-fall
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
