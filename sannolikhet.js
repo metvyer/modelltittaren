@@ -1159,12 +1159,19 @@ async function visaMeteogram() {
   if (!r) { info.textContent = "Välj en punkt inom MEPS-området först (klicka i kartan)."; return; }
   if (!P.dtg) { info.textContent = "Ingen körning vald än."; return; }
   const v = $("pParam").value, pa = PPARAM[v], dtg = P.dtg;
-  info.textContent = "Hämtar meteogram …"; $("pMeteo").disabled = true;
+  // 22/11: samma meteogram hamtas redan - starta inte ett till (probVisa anropas manga ganger medan falt laddas)
+  const nyckel = [dtg, v, r.iy, r.ix].join(":"); if (P.meteoLaddar === nyckel) return; P.meteoLaddar = nyckel;
+  // 22/11: annan parameter/korning - slack det gamla meteogrammet och visa att det nya laddas (orange)
+  const R = $("pMeteoRuta"), pnamn = pa.namn.split(",")[0].toLowerCase();
+  if (P.meteo && !R.hidden) { R.classList.add("meteoLaddar"); R.dataset.laddar = "Laddar meteogram för " + pnamn + " …"; }
+  info.textContent = "Laddar meteogram för " + pnamn + " …"; info.className = "stVant"; $("pMeteo").disabled = true;
   let d; const t0 = performance.now();
   try { d = await meteoHamta(dtg, v, r.iy, r.ix); }
-  catch (e) { info.textContent = "Meteogrammet gick inte att hämta (" + e.message + ")."; $("pMeteo").disabled = false; return; }
+  catch (e) { if (P.meteoLaddar !== nyckel) return; info.textContent = "Meteogrammet gick inte att hämta (" + e.message + ")."; info.className = "fel"; $("pMeteo").disabled = false; R.classList.remove("meteoLaddar"); P.meteoLaddar = null; return; }
+  if (P.meteoLaddar !== nyckel) return;   // en nyare hamtning (annan parameter) har startat - den ritar
+  P.meteoLaddar = null; R.classList.remove("meteoLaddar");
   $("pMeteo").disabled = false;
-  info.textContent = "Klart på " + ((performance.now() - t0) / 1000).toFixed(1) + " s.";
+  info.textContent = "Klart på " + ((performance.now() - t0) / 1000).toFixed(1) + " s."; info.className = "stOk";
   if (!P.meteo || P.meteo.dtg !== dtg) P.meteoStart = 0;   // ny korning -> ackumuleringen borjar om fran +0
   P.meteo = { dtg, v, iy: r.iy, ix: r.ix, d, lat, lon };
   ritaMeteogram();

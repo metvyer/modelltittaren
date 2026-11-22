@@ -312,6 +312,8 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .varnprick.nivRED { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); border: 0; }
 .varnprick.nivMESSAGE { border-radius: 2px; }
 .meteovarn { font-size: 12px; margin: 3px 0; }
+#pMeteoRuta.meteoLaddar > :not(.meteohuvud) { visibility: hidden; }
+#pMeteoRuta.meteoLaddar::before { content: attr(data-laddar); display: block; color: #c2410c; font-weight: 600; padding: 8px 2px; }
 .meteoxforkl { font-size: 12px; margin: 4px 0 6px; padding: 5px 8px; border-left: 3px solid var(--line); background: var(--panel); } .meteoxforkl > div { margin: 2px 0; } .meteoxforkl[hidden] { display: none; }
 /* 22/11: omraden (omr.js) */
 .omrvalj { position: relative; display: inline-block; }
@@ -2717,7 +2719,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261122-2140"></script>
+<script src="sannolikhet.js?v=20261122-2150"></script>
 <script src="kombo.js?v=20261122-2120"></script>
 <script src="m0karta.js?v=20261122-0825"></script>
 <script src="taf.js?v=20261122-0800"></script>
