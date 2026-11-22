@@ -6,7 +6,7 @@ async def main():
         b = await p.chromium.launch(); pg = await b.new_page(viewport={"width": 1400, "height": 1000})
         await pg.goto("https://metvyer.github.io/modelltittaren/?prov=" + str(int(time.time()))); await pg.wait_for_timeout(3000)
         await pg.evaluate("document.getElementById('testskylt') && (document.getElementById('testskylt').hidden = true)")
-        await pg.evaluate("bytLage('th'); const s_ = $('punkt'); s_.value = String(PUNKTER.findIndex(p => p[1] === 'ESCM')); sattPunkt(); if (typeof hamta === 'function') hamta()")
+        await pg.evaluate("bytLage('th'); const s_ = $('punkt'); s_.value = String(PUNKTER.findIndex(p => p[1] === 'ESCM')); sattPunkt(); 0")
         await pg.wait_for_timeout(60000)
         r = await pg.evaluate("""(() => { if (!M) return 'ingen M';
           const t0 = M.t0 || (M.tider && M.tider[0]); let it = -1;
