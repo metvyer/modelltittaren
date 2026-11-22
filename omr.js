@@ -15,8 +15,18 @@ const OMR_LAGER = [
   { id: "CTR", k: "CTR", namn: "CTR – kontrollzoner (LFV)", farg: "#1f6fb4", streck: "", etik: false },
   { id: "TMAW", k: "TMAW", namn: "TMA – terminalområden (LFV)", farg: "#17a2b8", streck: "3 3", etik: false },
   { id: "ATZ", k: "ATZ", namn: "ATZ – trafikzoner (LFV)", farg: "#2e8b57", streck: "", etik: false },
+  // 22/11: flygledningssektorer (ACC) - ligger i flera hojdskikt ovanpa varandra, anvand hojdfiltret
+  { id: "ESOS", k: "ATCCS_ESOS", namn: "Sektorer Stockholm kontroll (LFV)", farg: "#475569", streck: "5 3", etik: false },
+  { id: "ESMM", k: "ATCCS_ESMM", namn: "Sektorer Malmö kontroll (LFV)", farg: "#8b5a2b", streck: "5 3", etik: false },
 ];
-let OMR = { pa: (() => { try { return JSON.parse(lasa("mt:omr") || "[]"); } catch (e) { return []; } })(), data: {}, hamtar: {}, fel: {}, nyckel: "" };
+// 22/11: hojdfilter for LFV-lagren - visa bara omraden som omfattar vald hojd (fot). 0 = alla.
+const OMR_HOJDER = [[0, "alla höjder"], [1000, "1 000 ft"], [3000, "3 000 ft"], [5000, "FL 50"], [10000, "FL 100"], [15000, "FL 150"], [20000, "FL 200"], [25000, "FL 250"], [30000, "FL 300"], [40000, "FL 400"]];
+// LFV:s hojder: "GND", "UNL", "FL 95", "4500" (fot over havet) -> fot
+const omrFot = h => { h = String(h == null ? "" : h).trim().toUpperCase(); if (!h || h === "GND" || h === "SFC") return 0; if (h === "UNL") return 1e6;
+  const m = h.match(/^FL\s*(\d+)/); if (m) return +m[1] * 100; const n = parseFloat(h); return isFinite(n) ? n : null; };
+const omrHojdOk = a => { const H = OMR.hojd; if (!H || a.l === undefined) return true; const l = omrFot(a.l), u = omrFot(a.u);
+  return (l === null || l <= H) && (u === null || u >= H); };
+let OMR = { hojd: +(lasa("mt:omrHojd") || 0) || 0, pa: (() => { try { return JSON.parse(lasa("mt:omr") || "[]"); } catch (e) { return []; } })(), data: {}, hamtar: {}, fel: {}, nyckel: "" };
 const omrLager = id => OMR_LAGER.find(l => l.id === id);
 
 async function omrHamta(k) {
@@ -48,6 +58,7 @@ function omrRita() {
     const lista = OMR.data[L.k]; if (!lista) continue;
     lista.forEach((a, i) => {
       if (L.f && !L.f(a)) return;
+      if (L.k !== "SMHI" && !omrHojdOk(a)) return;
       let d = "", storst = null, yta = -1;
       for (const { r, sluten } of omrRingar(a.g, [])) {
         const pts = r.filter(p => p && isFinite(p[0]) && isFinite(p[1])).map(p => tillKarta(p[1], p[0])); if (pts.length < 2) continue;
@@ -92,7 +103,7 @@ function omrKlick(e, mal) { const x = omrFran(mal); if (x) visaKTips(omrTipsText
 // menyn
 function omrMenyStatus() {
   for (const L of OMR_LAGER) { const s = document.querySelector('#omrMeny [data-s="' + L.id + '"]'); if (!s) continue;
-    s.textContent = OMR.hamtar[L.k] ? " hämtar …" : OMR.fel[L.k] ? " fel: " + OMR.fel[L.k] : OMR.pa.includes(L.id) && OMR.data[L.k] ? " (" + OMR.data[L.k].filter(a => !L.f || L.f(a)).length + ")" : ""; }
+    s.textContent = OMR.hamtar[L.k] ? " hämtar …" : OMR.fel[L.k] ? " fel: " + OMR.fel[L.k] : OMR.pa.includes(L.id) && OMR.data[L.k] ? " (" + OMR.data[L.k].filter(a => (!L.f || L.f(a)) && (L.k === "SMHI" || omrHojdOk(a))).length + ")" : ""; }
   const k = $("visaOmr"); if (k) k.setAttribute("aria-pressed", String(OMR.pa.length > 0));
 }
 (function omrInit() {
@@ -106,6 +117,10 @@ function omrMenyStatus() {
       lagra("mt:omr", JSON.stringify(OMR.pa)); omrMenyStatus(); OMR.nyckel = ""; omrRita(); });
     lb.append(cb, pr, L.namn, s); m.appendChild(lb);
   }
+  { const lb = document.createElement("label"), sel = document.createElement("select"); lb.className = "omrhojd";
+    for (const [v, t] of OMR_HOJDER) sel.add(new Option(t, v)); sel.value = String(OMR.hojd);
+    sel.addEventListener("change", () => { OMR.hojd = +sel.value; lagra("mt:omrHojd", sel.value); omrMenyStatus(); OMR.nyckel = ""; omrRita(); });
+    lb.append("Höjdfilter (LFV-lagren): ", sel); lb.title = "Visa bara områden vars nedre gräns ligger under och övre gräns över vald höjd - bra för sektorerna, som ligger i flera skikt"; m.appendChild(lb); }
   const not = document.createElement("div"); not.className = "dim";
   not.textContent = "Visar var gränserna går – inte om ett område är aktivt (det meddelas via NOTAM/eAUP). Inte för navigering. Hovra eller tryck på namnet för höjder och anmärkningar. Källor: LFV (AIP Sverige, öppna data), SMHI.";
   m.appendChild(not);

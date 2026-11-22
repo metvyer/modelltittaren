@@ -24,13 +24,14 @@ const DELA = { mina: [], aktivId: null, sander: false, senastSkickat: "", skicka
                not: "", oppen: false, styr: null, jagStyr: null, vantar: false, fraga: null, agarFoljer: false,
                sess: Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 8) };
 // jamforelse "har tittaren andrat nagot sjalv": utan zoom, korning och ritlinjer
-const utanVb = v => { const k = { ...v }; delete k.vb; delete k.dtg; delete k.rit; delete k.not; return JSON.stringify(k); };
+const utanVb = v => { const k = { ...v }; delete k.vb; delete k.dtg; delete k.rit; delete k.not; delete k.mat; return JSON.stringify(k); };
 
 // ---------- Vad som sparas ----------
 function vyFanga() {
   const r = x => Math.round(x * 10) / 10;
   const v = { l: fav ? "f" : lage, vb: [r(vb.x), r(vb.y), r(vb.w)], lat: $("lat").value, lon: $("lon").value, pk: $("punkt").value,
-              sf: siffLage, flyg: visaFlyg, rit: typeof RIT !== "undefined" ? RIT.linjer : [], not: DELA.not || "" };
+              sf: siffLage, flyg: visaFlyg, rit: typeof RIT !== "undefined" ? RIT.linjer : [], not: DELA.not || "",
+              mat: typeof MAT !== "undefined" && MAT.p.length > 1 ? MAT.p : [] };   // 22/11: matningen foljer med
   if (lage === "p") {
     Object.assign(v, { dtg: P.dtg, pp: $("pParam").value, pv: $("pVisa").value, pm: $("pMedl").value, tr: $("pTrosk").value,
       fr: $("pFran").value, ti: $("pTill").value, st: $("pStorlek").value, up: $("pUppl").value, dt: $("pDt").value,
@@ -77,6 +78,7 @@ async function vyTillampa(v) {
     $("lat").value = v.lat; $("lon").value = v.lon;
     if (v.flyg !== undefined && v.flyg !== visaFlyg) $("visaFlyg").click();
     if (typeof RIT !== "undefined") { RIT.delade = Array.isArray(v.rit) && v.rit.length ? v.rit : null; ritRita(); }
+    if (typeof MAT !== "undefined") { MAT.delade = Array.isArray(v.mat) && v.mat.length > 1 ? v.mat : null; matRita(); }
     DELA.not = v.not || "";
     if (v.sf !== undefined && v.sf !== siffLage) { siffLage = v.sf; sattSiffKnapp(); }
     if (lage === "p") {

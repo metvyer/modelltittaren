@@ -36,7 +36,7 @@ const SMHI_VARN = "https://opendata-download-warnings.smhi.se/ibww/", CACHE_VARN
 // (SMHI:s varningsomraden: sjovaderomraden + lan). Andras sallan (LFV per AIRAC) -> cache 1 dygn.
 // Svaret gors om till en kompakt lista [{n,l,u,c,w,g}] med koordinater avrundade till 4 decimaler.
 const LFV_WFS = "https://daim.lfv.se/geoserver/mais/wfs?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=mais:";
-const OMR_TYPER = ["TRA", "RSTA", "DNGA", "CTR", "TMAW", "ATZ", "SMHI"], CACHE_OMR = 86400;
+const OMR_TYPER = ["TRA", "RSTA", "DNGA", "CTR", "TMAW", "ATZ", "ATCCS_ESOS", "ATCCS_ESMM", "SMHI"], CACHE_OMR = 86400;   // 22/11: + flygledningssektorer
 const omrR4 = g => Array.isArray(g) ? (typeof g[0] === "number" ? [Math.round(g[0] * 1e4) / 1e4, Math.round(g[1] * 1e4) / 1e4] : g.map(omrR4)) : g;
 const omrGeo = g => !g ? null : g.type === "Feature" ? omrGeo(g.geometry) : g.type === "GeometryCollection" ? { type: g.type, geometries: (g.geometries || []).map(omrGeo) } : { type: g.type, coordinates: omrR4(g.coordinates) };
 function omrKompakt(k, js) {

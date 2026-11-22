@@ -38,6 +38,12 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 .nyfinns { color: var(--warn); font-weight: 650; }
 .vald { color: var(--warn); font-weight: 600; }
 .fel { color: var(--bad); font-weight: 600; }
+/* 22/11: statusfarger - orange med snurra medan nagot hamtas, gront nar det ar klart */
+.stVant { color: #c2410c; } .stOk { color: #15803d; }
+.stVant::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: stSnurr .8s linear infinite; }
+.stOk::before { content: "✓ "; font-weight: 700; }
+@keyframes stSnurr { to { transform: rotate(360deg); } }
+@media (prefers-color-scheme: dark) { .stVant { color: #fb923c; } .stOk { color: #4ade80; } }
 .diagram { display: flex; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .axel { flex: 0 0 auto; border-right: 1px solid var(--line); }
 .skroll { flex: 1 1 auto; overflow-x: auto; min-width: 0; }
@@ -232,8 +238,13 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .kartlegend b { display: block; font-size: 10.5px; margin-bottom: 3px; max-width: 120px; }
 .kartlegend div { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .kartlegend i { display: inline-block; width: 13px; height: 11px; border: 1px solid rgba(0,0,0,.25); flex: none; }
-.karttom { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none; max-width: min(460px, calc(100% - 24px)); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-left: 4px solid #d97706; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: var(--fg); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.karttom { position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none; max-width: min(380px, calc(55% - 12px)); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-left: 4px solid #d97706; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: var(--fg); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
 .karttom[hidden] { display: none; }
+/* 22/11: matning */
+.mattips { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 3; pointer-events: none; background: #0f172a; color: #fff; border-radius: 6px; padding: 5px 10px; font-size: 12.5px; opacity: .92; white-space: nowrap; max-width: calc(100% - 20px); overflow: hidden; text-overflow: ellipsis; }
+.mattips[hidden] { display: none; }
+.matmeny { position: fixed; z-index: 60; display: flex; flex-direction: column; gap: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px; box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.mattext { pointer-events: none; }
 .karttid { position: absolute; top: 8px; left: 8px; z-index: 2; pointer-events: none; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; font-size: 15px; font-weight: 700; color: var(--fg); box-shadow: 0 1px 4px rgba(0,0,0,.15); max-width: calc(100% - 16px); }
 .karttid small { display: block; font-size: 13.5px; font-weight: 600; color: var(--fg); margin-top: 1px; }   /* 22/11: parametern storre */
 .karttid:empty { display: none; } body:not(.m0) .baraM0 { display: none !important; }
@@ -394,17 +405,19 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <button class="sek liten baraP" id="visaSnabb" aria-pressed="true" title="Gröna rutor = områden som redan finns i mellanserverns cache (någon har hämtat dem) – de hämtas på en sekund utan att fråga met.no">Snabba</button>
     <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
-    <button class="sek liten" id="ritKnapp" aria-pressed="false" title="Rita en linje på kartan med en kort text (t.ex. Norr om denna: snö). Klicka punkt för punkt, högerklick, dubbelklick eller Enter = klar. Klicka på en linje för att ändra eller ta bort den. Följer med när du delar.">✏ Rita</button><button class="sek liten" id="ritRensa" hidden title="Ta bort allt du ritat (alla linjer och områden). Klicka två gånger.">🗑 Rensa ritat</button>
+    <button class="sek liten" id="ritKnapp" aria-pressed="false" title="Rita en linje på kartan med en kort text (t.ex. Norr om denna: snö). Klicka punkt för punkt, högerklick, dubbelklick eller Enter = klar. Klicka på en linje för att ändra eller ta bort den. Följer med när du delar.">✏ Rita</button>
+    <button class="sek liten" id="matKnapp" aria-pressed="false" title="Mät avstånd (NM och km) och kurs i kartan: klicka punkt för punkt. Högerklick, dubbelklick, Enter eller Esc = klar. Snabbare: högerklicka i kartan och välj Mät härifrån (mobil: håll fingret still på kartan).">📏 Mät</button><button class="sek liten" id="ritRensa" hidden title="Ta bort allt du ritat (alla linjer och områden). Klicka två gånger.">🗑 Rensa ritat</button>
     <span class="kartpos" id="kartPos"></span>
   </div>
   <div class="kartram">
   <div class="karttid baraP" id="kartTid" aria-live="polite"></div>
   <div class="karttom baraP" id="kartTom" aria-live="polite" hidden></div>
+  <div class="mattips" id="matTips" hidden>Mäter: klicka nästa punkt · högerklick, dubbelklick, Enter eller Esc = klar</div>
   <div class="karttid baraM0" id="kartTidM0" aria-live="polite"></div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -784,7 +797,12 @@ function rensaGammalCache() {
 let lage = "th";   // "th" = tid-hojd, "p" = sannolikhet
 // Vid fel visas en lank till met.no:s driftstatus (status.met.no), dar storningar pa thredds meddelas.
 function status(t, klass) {
-  const e = $(lage === "p" ? "pStatus" : "iStatus"); e.textContent = t; e.className = klass || "";
+  const e = $(lage === "p" ? "pStatus" : "iStatus"); e.textContent = t;
+  // 22/11: farg efter lage nar inget annat anges - orange = hamtar/laddar (snurra), gron = klart, rod = fel
+  if (!klass && t) { const s_ = String(t).trim();
+    if (/^(Klart|Hämtat|Färdig|Allt)/i.test(s_)) klass = "stOk";
+    else if (/^(Hämtar|Kollar|Laddar|Startar|Räknar|Söker|Väntar|Försöker)|…\s*$|\.\.\.\s*$|hämtas …/i.test(s_)) klass = "stVant"; }
+  e.className = klass || "";
   if (klass === "fel" && /thredds|svar \d|servern|körning|misslyckades/i.test(t)) {   // bara serverfel, inte inmatningsfel
     const a = document.createElement("a"); a.href = "https://status.met.no/"; a.target = "_blank"; a.rel = "noopener";
     a.textContent = "status.met.no"; e.append(" Driftstatus hos met.no: ", a);
@@ -2568,6 +2586,7 @@ function kartTips(e) {
   visaKTips(mk.dataset.tips, e.clientX + 14, e.clientY + 14);
 }
 function kartKlick(e, mal) {
+  if (typeof matKlick === "function" && matKlick(e)) return;   /* 22/11: matning (mat.js) */
   if (typeof ritKlick === "function" && ritKlick(e, mal)) return;   // 21/11: ritlinjer (rita.js)
   if (mal && mal.closest && mal.closest(".varnsym") && typeof varnKlick === "function") { varnKlick(e, mal); return; }   /* 22/11: tryck pa varningssymbol = info */
   if (mal && mal.closest && mal.closest(".omretik") && typeof omrKlick === "function") { omrKlick(e, mal); return; }   /* 22/11: tryck pa omradesnamn = info */
@@ -2701,12 +2720,13 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="m0karta.js?v=20261122-0825"></script>
 <script src="taf.js?v=20261122-0800"></script>
 <script src="rita.js?v=20261121-1300"></script>
-<script src="dela.js?v=20261121-2030"></script>
+<script src="dela.js?v=20261122-2130"></script>
 <script src="bild.js?v=20261121-1900"></script>
 <script src="obs.js?v=20261122-0710"></script>
 <script src="exp.js?v=20261122-0940"></script>
 <script src="extra.js?v=20261122-0715"></script>
 <script src="varn.js?v=20261122-0940"></script>
-<script src="omr.js?v=20261122-1205"></script>
+<script src="omr.js?v=20261122-2130"></script>
+<script src="mat.js?v=20261122-2130"></script>
 </body>
 </html>
