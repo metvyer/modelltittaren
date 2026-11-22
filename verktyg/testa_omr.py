@@ -14,20 +14,20 @@ async def main():
         await pg.evaluate("$('visaOmr').click()"); await pg.wait_for_timeout(500)
         await pg.evaluate("for (const cb of document.querySelectorAll('#omrMeny input')) if (!cb.checked) cb.click()"); await pg.wait_for_timeout(20000)
         skriv("meny: " + await pg.evaluate("[...document.querySelectorAll('#omrMeny label')].map(l => l.textContent).join(' | ')"))
-        skriv("ritat: " + await pg.evaluate("OMR_LAGER.map(L => L.id + ' ' + document.querySelectorAll('#kOmr .omryta[data-l=\"' + L.id + '\"]').length).join(', ') + ' | etiketter ' + document.querySelectorAll('#kOmr .omretik').length"))
+        skriv("ritat: " + await pg.evaluate("OMR_LAGER.map(L => L.id + ' ' + document.querySelectorAll('#kOmraden .omryta[data-l=\"' + L.id + '\"]').length).join(', ') + ' | etiketter ' + document.querySelectorAll('#kOmraden .omretik').length"))
         skriv("data: " + await pg.evaluate("Object.keys(OMR.data).map(k => k + ' ' + OMR.data[k].length + ' (' + JSON.stringify(OMR.data[k]).length + ' tkn)').join(', ') + ' fel ' + JSON.stringify(OMR.fel)"))
         await pg.screenshot(path="matprov/omr_meny.png")
         # bara TRA, R, D, sjo
         await pg.evaluate("for (const cb of document.querySelectorAll('#omrMeny input')) { const t = cb.parentNode.textContent; if (/^(Län|CTR|TMA|ATZ)/.test(t) && cb.checked) cb.click(); }; document.body.click()"); await pg.wait_for_timeout(1500)
         await pg.evaluate("$('testskylt') && ($('testskylt').hidden = true)")
         await pg.screenshot(path="matprov/omr_karta.png")
-        e = await pg.query_selector('#kOmr .omretik[data-l="TRA"]')
+        e = await pg.query_selector('#kOmraden .omretik[data-l="TRA"]')
         if e:
             bb = await e.bounding_box(); await pg.mouse.move(bb["x"] + bb["width"] / 2, bb["y"] + bb["height"] / 2); await pg.wait_for_timeout(500)
             skriv("tips TRA: " + await pg.evaluate("$('kTips').hidden ? '(dold)' : $('kTips').textContent"))
         await pg.evaluate("satVb(330, 620, 220)"); await pg.wait_for_timeout(1500)
         await pg.evaluate("$('testskylt') && ($('testskylt').hidden = true)")
-        e = await pg.query_selector('#kOmr .omretik[data-l="RSTA"]')
+        e = await pg.query_selector('#kOmraden .omretik[data-l="RSTA"]')
         if e:
             bb = await e.bounding_box(); await pg.mouse.move(bb["x"] + bb["width"] / 2, bb["y"] + bb["height"] / 2); await pg.wait_for_timeout(500)
             skriv("tips R: " + await pg.evaluate("$('kTips').hidden ? '(dold)' : $('kTips').textContent"))

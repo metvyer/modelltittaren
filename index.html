@@ -401,7 +401,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmr"></g><g id="kVarn"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -2704,6 +2704,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="exp.js?v=20261122-0940"></script>
 <script src="extra.js?v=20261122-0715"></script>
 <script src="varn.js?v=20261122-0940"></script>
-<script src="omr.js?v=20261122-1140"></script>
+<script src="omr.js?v=20261122-1205"></script>
 </body>
 </html>

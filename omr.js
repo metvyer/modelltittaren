@@ -40,7 +40,7 @@ function omrRingar(g, ut) {
 const omrHojd = h => { h = String(h == null ? "" : h).trim(); return /^\d+$/.test(h) ? h + " ft" : h || "?"; };
 
 function omrRita() {
-  const g = $("kOmr"); if (!g) return; g.textContent = "";
+  const g = $("kOmraden"); if (!g) return; g.textContent = "";
   const w = typeof vb !== "undefined" && vb ? vb.w : 949, fs = Math.max(3, w / 949 * 11), nara = w < 420;
   const etiketter = [];
   for (const L of OMR_LAGER) {
