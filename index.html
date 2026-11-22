@@ -1076,6 +1076,7 @@ function hojder(t, kFran) {
 // ===================================================================
 const COL = 22, PLOT_H = 400, TOPP_RAD = 30, RAD_H = 17;
 // Tabellraderna under diagrammet (nyckel, etikett). Obs-raderna (magenta) visas bara nar METAR ar pa.
+const NOLL_BLA = "#2563eb", NOLL_ROD = "#dc2626";   // 22/11: nollor efter tecken
 const RAD_NAMN = { tid: "Tid UTC", sikt: "Sikt km", siktObs: "Sikt obs", bas: "Bas hft", t: "T °C", tObs: "T obs", td: "Td °C",
   pil: "Vind", vind: "Vind kt", by: "By kt", vader: "Väder", moln: "Moln", nb: "Nb mm/h", is: "Isbildning" };
 function tabellRader(obs) {
@@ -1190,10 +1191,10 @@ function tolkaMetar(raw) {
   // sikt: forsta fyrsiffriga gruppen efter vinden (9999 = 10 km eller mer); CAVOK = 9999
   let sikt = cavok ? 9999 : NaN; const s = raw.match(/\b(?:\d{5}|VRB\d{2})(?:G\d{2,3})?KT(?:\s+\d{3}V\d{3})?\s+(\d{4})(?:NDV)?\b/); if (s) sikt = +s[1];
   // temperatur: TT/TdTd (M = minus)
-  const tt = raw.match(/\s(M?\d{2})\/(M?\d{2})?(?=\s)/), tc = tt ? parseInt(tt[1].replace("M", "-"), 10) : NaN;
+  const tt = raw.match(/\s(M?\d{2})\/(M?\d{2})?(?=\s)/), tc = tt ? parseInt(tt[1].replace("M", "-"), 10) : NaN, tcMinus = !!(tt && tt[1][0] === "M");
   // 20/11 kvall: vind dddffGggKT (kt) for meteogrammet
   const vd = raw.match(/\b(\d{3}|VRB)(\d{2,3})(?:G(\d{2,3}))?KT\b/), ff = vd ? +vd[2] : NaN, gg = vd && vd[3] ? +vd[3] : NaN, dd = vd && vd[1] !== "VRB" && +vd[2] > 0 ? +vd[1] : NaN;
-  return { lager, vv, inga: cavok || nsc, sikt, tc, ff, gg, dd };
+  return { lager, vv, inga: cavok || nsc, sikt, tc, tcMinus, ff, gg, dd };
 }
 async function hamtaMetar(icao, timmar) {
   const k = icao + ":" + timmar, c = metarCache.get(k); if (c && Date.now() - c.t < METAR_TTL) return c.obs;
@@ -1442,8 +1443,10 @@ function rita() {
     if (isFinite(M.cb[t])) { const h = M.cb[t] * FOT / 100; txt(t, R.bas, h < 10 ? enDec(h) : String(Math.floor(h)), c("--bastext")); }
     if (!M.ytaOK[t]) continue;
     const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
-    if (isFinite(tk)) txt(t, R.t, String(Math.round(tk - 273.15)), c("--red"));
-    if (isFinite(td)) txt(t, R.td, String(Math.round(td)), c("--red"));
+    // 22/11: en nolla far farg efter tecknet - bla om vardet ar under 0, rod om det ar over
+    const nollF = v => Math.round(v) === 0 && v !== 0 ? (v < 0 ? NOLL_BLA : NOLL_ROD) : c("--red");
+    if (isFinite(tk)) txt(t, R.t, String(Math.round(tk - 273.15)), nollF(tk - 273.15));
+    if (isFinite(td)) txt(t, R.td, String(Math.round(td)), nollF(td));
     if (Y(3) > 0.5 && isFinite(Y(4))) {
       const cx = t * COL + COL / 2, cy = yRad(R.pil) - 4, L = 7, r = (Y(4) + 180) * Math.PI / 180;
       const x1 = cx - Math.sin(r) * L, y1 = cy + Math.cos(r) * L, x2 = cx + Math.sin(r) * L, y2 = cy - Math.cos(r) * L;
@@ -1465,12 +1468,14 @@ function rita() {
   if (R.siktObs !== undefined) {
     const perTimme = new Map();
     for (const o of M.metar) { const tt = Math.floor((o.t - t0) / 3600e3); if (tt < 0 || tt >= nt) continue; if (!perTimme.has(tt)) perTimme.set(tt, []); perTimme.get(tt).push(o); }
-    const ut = (i, x, v) => svg.appendChild(el("text", { x, y: yRad(i), "font-size": 7.5, "text-anchor": "middle", fill: METAR_FARG }, v));
+    const ut = (i, x, v, f) => svg.appendChild(el("text", { x, y: yRad(i), "font-size": 7.5, "text-anchor": "middle", fill: f || METAR_FARG, "font-weight": f ? 700 : null }, v));
+    // 22/11: METAR M00 = bla nolla, 00 = rod nolla
+    const obsF = (rad, lista) => rad === R.tObs && lista.every(o => o.tc === 0) ? (lista.every(o => o.tcMinus) ? NOLL_BLA : lista.every(o => !o.tcMinus) ? NOLL_ROD : null) : null;
     for (const [tt, lista] of perTimme) for (const [rad, fn] of [[R.siktObs, o => isFinite(o.sikt) ? (o.sikt >= 9999 ? ">10" : siktKm(o.sikt)) : ""], [R.tObs, o => isFinite(o.tc) ? String(o.tc) : ""]]) {
       const v = lista.map(o => ({ o, s: fn(o) })).filter(a => a.s !== "");
       if (!v.length) continue;
-      if (v.every(a => a.s === v[0].s)) ut(rad, tt * COL + COL / 2, v[0].s);
-      else v.forEach((a, k) => ut(rad, tt * COL + COL * (k + 0.5) / v.length, a.s.replace(">", "")));   // i tidsordning, jamnt fordelade; ">" skippas (plats)
+      if (v.every(a => a.s === v[0].s)) ut(rad, tt * COL + COL / 2, v[0].s, obsF(rad, v.map(a => a.o)));
+      else v.forEach((a, k) => ut(rad, tt * COL + COL * (k + 0.5) / v.length, a.s.replace(">", ""), obsF(rad, [a.o])));   // i tidsordning, jamnt fordelade; ">" skippas (plats)
     }
   }
   ritaRisk(svg, ax, sk.botten + 8 + EXTRA + RADER.length * RAD_H + 6, nt, t0, c);
@@ -2109,6 +2114,8 @@ function gomTips() { $("tips").hidden = true; const r = $("tipsRam"); if (r) r.r
 //  FORLOPP (stapel per 24 h-bit, tickande tid, uppskattad tid kvar)
 // ===================================================================
 let F = null, tick = null, upptagen = false, koad = false;
+// 22/11: timglas pa fliken Tid-hojd medan en punkt hamtas (hamtningen fortsatter aven i andra flikar)
+function flikTimglas(pa) { const f = $("flikTH"); if (!f) return; f.textContent = "Tid-höjd" + (pa ? " ⏳" : ""); f.title = pa ? "Hämtar en punkt – fortsätter även om du byter flik" : ""; }
 const bitTidNyckel = () => baraSkew ? "mt:bitTid:skew" + (visaVatten ? "w" : "") + (visaGraupel ? "r" : "") : "mt:bitTid:" + $("topp").value + (vindLage ? "v" : "");
 function forvantadBitTid() { const v = +lasa(bitTidNyckel()); return v > 0 ? v : baraSkew ? 25 + (visaVatten ? 8 : 0) + (visaGraupel ? 8 : 0) : (+$("topp").value <= 30 ? 28 : 42); }
 function noteraBitTid(s) { const k = bitTidNyckel(), v = +lasa(k); lagra(k, String(v > 0 ? v * 0.6 + s * 0.4 : s)); }
@@ -2143,7 +2150,7 @@ async function hamtaAllt() {
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
   if (!isFinite(lat) || !isFinite(lon)) { status("Ange lat och lon (decimalgrader).", "fel"); return; }
   const r = ruta(lat, lon); if (!r) { status("Punkten ligger utanför MEPS-området.", "fel"); return; }
-  upptagen = true; stoppad = false; $("hamta").disabled = true; $("stopp").disabled = false; rensaGammalCache();
+  upptagen = true; flikTimglas(true); stoppad = false; $("hamta").disabled = true; $("stopp").disabled = false; rensaGammalCache();
   if ($("punkt").value === "egen") laggTillEgen(lat, lon, r);
   const t0 = performance.now(); const tider = []; let kb = 0;
   forloppStart("Letar senaste körningen …");
@@ -2221,7 +2228,7 @@ async function hamtaAllt() {
     try { rita(); } catch (e2) {}
     status(koad ? "Byter punkt …" : stoppad || e.message === "stoppad" ? "Stoppad – det som hunnit hämtas visas. Tryck Hämta för att fortsätta." : e.message, stoppad ? "" : "fel");
   } finally {
-    upptagen = false; forloppSlut(); ritaMarkorer();
+    upptagen = false; flikTimglas(false); forloppSlut(); ritaMarkorer();
     // NYTT 19/11 kvall: ar skew-T oppen foljer den med till den nya punkten (samma timme)
     if (skewT !== null && !koad && M && M.stat && !$("skewRuta").hidden) oppnaSkewT(skewT, innerWidth <= 860);
     if (M && M.dtg) setTimeout(() => laddaSnabbPunkter(M.dtg, true), 4000);   // den nyss hamtade punkten far gron ring
