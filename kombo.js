@@ -42,6 +42,7 @@ async function komboHamta(auto) {
   const K = komboAktiv(); if (!K || P.upptagen) return;
   // 22/11 kvall: "Snödrev – del 1 av 2 (snöfall)" star forst i varje status medan delarna hamtas (status() i index.html),
   // och stapeln under visar anropen for den del som hamtas
+  const t0 = Date.now();
   try {
     for (let di = 0; di < K.delar.length; di++) { const p = K.delar[di];
       if (stoppad && P.komboStopp) break;
@@ -50,7 +51,8 @@ async function komboHamta(auto) {
       status("Hämtar …");
       await probHamta(auto === true);
     }
-  } finally { P.vOverride = null; P.listaOverride = null; P.komboStopp = false; P.komboDel = null; await probVisa(); }
+  } finally { P.vOverride = null; P.listaOverride = null; P.komboStopp = false; P.komboDel = null; await probVisa();
+    if (P.komboTom === false && !/fel/.test($("pStatus").className)) status("Klart: " + K.namn + " – alla delar hämtade (" + Math.round((Date.now() - t0) / 1000) + " s)."); }
 }
 
 // Sannolikheten för ett sparat område e (det första fältets rutnät). null om något saknas.
