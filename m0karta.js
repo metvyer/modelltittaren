@@ -12,6 +12,16 @@ const PAL_SEK = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626
 const PAL_TEMP = ["#312e81", "#1d4ed8", "#3b82f6", "#93c5fd", "#e0f2fe", "#fef3c7", "#fdba74", "#f97316", "#dc2626", "#7f1d1d"];
 const PAL_MOLN = ["#f1f5f9", "#cbd5e1", "#94a3b8", "#64748b", "#475569", "#334155"];
 const K_ = v => v - 273.15;
+// 22/11: tata temperaturklasser, 1 grad fran -20 till +20 (blatt under noll, gult-rott over) - farger interpolerade
+const TEMP_1 = Array.from({ length: 41 }, (_, i) => i - 20);
+const PAL_TEMP1 = (() => {
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), ut = [];
+  const blanda = (stopp, t) => { const x = t * (stopp.length - 1), i = Math.min(stopp.length - 2, Math.floor(x)), f = x - i, a = hex(stopp[i]), b = hex(stopp[i + 1]);
+    return "#" + a.map((c, j) => Math.round(c + (b[j] - c) * f).toString(16).padStart(2, "0")).join(""); };
+  const kall = ["#1e1b4b", "#312e81", "#1d4ed8", "#3b82f6", "#93c5fd", "#dbeafe"], varm = ["#fef9c3", "#fde68a", "#fdba74", "#f97316", "#dc2626", "#7f1d1d"];
+  for (const k of TEMP_1) ut.push(k < 0 ? blanda(kall, (k + 20) / 19) : blanda(varm, k / 20));
+  return ut;
+})();
 const M0P = {
   // Nederbörd och moln
   nb:     { g: "Nederbörd och moln", namn: "Nederbörd", var: "precipitation_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, konv: v => v, iso: [0.1, 1, 4] },
@@ -39,11 +49,11 @@ const M0P = {
   jet:    { g: "Vind", namn: "Max vind i pelaren", var: ["x_wind_at_maximum_wind_speed_level", "y_wind_at_maximum_wind_speed_level"], enh: "kt", klass: [40, 60, 80, 100, 120, 150], konv: v => v * KT, iso: [80, 120] },
   jetniv: { g: "Vind", namn: "Höjd för max vind", var: "atmosphere_level_of_max_wind_speed", enh: "ft", klass: [10000, 20000, 25000, 30000, 35000, 40000], konv: v => v * FOT, iso: [30000] },
   // Temperatur och fukt
-  t2:     { g: "Temperatur och fukt", namn: "Temperatur 2 m", var: "air_temperature_2m", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10, 15, 20], pal: PAL_TEMP, konv: K_, iso: [-10, -5, 0, 5, 10, 15, 20] },
-  t0:     { g: "Temperatur och fukt", namn: "Yttemperatur 0 m", var: "air_temperature_0m", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10, 15, 20], pal: PAL_TEMP, konv: K_, iso: [-5, 0, 5] },
+  t2:     { g: "Temperatur och fukt", namn: "Temperatur 2 m", var: "air_temperature_2m", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, konv: K_, iso: [-10, -5, 0, 5, 10, 15, 20] },
+  t0:     { g: "Temperatur och fukt", namn: "Yttemperatur 0 m", var: "air_temperature_0m", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, konv: K_, iso: [-5, 0, 5] },
   tmax:   { g: "Temperatur och fukt", namn: "Högsta temperatur senaste timmen", var: "air_temperature_max", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10, 15, 20], pal: PAL_TEMP, konv: K_, iso: [0, 10, 20] },
   tmin:   { g: "Temperatur och fukt", namn: "Lägsta temperatur senaste timmen", var: "air_temperature_min", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10, 15, 20], pal: PAL_TEMP, konv: K_, iso: [-10, 0] },
-  td:     { g: "Temperatur och fukt", namn: "Daggpunkt 2 m", var: ["air_temperature_2m", "relative_humidity_2m"], typ: "dagg", enh: "°C", klass: [-20, -10, -5, -2, 0, 2, 5, 10, 15, 20], pal: PAL_TEMP, konv: v => v, iso: [-5, 0, 5, 10] },
+  td:     { g: "Temperatur och fukt", namn: "Daggpunkt 2 m", var: ["air_temperature_2m", "relative_humidity_2m"], typ: "dagg", enh: "°C", klass: TEMP_1, pal: PAL_TEMP1, tat: 5, konv: v => v, iso: [-5, 0, 5, 10] },
   spread: { g: "Temperatur och fukt", namn: "Yttemp minus daggpunkt (rimfrost < 0)", var: ["air_temperature_0m", "air_temperature_2m", "relative_humidity_2m"], typ: "rimfrost", enh: "°C", klass: [-3, -2, -1, -0.5, 0], lagre: true, konv: v => v, iso: [0] },
   rh:     { g: "Temperatur och fukt", namn: "Relativ fukt 2 m", var: "relative_humidity_2m", enh: "%", klass: [50, 70, 80, 90, 95, 98], konv: v => Math.min(100, v > 1.5 ? v : v * 100), iso: [90] },
   t850:   { g: "Temperatur och fukt", namn: "Temperatur 850 hPa", var: "air_temperature_pl", niv: "p850", enh: "°C", klass: [-20, -15, -10, -5, -2, 0, 2, 5, 10, 15], pal: PAL_TEMP, konv: K_, iso: [-10, -5, 0, 5] },
@@ -180,7 +190,7 @@ function m0Rita() {
   for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
     const w = d[y * o.nx + x]; if (!isFinite(w)) continue; let k = -1;
     for (let i = 0; i < K.length; i++) if (pa.lagre ? w < K[i] : w >= K[i]) k = i;
-    if (k < 0) { if (pa.pal === PAL_TEMP && w < K[0]) k = 0; else continue; }
+    if (k < 0) { if ((pa.pal === PAL_TEMP || pa.pal === PAL_TEMP1) && w < K[0]) k = 0; else continue; }
     const i = ((o.ny - 1 - y) * o.nx + x) * 4; px[i] = F[k][0]; px[i + 1] = F[k][1]; px[i + 2] = F[k][2]; px[i + 3] = 210;
   }
   cx.putImageData(img, 0, 0);
@@ -206,7 +216,7 @@ function m0Rita() {
 function m0Forklaring() {
   const f = $("m0Forkl"), pa = M0P[M0F.v], fa = m0Farger(M0F.v); f.textContent = "";
   pa.klass.forEach((k, i) => { const sp = document.createElement("span"), ii = document.createElement("i"); ii.style.background = fa[i];
-    sp.append(ii, (pa.lagre ? "< " : "≥ ") + k.toLocaleString("sv-SE") + (pa.enh ? " " + pa.enh : "")); f.appendChild(sp); });
+    sp.append(ii, pa.tat && k % pa.tat ? "" : (pa.lagre ? "< " : "≥ ") + k.toLocaleString("sv-SE") + (pa.enh ? " " + pa.enh : "")); if (pa.tat) sp.className = "tat"; f.appendChild(sp); });
   if (M0F.v2) { const sp = document.createElement("span"); sp.textContent = "Linjer: " + M0P[M0F.v2].namn.toLowerCase() + (M0P[M0F.v2].enh ? " (" + M0P[M0F.v2].enh + ")" : ""); f.appendChild(sp); }
 }
 function m0Tips(e) {

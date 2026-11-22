@@ -384,6 +384,7 @@ function kartLegend() {
   if (lage === "p") { const pa = PPARAM[$("pParam").value]; rub = typeof visaLage === "function" && visaLage() === "sannolikhet" ? "Sannolikhet" : pa ? pa.namn.split(",")[0] : ""; }
   else if (typeof M0P !== "undefined" && M0P[M0F.v]) rub = M0P[M0F.v].namn;
   L.textContent = ""; const b = document.createElement("b"); b.textContent = rub; L.appendChild(b);
+  L.classList.toggle("tat", rader.length > 15);   // 22/11: manga klasser (temperatur per grad) - smala rader
   for (const sp of rader.slice().reverse()) {
     const d = document.createElement("div"), i = document.createElement("i"), src = sp.querySelector("i");
     i.style.background = src.style.background; d.append(i, sp.textContent.trim()); L.appendChild(d);

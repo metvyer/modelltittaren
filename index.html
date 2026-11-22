@@ -238,6 +238,10 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .kartlegend b { display: block; font-size: 10.5px; margin-bottom: 3px; max-width: 120px; }
 .kartlegend div { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .kartlegend i { display: inline-block; width: 13px; height: 11px; border: 1px solid rgba(0,0,0,.25); flex: none; }
+/* 22/11: tata klasser (temperatur per grad) - smal fargstapel, siffra var 5:e grad */
+.kartlegend.tat div { height: 5px; line-height: 5px; font-size: 10.5px; overflow: visible; }
+.kartlegend.tat i { height: 5px; border-top: 0; border-bottom: 0; }
+.m0forkl:has(span.tat) { column-gap: 0; } .m0forkl span.tat { margin-right: 0 !important; gap: 0; } .m0forkl span.tat i { width: 7px; margin-right: 0; border-left: 0; border-right: 0; }
 .karttom { position: absolute; top: 8px; right: 8px; z-index: 2; pointer-events: none; max-width: min(380px, calc(55% - 12px)); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-left: 4px solid #d97706; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: var(--fg); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
 .karttom[hidden] { display: none; }
 /* 22/11: matning */
@@ -2719,14 +2723,14 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261122-2150"></script>
+<script src="sannolikhet.js?v=20261122-2200"></script>
 <script src="kombo.js?v=20261122-2120"></script>
-<script src="m0karta.js?v=20261122-0825"></script>
+<script src="m0karta.js?v=20261122-2200"></script>
 <script src="taf.js?v=20261122-0800"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261122-2130"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261122-0710"></script>
+<script src="obs.js?v=20261122-2200"></script>
 <script src="exp.js?v=20261122-0940"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>
