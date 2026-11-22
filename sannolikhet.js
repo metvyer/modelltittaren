@@ -1423,6 +1423,9 @@ const FAV_FALT = ["pKorningVal", "pParam", "pVisa", "pTrosk", "pStorlek", "pUppl
 // 21/11: vintergruppen - kombinerad sannolikhet, hamtas fran met.no nar man trycker (inte forhamtat)
 const FAV_VINTER = [["snofok", "Snödrev"], ["ishalka", "Ishalka"], ["rimfrost", "Rimfrost/frost"]];
 function favVinter(k) {
+  // 22/11: Favoriter galler hela Sverige - kombinationerna hamtas fran met.no (3 falt x 30 medlemmar), sa i 10 km
+  // (5 km for hela Sverige blir for stort, ca 400 MB for en halv dag). Perioden = den valda i tidslinjen.
+  if (+$("pUppl").value < 4) { $("pUppl").value = "4"; $("pUppl").dispatchEvent(new Event("change")); }
   komboVal(k); document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", "false"));
   document.querySelectorAll("#favVinter button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === k)));
   ritaOmrade(); probVisa().then(() => { if (!P.varden) komboHamta(false); });
