@@ -458,9 +458,19 @@ function hamtaRegRad(r) {
 }
 const overlappar = (a, b) => a.y0 <= b.y1 && b.y0 <= a.y1 && a.x0 <= b.x1 && b.x0 <= a.x1;
 // Snabbfasen: returnerar { antal, tackt (0-1), kb } - antal cachade bitar som lades in
+// 22/11: nedrakning medan cachen kollas - registret far max 10 s och varje cachad bit max 20 s, sa vi vet ett tak
+function snabbTick() {
+  const kvar = Math.max(0, Math.ceil((P.snabbSlut - Date.now()) / 1000));
+  status("Kollar om området redan finns i mellanserverns cache" + (P.snabbN ? " – bit " + Math.min(P.snabbI, P.snabbN) + " av " + P.snabbN : " – registret") + " · högst " + kvar + " s kvar …");
+}
 async function snabbFas(o, oH, sakn, pa) {
+  if (!visaSnabb || VAG !== "mellan" || !sakn.length) return { antal: 0, tackt: 0, kb: 0, traff: 0 };
+  P.snabbN = 0; P.snabbI = 0; P.snabbSlut = Date.now() + 10000; snabbTick();
+  const tick = setInterval(snabbTick, 1000);
+  try { return await snabbFasInre(o, oH, sakn, pa); } finally { clearInterval(tick); P.snabbN = 0; }
+}
+async function snabbFasInre(o, oH, sakn, pa) {
   const ut = { antal: 0, tackt: 0, kb: 0, traff: 0 };
-  if (!visaSnabb || VAG !== "mellan" || !sakn.length) return ut;
   await hamtaRegister(true);
   const dtgF = dtgText(new Date(dtgDatum(o.dtg).getTime() - ENS_LAGG_H * 3600e3)), ms = SAKN[pa.bitar];
   const nya = regOmr(o.dtg, o.v, o.s), gamla = regOmr(dtgF, o.v, o.s);
@@ -468,7 +478,9 @@ async function snabbFas(o, oH, sakn, pa) {
   const bitar = new Map();
   for (const r of nya) { if (!overlappar(r, oH) || !sakn.some(t => t >= r.t0 && t <= r.t1 && (t - r.t0) % r.st === 0)) continue;
     const k = [r.y0, r.y1, r.x0, r.x1, r.t0, r.t1, r.st].join(":"); if (!bitar.has(k)) bitar.set(k, []); bitar.get(k).push(r); }
+  P.snabbN = bitar.size; P.snabbSlut = Date.now() + bitar.size * 20000;
   for (const [, rader] of bitar) {
+    P.snabbI++; P.snabbSlut = Math.min(P.snabbSlut, Date.now() + (P.snabbN - P.snabbI + 1) * 20000);
     const b = rader[0], e0 = { dtg: o.dtg, v: o.v, s: o.s, y0: b.y0, y1: b.y1, x0: b.x0, x1: b.x1 };
     const ny = (b.y1 - b.y0) / b.s + 1, nx = (b.x1 - b.x0) / b.s + 1, n = ny * nx;
     if ((b.t1 - b.t0 + 1) * ENS_MEDL * n * ENS_BYTE[ensFormat] / 1048576 > ENS_GRANS_MB) continue;   // for stor bit
@@ -675,7 +687,6 @@ async function probHamta(auto, utanSnabb) {
     }
     // snabbfasen: cachade omraden fran mellanservern (registret)
     if (!utanSnabb && sakn.length) {
-      status("Kollar om området redan finns i mellanserverns cache …");
       const sf = await snabbFas(o, oH, sakn, pa);
       // 22/11: tacker cachen nastan inget (0 %) eller hamtar vi en kombination (Favoriternas vinterknappar) - fraga inte, hamta vidare
       if (sf.antal && (P.vOverride || sf.tackt < 0.02)) { sakn = saknadeTimmar(o, lista); kb += sf.kb; }

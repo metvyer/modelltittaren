@@ -44,8 +44,8 @@ function matRita() {
     }
     k.forEach((q, i) => g.appendChild(el("circle", { cx: q.x, cy: q.y, r: px(i === 0 ? 4.5 : 3.5), fill: i === 0 ? farg : "#ffffff", stroke: farg, "stroke-width": px(1.8) })));
     if (lista.length > 2 || (lista.length === 2 && !MAT.aktiv)) {
-      const s = k[k.length - 1];
-      const t = el("text", { x: s.x + px(9), y: s.y + px(4), "font-size": fs * 1.1, "font-weight": 800, fill: farg, stroke: "#ffffff", "stroke-width": px(4), "paint-order": "stroke", class: "mattext" },
+      const s = k[k.length - 1], hoger = s.x > vb.x + vb.w * 0.7;   // nara hogerkanten: texten till vanster om punkten
+      const t = el("text", { x: s.x + (hoger ? -px(9) : px(9)), y: s.y + px(4), "text-anchor": hoger ? "end" : "start", "font-size": fs * 1.1, "font-weight": 800, fill: farg, stroke: "#ffffff", "stroke-width": px(4), "paint-order": "stroke", class: "mattext" },
         (lista.length > 2 ? "Totalt " : "") + matText(tot));
       g.appendChild(t);
     }

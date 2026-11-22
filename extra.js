@@ -150,3 +150,6 @@ function extraForkl(S) { return S.length ? " " + S.map(s => s.namn + " = " + (s.
       if (P.meteo) { ritaMeteogram(); extraHamta(P.meteo); } else extraInfo(EXTRA_PA[k] ? { [k]: ["vant", "visas när du öppnar ett meteogram"] } : {}); });
   }
 })();
+// 22/11: ⓘ i meteogrammets rad - kort forklaring av kallorna (aven for mobil, dar hovring inte finns)
+(function () { const k = $("pMeteoXInfo"), f = $("pMeteoXForkl"); if (!k || !f) return;
+  k.addEventListener("click", () => { f.hidden = !f.hidden; k.setAttribute("aria-pressed", String(!f.hidden)); }); })();
