@@ -232,6 +232,8 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .kartlegend b { display: block; font-size: 10.5px; margin-bottom: 3px; max-width: 120px; }
 .kartlegend div { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
 .kartlegend i { display: inline-block; width: 13px; height: 11px; border: 1px solid rgba(0,0,0,.25); flex: none; }
+.karttom { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2; pointer-events: none; max-width: min(460px, calc(100% - 24px)); background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-left: 4px solid #d97706; border-radius: 6px; padding: 6px 10px; font-size: 13px; color: var(--fg); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.karttom[hidden] { display: none; }
 .karttid { position: absolute; top: 8px; left: 8px; z-index: 2; pointer-events: none; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 4px 9px; font-size: 15px; font-weight: 700; color: var(--fg); box-shadow: 0 1px 4px rgba(0,0,0,.15); max-width: calc(100% - 16px); }
 .karttid small { display: block; font-size: 13.5px; font-weight: 600; color: var(--fg); margin-top: 1px; }   /* 22/11: parametern storre */
 .karttid:empty { display: none; } body:not(.m0) .baraM0 { display: none !important; }
@@ -397,6 +399,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   </div>
   <div class="kartram">
   <div class="karttid baraP" id="kartTid" aria-live="polite"></div>
+  <div class="karttom baraP" id="kartTom" aria-live="polite" hidden></div>
   <div class="karttid baraM0" id="kartTidM0" aria-live="polite"></div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
@@ -2693,8 +2696,8 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261122-1925"></script>
-<script src="kombo.js?v=20261122-0825"></script>
+<script src="sannolikhet.js?v=20261122-2030"></script>
+<script src="kombo.js?v=20261122-2030"></script>
 <script src="m0karta.js?v=20261122-0825"></script>
 <script src="taf.js?v=20261122-0800"></script>
 <script src="rita.js?v=20261121-1300"></script>

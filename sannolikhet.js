@@ -934,8 +934,11 @@ function tidslinjeNer(ev) {
 function tidslinjeDra(ev) { if (!tlDrag) return; const t = tidslinjeTimme(ev); if (t !== tlDrag.start) tlDrag.flyttad = true; tidslinjeSatt(tlDrag.ankare, t, false); }
 function tidslinjeUpp(ev) { if (!tlDrag) return; const t = tidslinjeTimme(ev); const d = tlDrag; tlDrag = null; tidslinjeSatt(d.ankare, d.flyttad || d.ankare !== d.start ? t : d.start, true); }
 
+// NYTT 22/11: skylt i kartan nar faltet ar inlast men inget nar troskeln/farggransen (annars ser kartan ut som om inget hamtats)
+function kartTomSkylt(text) { const e = $("kartTom"); if (!e) return; e.textContent = text || ""; e.hidden = !text; }
+const tomVarde = (w, pa) => (pa.enhet === "m" || pa.enhet === "ft" ? Math.round(w) : Math.round(w * 10) / 10).toLocaleString("sv-SE") + " " + pa.enhet;
 async function probVisa() {
-  const g = $("kProb"); ritaPForklaring(); ritaTidslinje();
+  const g = $("kProb"); ritaPForklaring(); ritaTidslinje(); kartTomSkylt("");
   // meteogrammet foljer med: annan parameter/korning -> hamta om, annars rita om (period, troskel)
   if (P.meteo) { if (P.meteo.v !== $("pParam").value || P.meteo.dtg !== P.dtg) visaMeteogram(); else ritaMeteogram(); }
   const rensa = () => { g.textContent = ""; P.varden = null; $("pSam").textContent = ""; };
@@ -957,7 +960,7 @@ async function probVisa() {
   // annars blir kartan seg att zooma och dra med stora omraden.
   const rgb = PKLASS.map(([gr, c]) => [gr, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   const vrgb = vfarg($("pParam").value).map(c => [0, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
-  const visa = visaLage(); let vext = null;   // varde-lage: extremvardet i bilden (for sammanfattningen)
+  const visa = visaLage(); let vext = null, ritade = 0;   // varde-lage: extremvardet i bilden (for sammanfattningen); ritade = antal fargade rutor
   for (const r of vis) {
     const { o, prob } = r, n = o.ny * o.nx;
     const cv = document.createElement("canvas"); cv.width = o.nx; cv.height = o.ny;
@@ -973,11 +976,21 @@ async function probVisa() {
         const k = vardeKlass(v, w); if (k < 0) continue; f = vrgb[k];
       }
       const i = ((o.ny - 1 - y) * o.nx + x) * 4;   // bildens rad 0 = norra kanten
-      px[i] = f[1]; px[i + 1] = f[2]; px[i + 2] = f[3]; px[i + 3] = 255;
+      px[i] = f[1]; px[i + 1] = f[2]; px[i + 2] = f[3]; px[i + 3] = 255; ritade++;
     }
     cx.putImageData(img, 0, 0);
     g.appendChild(el("image", { href: skarpaRutor(cv), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
       preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
+  }
+  if (vis.length && !ritade) {
+    // extremvardet i nagon medlem (hela perioden) - visar hur langt fran troskeln faltet ligger
+    let ext = null; const lag = pa.villkor === "<";
+    for (const r of vis) for (const w of r.agg) if (isFinite(w) && (ext === null || (lag ? w < ext : w > ext))) ext = w;
+    const pn = pa.namn.split(",")[0].toLowerCase();
+    kartTomSkylt(visa === "sannolikhet"
+      ? "Fältet är inläst – ingen ruta når " + PKLASS[0][0] + " % för " + pn + " " + pa.villkor + " " + trosk.toLocaleString("sv-SE") + " " + pa.enhet + ". Högsta sannolikhet " + Math.round(pmax * 100) + " %" +
+        (ext !== null ? ", " + (lag ? "lägsta" : "högsta") + " " + pn + " i någon medlem " + tomVarde(ext, pa) : "") + ". Prova en " + (lag ? "högre" : "lägre") + " tröskel."
+      : "Fältet är inläst – inga värden i färgskalan för " + pn + "." + (vext !== null ? " " + (lag ? "Lägsta" : "Högsta") + ": " + tomVarde(vext, pa) + "." : ""));
   }
   // NYTT 20/11 kvall: medlem 0:s linje for troskeln ovanpa sannolikheten (bla) - ligger den langt fran de roda
   // omradena skiljer sig medlem 0 fran ensemblen

@@ -88,7 +88,7 @@ async function komboVisa(g, rensa) {
   const K = komboAktiv(), A = komboA(), B = komboB();
   if ((K.A && !isFinite(A)) || !isFinite(B)) { rensa(); return; }
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === K.delar[0]).sort((x, y) => y.s - x.s);
-  const vis = []; let pmax = 0;
+  const vis = []; let pmax = 0, komboRitade = 0;   // 22/11: komboRitade = antal fargade rutor (skylt om 0)
   for (const e of kand) { const r = await komboOmrade(e, K, A, B); if (r) vis.push(r); }
   if (!vis.length && (P.upptagen || P.autoVantar)) return;
   rensa();
@@ -98,7 +98,7 @@ async function komboVisa(g, rensa) {
     const cv = document.createElement("canvas"); cv.width = o.nx; cv.height = o.ny;
     const cx = cv.getContext("2d"), img = cx.createImageData(o.nx, o.ny), px = img.data;
     for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) {
-      const p = prob[y * o.nx + x]; if (p > pmax) pmax = p; const pr = p * 100; if (pr < rgb[0][0]) continue;
+      const p = prob[y * o.nx + x]; if (p > pmax) pmax = p; const pr = p * 100; if (pr < rgb[0][0]) continue; komboRitade++;
       let f = rgb[0]; for (const k of rgb) if (pr >= k[0]) f = k;
       const i = ((o.ny - 1 - y) * o.nx + x) * 4; px[i] = f[1]; px[i + 1] = f[2]; px[i + 2] = f[3]; px[i + 3] = 255;
     }
@@ -121,6 +121,7 @@ async function komboVisa(g, rensa) {
       " för perioden – tryck " + (fav ? "knappen igen" : "Hämta fält") + ".", "");
     $("pSam").textContent = ""; return;
   }
+  if (!komboRitade && typeof kartTomSkylt === "function") kartTomSkylt("Fältet är inläst – ingen ruta når " + PKLASS[0][0] + " % för " + K.namn.toLowerCase() + " (" + K.text(A, B) + "). Högsta sannolikhet " + Math.round(pmax * 100) + " %. Prova andra trösklar A/B.");
   $("pSam").textContent = K.namn + ": " + K.text(A, B) + " någon gång " + tidText(a) + " – " + tidText(b) + ". Högsta sannolikhet: " + Math.round(pmax * 100) + " %. Räknat per medlem och timme.";
 }
 
