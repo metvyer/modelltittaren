@@ -2,7 +2,10 @@
 import re, urllib.request, math
 from datetime import datetime, timezone
 def h(u):
-    with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "modelltittaren-test"}), timeout=120) as r: return r.read().decode()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "modelltittaren-test"}), timeout=120) as r: return r.read().decode()
+    except urllib.error.HTTPError as e:
+        print("FEL", e.code, u, e.read()[:300]); return ""
 def vals(txt):   # alla tal efter rubrikraden i ett OPeNDAP-asciisvar (index i [..] hoppas over)
     body = txt.split("---------------------------------------------")[-1]
     out = []
@@ -23,7 +26,8 @@ for fil in filer[-2:]:
     X, Y = P(17.5886, 59.8973); ix = min(range(len(x)), key=lambda i: abs(x[i] - X)); iy = min(range(len(y)), key=lambda i: abs(y[i] - Y))
     it = next(i for i, t in enumerate(tt) if datetime.fromtimestamp(t, timezone.utc).hour == 7)
     print(f"\n### {fil}: ix {ix} iy {iy}, tid {datetime.fromtimestamp(tt[it], timezone.utc)}")
-    T = vals(h(D + f".ascii?air_temperature_ml[{it}][0:64][{iy}][{ix}]")); ap = vals(h(D + ".ascii?ap")); b = vals(h(D + ".ascii?b"))
+    T = vals(h(D + f".ascii?air_temperature_ml[{it}][0:64][{iy}][{ix}]")); ap = vals(h(D + ".ascii?ap")) or vals(h(D + ".ascii?a")); b = vals(h(D + ".ascii?b"))
+    if not ap: print(h(D + ".dds")[:3000])
     ps = vals(h(D + f".ascii?surface_air_pressure[{it}][0][{iy}][{ix}]"))[-1]
     print("antal", len(T), len(ap), len(b), "ps", ps)
     for k in range(38, min(65, len(T))): print(f"niva {k}: p={(ap[k] + b[k] * ps) / 100:7.1f} hPa  T={T[k] - 273.15:6.2f} C")
