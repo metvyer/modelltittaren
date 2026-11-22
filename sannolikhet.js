@@ -1426,8 +1426,7 @@ function favVinter(k) {
   // 22/11: Favoriter galler hela Sverige - kombinationerna hamtas fran met.no (3 falt x 30 medlemmar), sa i 10 km
   // (5 km for hela Sverige blir for stort, ca 400 MB for en halv dag). Perioden = den valda i tidslinjen.
   if (+$("pUppl").value < 4) { $("pUppl").value = "4"; $("pUppl").dispatchEvent(new Event("change")); }
-  komboVal(k); document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", "false"));
-  document.querySelectorAll("#favVinter button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.k === k)));
+  komboVal(k); favMarkera();
   ritaOmrade(); probVisa().then(() => { if (!P.varden) komboHamta(false); });
 }
 function favKnappar() {
@@ -1440,7 +1439,11 @@ function favKnappar() {
       b.textContent = g.toLocaleString("sv-SE") + " " + PPARAM[v].enhet; b.addEventListener("click", () => favVal(v, g)); box.appendChild(b); }
   }
 }
-function favMarkera() { document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === $("pParam").value && +b.dataset.g === parseFloat($("pTrosk").value.replace(",", "."))))); }
+function favMarkera() {   // 22/11: bara EN knapp blå - vinterknappen när en kombination är vald, annars tröskelknappen
+  const kb = $("pKombo") ? $("pKombo").value : "";
+  document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", String(!kb && b.dataset.v === $("pParam").value && +b.dataset.g === parseFloat($("pTrosk").value.replace(",", ".")))));
+  document.querySelectorAll("#favVinter button").forEach(b => b.setAttribute("aria-pressed", String(!!kb && b.dataset.k === kb)));
+}
 function favVal(v, g) {
   if (typeof komboVal === "function" && $("pKombo").value) komboVal("");   // 21/11: vanlig favorit = ingen kombination
   const sel = $("pParam"); if (sel.value !== v) { sel.value = v; sel.dispatchEvent(new Event("change")); }

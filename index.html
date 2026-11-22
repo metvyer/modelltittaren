@@ -23,7 +23,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 var(-
 h1 { font-size: 18px; margin: 0 0 10px; font-weight: 650; }
 h1 small { font-weight: 400; color: var(--dim); font-size: 13px; margin-left: 8px; }
 .kontroller { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
-.falt { display: grid; gap: 3px; }
+.falt { display: grid; gap: 3px; } .falt[hidden] { display: none; }   /* 22/11: A/B-rutorna syntes trots hidden */
 .falt label { font-size: 12px; color: var(--dim); }
 select, input { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); min-width: 0; }
 input.koord { width: 92px; font-variant-numeric: tabular-nums; }
@@ -2693,7 +2693,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261122-0745"></script>
+<script src="sannolikhet.js?v=20261122-1925"></script>
 <script src="kombo.js?v=20261122-0825"></script>
 <script src="m0karta.js?v=20261122-0825"></script>
 <script src="taf.js?v=20261122-0800"></script>
