@@ -9,5 +9,5 @@ for mall in [r"meps_det_2_5km_\d{8}T\d\dZ", r"meps_lagged_6_h_subset_2_5km_\d{8}
     rader = re.findall(r"^\s*(\w+)\s+(\w+)(\[[^;]*);", dds, re.M)
     print("##", f, len(rader), "variabler")
     for typ, namn, dims in rader:
-        if re.search(r"graup|hail|ice|snow|cloud|convect|cape|cin|lightn|thunder|water|precip|integral|content|column|atmosphere", namn, re.I):
+        if re.search(r"velocity|omega|vertical|upward|w_|_ml$", namn, re.I):
             print("  ", namn, re.sub(r"\s+", "", dims)[:80])
