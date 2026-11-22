@@ -74,7 +74,7 @@ function omrRita() {
   }
   for (const e of etiketter) {
     const t = el("text", { class: "omretik", "data-l": e.L.id, "data-i": e.i, x: e.x, y: e.y, "text-anchor": "middle", "font-size": fs, "stroke-width": fs * 0.22, fill: e.L.farg, "font-weight": 600 },
-      e.L.id === "SJO" || e.L.id === "LAN" ? e.a.n : e.a.n.replace(/^ES\s*/, ""));
+      e.L.id === "SJO" || e.L.id === "LAN" ? e.a.n : e.a.n.replace(/^ES\s+/, "")   /* "ES R31" -> "R31", men "ESOS 4:1" orord */);
     g.appendChild(t);
   }
 }
