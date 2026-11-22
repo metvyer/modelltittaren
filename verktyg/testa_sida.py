@@ -29,7 +29,7 @@ async def main():
         await bild("m0", "bytLage('m0')", 15000)
         # meteogram med andra modeller (Arlanda, temperatur och nederbord)
         await pg.evaluate("localStorage.setItem('mt:meteoExtra', JSON.stringify({aifs:true,nordic:true,nc:true}))")
-        for par in ["t2", "nb"]:
+        for par in ["by", "t2", "nb"]:
             await pg.evaluate(f"bytLage('p'); $('lat').value='59.65'; $('lon').value='17.92'; $('pParam').value='{par}'; $('pParam').dispatchEvent(new Event('change'))")
             await pg.wait_for_timeout(4000)
             await pg.evaluate("EXTRA_PA={aifs:true,nordic:true,nc:true}; ['aifs','nordic','nc'].forEach(k=>$('pMeteoX_'+k).setAttribute('aria-pressed','true')); visaMeteogram()")
