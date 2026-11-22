@@ -159,7 +159,7 @@ const ISO_PROB_ALLA = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 function isoProbVal() { try { const a = JSON.parse(lasa("mt:isoProb") || "null"); if (Array.isArray(a)) return a.filter(x => ISO_PROB_ALLA.includes(x)).sort((a, b) => a - b); } catch (e) {} return [30, 70]; }
 function isoProbNivaer() {
   const val = isoProbVal();
-  return val.map((x, i) => ({ v: x / 100, namn: x + " %", ...ISO_STIL[Math.min(ISO_STIL.length - 1, Math.round(i * (ISO_STIL.length - 1) / Math.max(1, val.length - 1)))] }));
+  return val.map((x, i) => ({ v: x / 100, namn: x + " %", ...ISO_STIL[isoStilIndex(i, val.length)] }));
 }
 function ritaIsoProbKnappar() {
   const c = $("pIsoProb"); if (!c) return; c.textContent = ""; const val = isoProbVal();
@@ -1013,7 +1013,7 @@ async function probVisa() {
       const d = isoSegment(n.f, r.o, n.v); if (!d) continue;
       // NYTT 20/11: tydligare - ljus kant under linjen, sedan linjen, sedan vardet utskrivet pa linjen
       g.appendChild(el("path", { d, fill: "none", stroke: c_isoKant(), "stroke-width": n.bredd + 2.6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.85 }));
-      g.appendChild(el("path", { d, fill: "none", stroke: c_iso(), "stroke-width": n.bredd + 0.4, "stroke-dasharray": n.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+      g.appendChild(el("path", { d, fill: "none", stroke: c_iso(), "stroke-width": n.bredd + 0.4, "stroke-dasharray": n.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": n.streck ? "butt" : "round" }));
       isoEtiketter(g, d, n.namn ? n.namn.replace(" %", "") : String(n.v).replace(".", ","));
     }
   }
@@ -1044,10 +1044,10 @@ const c_iso = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "#f3f4
 const c_isoKant = () => (matchMedia("(prefers-color-scheme: dark)").matches ? "#111827" : "#ffffff");
 // NYTT 20/11: vardet skrivet pa isolinjen, glest (minst en sjattedels kartbredd mellan etiketterna).
 // Textstorleken foljer kartans zoom (skalaIsoEtiketter anropas fran satVb i index.html).
-const isoFs = () => (typeof vb !== "undefined" ? vb.w : 949) / 45;
+const isoFs = () => (typeof vb !== "undefined" ? vb.w : 949) / 62;   // 22/11: mindre (var /45)
 function isoEtiketter(g, d, text) {
   const seg = [...d.matchAll(/M([-\d.]+) ([-\d.]+)L([-\d.]+) ([-\d.]+)/g)].map(m => [(+m[1] + +m[3]) / 2, (+m[2] + +m[4]) / 2]);
-  const avst = (typeof vb !== "undefined" ? vb.w : 949) / 6, satta = [];
+  const avst = (typeof vb !== "undefined" ? vb.w : 949) / 3.5, satta = [];   // 22/11: glesare (var /6)
   for (let i = 0; i < seg.length && satta.length < 40; i += 3) { const [x, y] = seg[i];
     if (satta.some(([a, b]) => Math.hypot(a - x, b - y) < avst)) continue; satta.push([x, y]);
     g.appendChild(el("text", { x, y, class: "isoEtikett", "font-size": isoFs(), "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central",
@@ -1160,10 +1160,16 @@ async function visaMeteogram() {
   const M1 = P.meteo;
   if (typeof extraHamta === "function") extraHamta(M1);   // 21/11 kvall: AIFS / MET Nordic / nowcast om de ar pa
   if (v === "by") try { M1.u = await meteoHamta(dtg, "u10", r.iy, r.ix); M1.w = await meteoHamta(dtg, "v10", r.iy, r.ix); if (P.meteo === M1) ritaMeteogram(); } catch (e) {}
-  if (["by", "sikt", "bas", "t2"].includes(v) && typeof narmasteICAO === "function") try {
+  // 22/11: METAR-status bredvid knappen (varfor METAR inte syns), som for de andra kallorna
+  const mInfo = t => { const e = $("pMeteoMetarInfo"); if (e && P.meteo === M1) e.textContent = t ? "METAR: " + t : ""; };
+  if (!["by", "sikt", "bas", "t2"].includes(v)) mInfo("finns inte för " + PPARAM[v].namn.toLowerCase().split(",")[0]);
+  else if (typeof narmasteICAO === "function") try {
     const icao = narmasteICAO(lat, lon), tim = Math.min(72, Math.ceil((Date.now() - dtgDatum(dtg).getTime()) / 3600e3) + 1);
-    if (icao && tim > 0) { const obs = await hamtaMetar(icao, tim); if (obs && P.meteo === M1) { M1.icao = icao; M1.obs = obs; ritaMeteogram(); } }
-  } catch (e) {}
+    if (!icao) mInfo("ingen flygplats med METAR inom " + METAR_AVST + " km från punkten");
+    else if (tim <= 0) mInfo("körningen har inte börjat än – inga observationer");
+    else { mInfo("hämtas från " + icao + " …"); const obs = await hamtaMetar(icao, tim);
+      if (P.meteo === M1) { if (obs && obs.length) { M1.icao = icao; M1.obs = obs; mInfo(icao + ", " + obs.length + " obs"); ritaMeteogram(); } else mInfo(obs ? "inga observationer från " + icao + " under körningens tid" : "kunde inte hämtas från " + icao); } }
+  } catch (e) { mInfo("kunde inte hämtas (" + (e.message || e) + ")"); }
 }
 // NYTT 19/11 em: nederbord i meteogrammet kan visas som
 //   ack = ackumulerat fran en starttimme (dra startlinjen, klicka pa tidsaxeln, dubbelklick = +0)
@@ -1403,11 +1409,14 @@ function isoValen(v) {
   try { const a = JSON.parse(lasa("mt:isoVal:" + v) || "null"); if (Array.isArray(a)) return a.filter(x => PPARAM[v].snabb.includes(x)); } catch (e) {}
   return (ISO_VARDE[v] || []).map(n => n.v).filter(x => PPARAM[v].snabb.includes(x));
 }
-const ISO_STIL = [{ streck: "6 3", bredd: 1.5 }, { streck: "3 2", bredd: 1.9 }, { streck: "", bredd: 2.3 }, { streck: "10 3 2 3", bredd: 2.3 }, { streck: "", bredd: 3.2 }, { streck: "2 2", bredd: 3 }];
+// 22/11: tunnare overst (den gamla "2 2"/3 blev parlor med rundade andar) - grovsta nu hel 2,7
+const ISO_STIL = [{ streck: "6 3", bredd: 1.5 }, { streck: "3 2", bredd: 1.8 }, { streck: "", bredd: 2.1 }, { streck: "10 3 2 3", bredd: 2.2 }, { streck: "8 3", bredd: 2.4 }, { streck: "", bredd: 2.7 }];
+// stil for linje i av n: 2 linjer -> den hogsta far mittenstilen (som nar det finns tre)
+const isoStilIndex = (i, n) => Math.min(ISO_STIL.length - 1, Math.round(i * (n === 2 ? 3 : ISO_STIL.length - 1) / Math.max(1, n - 1)));
 // Valda isolinjer med stil: lindrigast forst (tunn, streckad), varst sist (tjock, hel)
 function isoNivaerVarde(v) {
   const pa = PPARAM[v], val = isoValen(v).slice().sort((a, b) => pa.villkor === "<" ? b - a : a - b);
-  return val.map((x, i) => ({ v: x, ...ISO_STIL[Math.min(ISO_STIL.length - 1, Math.round(i * (ISO_STIL.length - 1) / Math.max(1, val.length - 1)))] }));
+  return val.map((x, i) => ({ v: x, ...ISO_STIL[isoStilIndex(i, val.length)] }));
 }
 function sattParam(behallTrosk) {
   const v = $("pParam").value, pa = PPARAM[v], vardelage = visaLage() !== "sannolikhet";
@@ -1440,7 +1449,7 @@ function favVinter(k) {
   // (5 km for hela Sverige blir for stort, ca 400 MB for en halv dag). Perioden = den valda i tidslinjen.
   if (+$("pUppl").value < 4) { $("pUppl").value = "4"; $("pUppl").dispatchEvent(new Event("change")); }
   komboVal(k); favMarkera();
-  ritaOmrade(); probVisa().then(() => { if (!P.varden) komboHamta(false); });
+  ritaOmrade(); P.komboTom = true; probVisa().then(() => { if (P.komboTom) komboHamta(false); });   // 22/11: P.komboTom i stallet for !P.varden (forsta trycket gjorde inget)
 }
 function favKnappar() {
   const vb_ = $("favVinter"); vb_.textContent = "";

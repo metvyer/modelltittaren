@@ -1,25 +1,27 @@
-# Prov S6 (22/11): Favoriter - vinterknappen Snodrev, foljer status over tid
+# Prov S6 (22/11 kvall): vinterknappen (forsta trycket), METAR-status i meteogrammet, isolinjer
 import asyncio, time, os
 from playwright.async_api import async_playwright
+os.makedirs("matprov", exist_ok=True)
 UT = []
 def skriv(s=""): print(s, flush=True); UT.append(str(s))
 async def main():
     async with async_playwright() as p:
-        b = await p.chromium.launch(); pg = await b.new_page(viewport={"width": 1300, "height": 1000}); fel = []; anrop = []
+        b = await p.chromium.launch(); pg = await b.new_page(viewport={"width": 1300, "height": 1000}); fel = []
         pg.on("pageerror", lambda e: fel.append("JS: " + str(e)))
-        pg.on("console", lambda m: fel.append("KONSOL " + m.type + ": " + m.text[:200]) if m.type in ("error", "warning") else None)
-        pg.on("request", lambda r: anrop.append(r.url[:110]) if ("thredds" in r.url or "workers.dev" in r.url or "raw.github" in r.url or "data/" in r.url) else None)
         await pg.goto("https://metvyer.github.io/modelltittaren/?prov=" + str(int(time.time()))); await pg.wait_for_timeout(3000)
         await pg.evaluate("bytLage('f')"); await pg.wait_for_timeout(10000)
-        skriv("fore: " + str(await pg.evaluate("$('pStatus').textContent + ' | upptagen ' + P.upptagen + ' autoVantar ' + P.autoVantar + ' uppl ' + $('pUppl').value")))
-        n0 = len(anrop)
+        await pg.evaluate("favVal('by', 32)"); await pg.wait_for_timeout(5000)
         await pg.evaluate("document.querySelector('#favVinter button[data-k=snofok]').click()")
-        for i in range(20):
-            await pg.wait_for_timeout(4000)
-            skriv(f"{(i+1)*4:3d}s: " + str(await pg.evaluate("$('pStatus').textContent.slice(0,160) + ' | upptagen ' + P.upptagen + ' varden ' + !!P.varden + ' fragar ' + P.fragar")))
-        skriv("anrop efter tryck: " + str(len(anrop) - n0)); [skriv("  " + a) for a in anrop[n0:n0+12]]
-        await pg.evaluate("document.querySelector('#favVinter button[data-k=snofok]').click()"); await pg.wait_for_timeout(8000)
-        skriv("andra trycket: " + str(await pg.evaluate("$('pStatus').textContent.slice(0,160) + ' | upptagen ' + P.upptagen")))
-        skriv("fel: " + str(fel[:8])); await b.close()
+        for i in range(6):
+            await pg.wait_for_timeout(5000)
+            skriv(f"snodrev {(i+1)*5}s: " + str(await pg.evaluate("$('pStatus').textContent.slice(0,140) + ' | upptagen ' + P.upptagen")))
+        await pg.evaluate("favVal('by', 32); if (!visaIso) $('visaIso').click()"); await pg.wait_for_timeout(5000)
+        await pg.evaluate("$('testskylt') && ($('testskylt').hidden = true)")
+        k = await pg.query_selector("#karta")
+        if k: await k.screenshot(path="matprov/iso.png")
+        for namn, la, lo in [("hav", "57.6", "19.6"), ("Uppsala", "59.86", "17.64")]:
+            await pg.evaluate(f"$('lat').value='{la}'; $('lon').value='{lo}'; visaMeteogram()"); await pg.wait_for_timeout(25000)
+            skriv(f"METAR {namn}: " + str(await pg.evaluate("$('pMeteoMetarInfo').textContent")))
+        skriv("fel: " + str(fel[:5])); await b.close()
     open("sida.md", "w").write("\n".join(UT) + "\n")
 asyncio.run(main())

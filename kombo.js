@@ -90,6 +90,7 @@ async function komboVisa(g, rensa) {
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === K.delar[0]).sort((x, y) => y.s - x.s);
   const vis = []; let pmax = 0, komboRitade = 0;   // 22/11: komboRitade = antal fargade rutor (skylt om 0)
   for (const e of kand) { const r = await komboOmrade(e, K, A, B); if (r) vis.push(r); }
+  P.komboTom = !vis.length;   // 22/11: Favoriternas vinterknapp hamtar nar detta ar sant (P.varden kunde ligga kvar fran forra faltet)
   if (!vis.length && (P.upptagen || P.autoVantar)) return;
   rensa();
   const rgb = PKLASS.map(([gr, c]) => [gr, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
@@ -111,14 +112,14 @@ async function komboVisa(g, rensa) {
   if (visaIso) for (const r of vis) for (const nv of isoProbNivaer()) {
     const d = isoSegment(r.prob, r.o, nv.v); if (!d) continue;
     g.appendChild(el("path", { d, fill: "none", stroke: c_isoKant(), "stroke-width": nv.bredd + 2.6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.85 }));
-    g.appendChild(el("path", { d, fill: "none", stroke: c_iso(), "stroke-width": nv.bredd + 0.4, "stroke-dasharray": nv.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+    g.appendChild(el("path", { d, fill: "none", stroke: c_iso(), "stroke-width": nv.bredd + 0.4, "stroke-dasharray": nv.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": nv.streck ? "butt" : "round" }));
     isoEtiketter(g, d, nv.namn ? nv.namn.replace(" %", "") : String(nv.v));
   }
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa: PPARAM[K.delar[0]], visa: "sannolikhet", kombo: K } : null;
   let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
   if (!vis.length) {
     if (!P.upptagen && !P.fragar) status("Kombinationen " + K.namn + " behöver " + K.delar.map(p => PPARAM[p].namn.split(",")[0].toLowerCase()).join(", ") +
-      " för perioden – tryck " + (fav ? "knappen igen" : "Hämta fält") + ".", "");
+      " för perioden" + (fav ? " – hämtas …" : " – tryck Hämta fält.") , "");
     $("pSam").textContent = ""; return;
   }
   if (!komboRitade && typeof kartTomSkylt === "function") kartTomSkylt("Fältet är inläst – ingen ruta når " + PKLASS[0][0] + " % för " + K.namn.toLowerCase() + " (" + K.text(A, B) + "). Högsta sannolikhet " + Math.round(pmax * 100) + " %. Prova andra trösklar A/B.");
