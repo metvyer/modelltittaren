@@ -99,7 +99,10 @@ const VKLASS = {
   t2: [5, 2, 0, -5, -10, -20],
 };
 const VFARG_ALLA = ["#dbeafe", "#93c5fd", "#fde68a", "#fbbf24", "#f97316", "#dc2626", "#9f1239", "#581c87"];
-const vfarg = v => VFARG_ALLA.slice(VFARG_ALLA.length - VKLASS[v].length);   // farger for parameterns klasser (de morkaste sist)
+// 22/11: nederbord (och regn) i gront - ljust = lite, morkt = mycket, allra mest lila. Anvands aven av Karta m0.
+const PAL_NB = ["#dcfce7", "#bbf7d0", "#86efac", "#22c55e", "#15803d", "#14532d", "#a21caf"];
+const VPAL = { nb: PAL_NB };
+const vfarg = v => { const p = VPAL[v] || VFARG_ALLA; return p.slice(Math.max(0, p.length - VKLASS[v].length)); };   // farger for parameterns klasser (de morkaste sist)
 const visaLage = () => ($("pVisa") && $("pVisa").value) || "sannolikhet";
 // NYTT 20/11 kvall: vilka medlemmar som raknas - alla 30, de 15 nya (0-14 = senaste korningen) eller de 15 gamla
 // (15-29 = korningen 3 h tidigare). Galler kartan, tipsrutan, meteogrammet och riskpanelen.

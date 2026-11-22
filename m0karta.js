@@ -27,8 +27,8 @@ const PAL_TEMP1 = (() => {
 })();
 const M0P = {
   // Nederbörd och moln
-  nb:     { g: "Nederbörd och moln", namn: "Nederbörd", var: "precipitation_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, konv: v => v, iso: [0.1, 1, 4] },
-  regn:   { g: "Nederbörd och moln", namn: "Regn", var: "integral_of_rainfall_amount_wrt_time", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, konv: v => v, iso: [0.1, 1] },
+  nb:     { g: "Nederbörd och moln", namn: "Nederbörd", var: "precipitation_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, pal: typeof PAL_NB !== "undefined" ? PAL_NB : undefined, konv: v => v, iso: [0.1, 1, 4] },
+  regn:   { g: "Nederbörd och moln", namn: "Regn", var: "integral_of_rainfall_amount_wrt_time", enh: "mm/h", klass: [0.1, 0.3, 1, 2, 4, 8], diff: true, pal: typeof PAL_NB !== "undefined" ? PAL_NB : undefined, konv: v => v, iso: [0.1, 1] },
   sno:    { g: "Nederbörd och moln", namn: "Snöfall (snö + graupel + hagel, vatten)", var: "snowfall_amount_acc", enh: "mm/h", klass: [0.1, 0.3, 0.5, 1, 2, 4], diff: true, konv: v => v, iso: [0.1, 1] },
   graupel:{ g: "Nederbörd och moln", namn: "Graupel", var: "integral_of_graupelfall_amount_wrt_time", enh: "mm/h", klass: [0.05, 0.1, 0.3, 1], diff: true, konv: v => v, iso: [0.1] },
   tot:    { g: "Nederbörd och moln", namn: "Total molnmängd", var: "cloud_area_fraction", enh: "/8", klass: [1, 3, 5, 7, 8], pal: PAL_MOLN, konv: v => Math.min(8, (v > 1.5 ? v / 100 : v) * 8), iso: [4, 7] },
