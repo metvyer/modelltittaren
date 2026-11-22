@@ -103,7 +103,7 @@ async function komboVisa(g, rensa) {
       const i = ((o.ny - 1 - y) * o.nx + x) * 4; px[i] = f[1]; px[i + 1] = f[2]; px[i + 2] = f[3]; px[i + 3] = 255;
     }
     cx.putImageData(img, 0, 0);
-    g.appendChild(el("image", { href: cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
+    g.appendChild(el("image", { href: typeof skarpaRutor === "function" ? skarpaRutor(cv) : cv.toDataURL(), x: o.x0 - o.s / 2, y: KY - 1 - o.y1 - o.s / 2, width: o.nx * o.s, height: o.ny * o.s,
       preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges" }));
   }
   P.siffKalla = vis.map(r => ({ o: r.o, d: r.prob, proc: true, lagre: false, enh: "%" }));
