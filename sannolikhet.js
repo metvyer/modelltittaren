@@ -826,9 +826,10 @@ async function timData(o, t) {
   e.anv = Date.now();
   if (e.y0 === o.y0 && e.x0 === o.x0 && e.y1 === o.y1 && e.x1 === o.x1) return arr;
   const eny = (e.y1 - e.y0) / e.s + 1, enx = (e.x1 - e.x0) / e.s + 1, dy = (o.y0 - e.y0) / e.s, dx = (o.x0 - e.x0) / e.s;
+  const kk = (o.s || e.s) / e.s;   // 22/11: finare sparat rutnat (t.ex. 5 km) an fragat (10 km) - ta var k:e ruta (forut antogs k = 1)
   const ut = new arr.constructor(ENS_MEDL * o.ny * o.nx);
   for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++)
-    ut[(m * o.ny + y) * o.nx + x] = arr[(m * eny + y + dy) * enx + x + dx];
+    ut[(m * o.ny + y) * o.nx + x] = arr[(m * eny + y * kk + dy) * enx + x * kk + dx];
   return ut;
 }
 // Beraknar sannolikheten for ett sparat omrade e (pa dess eget rutnat). null om nagon timme saknas.

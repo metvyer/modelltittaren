@@ -52,7 +52,11 @@ async function komboHamta(auto) {
 
 // Sannolikheten för ett sparat område e (det första fältets rutnät). null om något saknas.
 async function komboOmrade(e, K, A, B) {
-  const o = { ...e, ny: (e.y1 - e.y0) / e.s + 1, nx: (e.x1 - e.x0) / e.s + 1 }, n = o.ny * o.nx, N = ENS_MEDL * n;
+  // 22/11: rakna pa det valda omradet (inte hela det sparade, som ar avrundat storre) - de andra falten kan vara sparade
+  // for just det omradet (t.ex. byvind ur den forhamtade Sverigeoversikten) och tacker da inte de extra kanterna
+  const bv = berakna(), inom = bv && bv.s === e.s && innehaller(e, { ...bv, v: e.v, dtg: e.dtg });
+  const g = inom ? { y0: bv.y0, y1: bv.y1, x0: bv.x0, x1: bv.x1 } : {};
+  const o = { ...e, ...g, ny: ((g.y1 ?? e.y1) - (g.y0 ?? e.y0)) / e.s + 1, nx: ((g.x1 ?? e.x1) - (g.x0 ?? e.x0)) / e.s + 1 }, n = o.ny * o.nx, N = ENS_MEDL * n;
   let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
   const dt = +$("pDt").value || 1, L = []; for (let t = a; t <= b; t++) if (t % dt === 0 || t === a) L.push(t);
   const traff = new Uint16Array(N), harData = new Uint8Array(ENS_MEDL);
