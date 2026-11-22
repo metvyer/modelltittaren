@@ -284,6 +284,26 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .tips .avdel { border-top: 1px solid var(--line); margin: 5px 0 3px; padding-top: 3px; font-weight: 650; color: var(--dim); }
 .tips .fet { font-weight: 650; }
 .ktips { white-space: pre-line; max-width: 260px; }
+/* 22/11: SMHI-varningar */
+.varnsym { cursor: pointer; }
+.varnlista { margin: 6px 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; background: var(--panel); }
+.varnlista .varnhuvud { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-bottom: 3px; }
+.varnlista .varnhuvud label { font-weight: 400; display: inline-flex; gap: 4px; align-items: center; }
+.varnlista details { border-top: 1px solid var(--line); padding: 3px 0; }
+.varnlista details.varnann { opacity: .6; }
+.varnlista summary { cursor: pointer; }
+.varnlista details > b { display: block; margin-top: 5px; }
+.varnlista .varntext { white-space: pre-line; }
+.varnprick { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; border: 1px solid #222; vertical-align: -1px; }
+.varnprick.nivORANGE { border-radius: 1px; transform: rotate(45deg) scale(.9); }
+.varnprick.nivRED { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); border: 0; }
+.varnprick.nivMESSAGE { border-radius: 2px; }
+.meteovarn { font-size: 12px; margin: 3px 0; }
+/* 22/11: Experiment - om falten */
+.expinfo { margin-top: 6px; font-size: 12.5px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.expinfo summary { cursor: pointer; font-weight: 600; }
+.expinfo p, .expinfo li { margin: 4px 0; }
+.expinfo ul { margin: 2px 0 4px; padding-left: 18px; }
 .tips .k { display: inline-block; min-width: 78px; color: var(--dim); }
 .stapel { display: flex; gap: 3px; height: 12px; }
 .stapel > div { flex: 1 1 0; border-radius: 3px; background: var(--line); position: relative; overflow: hidden; }
@@ -356,6 +376,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <button class="sek liten" id="zHem" title="Visa hela MEPS-området">Hela</button>
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
+    <button class="sek liten" id="visaVarn" aria-pressed="false" title="SMHI:s vädervarningar på kartan. Fylld yta = gäller vid kartans tid, streckad kant = börjar inom 48 h. Hovra över en yta eller tryck på symbolen för info – hela texten i listan under kartan. Hämtas via mellanservern, var 5:e minut.">⚠ Varningar</button>
     <button class="sek liten baraP" id="m0Linje" aria-pressed="false" title="Medlem 0:s linje för tröskeln (blå) ovanpå sannolikheten – ligger den långt från de röda områdena skiljer sig medlem 0 från ensemblen. Inga extra hämtningar.">m0-linje</button>
     <button class="sek liten" id="siffror" aria-pressed="false" title="Värdena som siffror på kartan: av → på (ovanpå färgerna) → bara siffror. Inzoomat syns varje punkt, längre ut blockens högsta (lägsta för sikt/molnbas) värde.">Siffror: av</button>
     <button class="sek liten baraP" id="visaSnabb" aria-pressed="true" title="Gröna rutor = områden som redan finns i mellanserverns cache (någon har hämtat dem) – de hämtas på en sekund utan att fråga met.no">Snabba</button>
@@ -370,12 +391,13 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kVarn"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
   <div class="kartlegend" id="kartLegend" hidden></div>
   </div>
+  <div class="varnlista" id="varnLista" hidden></div>
   <div class="baraP tidsrad">
     <button class="sek" id="tBak" title="Bakåt (vänsterpil)">◀</button>
     <div class="tidsmitt"><div class="tidsvald" id="tidsVald"></div><div class="tidslinje" id="tidslinje" title="Klicka på en timme för att flytta perioden dit"></div><div class="tidsetiketter" id="tidsEtiketter"></div></div>
@@ -433,6 +455,7 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
     <button class="sek liten" id="pMeteo" title="Hela körningen (+0 till +61 h) för vald parameter i den valda punkten">Meteogram här</button>
     <span id="pMeteoInfo" class="dim"></span>
     <div id="pMeteoRuta" hidden><div class="meteohuvud"><b id="pMeteoTitel"></b><span><button class="sek liten" id="pMeteoStor" title="Lägg meteogrammet under allt annat, över hela sidans bredd – då syns hela körningen">⤢ Expandera</button> <button class="sek liten" id="pMeteoStang" title="Stäng meteogrammet">✕</button></span></div>
+      <div class="meteovarn" id="pMeteoVarn" hidden></div>
       <div class="meteonb" id="pMeteoExtra">Jämför med: <button class="sek liten" id="pMeteoX_aifs" aria-pressed="false" title="ECMWF AIFS (AI-modell), ensemble 51 medlemmar – grönt band 10–90 % och streckad median. Via Open-Meteo.">AIFS</button> <button class="sek liten" id="pMeteoX_nordic" aria-pressed="false" title="MET Nordic 1 km (met.no, MEPS justerad mot observationer, deterministisk) – lila linje. Via Open-Meteo.">MET Nordic</button> <button class="sek liten" id="pMeteoX_nc" aria-pressed="false" title="met.no nowcast var 5:e minut ca 2 h framåt (radar + modell) – orange linje. Nederbörd visas som mm/h i läget Per timme.">Nowcast</button> <button class="sek liten" id="pMeteoMetar" aria-pressed="true" title="METAR från närmaste flygplats: svarta prickar (och röda vindpilar för byvind). Tänd/släck.">METAR</button> <span class="dim" id="pMeteoExtraInfo"></span></div>
       <div class="meteonb" id="pMeteoNbRad" hidden><label for="pMeteoNb">Nederbörd:</label> <select id="pMeteoNb"></select></div>
       <div class="meteoskroll"><svg id="pMeteoSvg"></svg></div>
@@ -593,6 +616,28 @@ body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
   </div>
   <div class="expprofil" id="expProfil" hidden><b id="expProfilTitel"></b><svg id="expProfilSvg"></svg><div class="expleg" id="expProfilSum"></div></div>
   <p class="karttips">Integrerad mängd = summan av graupel över alla nivåer gånger luftlagrets massa (kg/m² = mm vatten) – som radarns VIL. Max = högsta halten någonstans i kolumnen (g/kg) – som radarns max-CAPPI. Laddningszonen = −10 till −25 °C, där graupel, is och underkylt vatten laddar upp molnet. Uppvind × graupel vid −15 °C = McCauls blixtproxy (GFX). Värdena för alla fält står i tipsrutan. Klicka i en karta för kolumnens profil. MEPS medlem 0, inget annat räknat än det modellen ger.</p>
+  <details class="expinfo" id="expInfo">
+    <summary>ⓘ Mer om fälten, hur blixt uppstår och referenser</summary>
+    <p><b>Varför graupel?</b> Den viktigaste laddningsmekanismen i åskmoln är icke-induktiv laddning: när graupel (trindsnö, rimfrostbelagda korn) studsar mot små iskristaller i närvaro av underkylda vattendroppar förs laddning över. Vid ungefär −10 till −25 °C och normal vattenhalt blir graupeln negativ och iskristallerna positiva. Uppvinden lyfter de lätta kristallerna uppåt medan graupeln stannar kvar → laddningarna separeras, fältet växer och till slut slår blixten. Utan alla tre (graupel + is + underkylt vatten) och utan uppvind som skiljer dem åt blir det ingen blixt – därför ger kalla snöbyar ofta graupel men sällan åska.</p>
+    <ul>
+      <li><b>Integrerad graupel</b> (kg/m²): all graupel i kolumnen, som radarns VIL. Säger hur mycket ”material” det finns.</li>
+      <li><b>Max graupel</b> (g/kg): högsta halten någonstans i kolumnen, och på vilken höjd/temperatur den ligger.</li>
+      <li><b>Graupel i laddningszonen</b>: bara graupel mellan −10 och −25 °C – där laddningen sker.</li>
+      <li><b>Laddningsskikt</b>: graupel i samma zon, men bara där modellen samtidigt har is (&gt; 0,001 g/kg) och underkylt molnvatten (&gt; 0,01 g/kg). Gränserna är mina, valda för att ta bort brus – inte från litteraturen.</li>
+      <li><b>Temperatur vid graupelmaxet</b>: ligger maxet varmare än −10 °C (lågt, nära smältnivån) är laddningen svag; mellan −10 och −25 °C är det gynnsamt.</li>
+      <li><b>GFX – uppvind × graupel vid −15 °C</b> (m/s · g/kg): McCauls ”graupelflöde”. Tar både hur mycket graupel som finns där laddningen är starkast och hur kraftigt den lyfts. Det är det fält som i studien bäst följde var och när blixtarna kom. I vintermoln är värdena oftast små (&lt; 0,1); sommarceller med blixt ligger ofta flera enheter högre.</li>
+      <li><b>Max uppvind</b> (m/s): starkaste uppvinden i kolumnen. Konvektiva celler i MEPS har typiskt några m/s, kraftiga sommarceller över 10 m/s.</li>
+    </ul>
+    <p><b>Att tänka på:</b> MEPS löser inte upp enskilda små celler fullt ut (2,5 km), uppvinden blir svagare än i verkligheten och graupeln smetas ut. Använd fälten för <i>var</i> och <i>när</i> det är gynnsamt, inte som exakta värden. MEPS egen <i>lightning_index</i> (fliken Karta m0) bygger på samma idé. Jämför gärna med MTG:s blixtkarta i fliken Satellit.</p>
+    <p><b>Referenser</b></p>
+    <ul>
+      <li>Takahashi, T. (1978): Riming electrification as a charge generation mechanism in thunderstorms. <i>J. Atmos. Sci.</i>, 35, 1536–1548. – laboratorieförsöken som visar laddningens tecken beroende på temperatur och vattenhalt.</li>
+      <li>Saunders, C. P. R., Keith, W. D. och Mitzeva, R. P. (1991): The effect of liquid water on thunderstorm charging. <i>J. Geophys. Res.</i>, 96, 11007–11017.</li>
+      <li>Saunders, C. (2008): Charge separation mechanisms in clouds. <i>Space Sci. Rev.</i>, 137, 335–353. – översikt.</li>
+      <li>Krehbiel, P. R. (1986): The electrical structure of thunderstorms. I: <i>The Earth’s Electrical Environment</i>, National Academy Press, 90–113. – det negativa laddningscentret vid ca −10 till −20 °C.</li>
+      <li>McCaul, E. W., Goodman, S. J., LaCasse, K. M. och Cecil, D. J. (2009): Forecasting lightning threat using cloud-resolving model simulations. <i>Wea. Forecasting</i>, 24, 709–729. – GFX och vertikalt integrerad is som blixtprognos.</li>
+    </ul>
+  </details>
 </section>
 <div class="tips" id="tips" hidden></div>
 <div class="tips ktips" id="kTips" hidden></div>
@@ -2502,6 +2547,7 @@ function visaKTips(text, x, y, html) {   // html = true: texten ar HTML (bara eg
 // Namn och status for en markering visas bara vid hovring, och inte i fri-punkt-lage (Skift/knapp)
 function kartTips(e) {
   const mk = e.target && e.target.closest ? e.target.closest(".mk") : null;
+  if (!mk && typeof varnTips === "function" && varnTips(e)) return;   /* 22/11: SMHI-varningar (varn.js) */
   if (!mk && lage === "p" && e.pointerType !== "touch") { probTips(e); return; }
   if (!mk && lage === "m0" && e.pointerType !== "touch" && !friPunkt && m0Tips(e)) return;
   if (!mk || friPunkt || e.shiftKey || e.pointerType === "touch") { $("kTips").hidden = true; return; }
@@ -2509,6 +2555,7 @@ function kartTips(e) {
 }
 function kartKlick(e, mal) {
   if (typeof ritKlick === "function" && ritKlick(e, mal)) return;   // 21/11: ritlinjer (rita.js)
+  if (mal && mal.closest && mal.closest(".varnsym") && typeof varnKlick === "function") { varnKlick(e, mal); return; }   /* 22/11: tryck pa varningssymbol = info */
   const sel = $("punkt"), fri = friPunkt || e.shiftKey, mk = !fri && mal && mal.closest ? mal.closest(".mk") : null;
   // 21/11: TAF-fliken - klick pa en flygplats laggs till/tas bort i bevakningen
   if (lage === "taf") {
@@ -2642,7 +2689,8 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="dela.js?v=20261121-2030"></script>
 <script src="bild.js?v=20261121-1900"></script>
 <script src="obs.js?v=20261122-0710"></script>
-<script src="exp.js?v=20261122-0920"></script>
+<script src="exp.js?v=20261122-0940"></script>
 <script src="extra.js?v=20261122-0715"></script>
+<script src="varn.js?v=20261122-0940"></script>
 </body>
 </html>

@@ -30,6 +30,8 @@ const TILLATEN_FIL = /^\/mepslatest\/(meps_[A-Za-z0-9_]+\.(?:ncml|nc)\.(?:ascii|
 const AWC = "https://aviationweather.gov/api/data/";
 // NYTT 21/11: polska TAF/METAR fran IMGW:s flyg-API (/imgw?params=taf|metar|gamet|new_sigmet), cache 4 min
 const IMGW = "https://aviation-api.imgw.pl/data/last?format=json&count=1&params=", CACHE_IMGW = 240;   // + metar / taf
+// NYTT 22/11: SMHI:s vadervarningar (konsekvensbaserade, IBW) - /varningar (test: /varningar?test=1..5), cache 5 min
+const SMHI_VARN = "https://opendata-download-warnings.smhi.se/ibww/", CACHE_VARN = 300;
 const DELA_MAX = 20000;   // 21/11: storre (ritlinjer foljer med). Delningar raderas inte automatiskt.
 const slump = (n, tecken) => { const b = crypto.getRandomValues(new Uint8Array(n)); return [...b].map(x => tecken[x % tecken.length]).join(""); };
 const UA = { "User-Agent": "Modelltittaren-mellanserver (github.com/metvyer/modelltittaren)" };
@@ -59,6 +61,7 @@ function typAv(url) {
   if (url.pathname === "/metar") return "metar";
   if (url.pathname === "/taf") return "taf";
   if (url.pathname === "/imgw") return "imgw";
+  if (url.pathname === "/varningar") return "varningar";
   if (url.search === "?time") return "koll";
   if (/meps_det/.test(url.pathname)) return "tidhojd";
   if (/meps_lagged/.test(url.pathname)) return "sannolikhet";
@@ -127,6 +130,9 @@ export class Kalla extends WorkerEntrypoint {
       kalla = AWC + url.pathname.slice(1) + url.search; tid = url.pathname === "/taf" ? CACHE_TAF : CACHE_METAR;
     } else if (url.pathname === "/imgw") {
       kalla = IMGW + url.searchParams.get("params"); tid = CACHE_IMGW;
+    } else if (url.pathname === "/varningar") {
+      const t = url.searchParams.get("test");
+      kalla = SMHI_VARN + (t ? "test/test_" + t + ".json" : "api/version/1/warning.json"); tid = CACHE_VARN;
     } else {
       const fil = url.pathname.replace(/^\/mepslatest\//, "");
       kalla = THREDDS + fil + url.search; tid = cachetid(fil, url.search);
@@ -356,7 +362,12 @@ export default {
     }
 
     let vidare;
-    if (url.pathname === "/imgw") {
+    if (url.pathname === "/varningar") {
+      const t = url.searchParams.get("test") || "";
+      if (t && !/^[1-5]$/.test(t)) return new Response("Fel test", { status: 400, headers: cors });
+      if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
+      vidare = url.origin + "/varningar" + (t ? "?test=" + t : "");
+    } else if (url.pathname === "/imgw") {
       const pr = url.searchParams.get("params") || "";
       if (!/^(taf|metar|gamet|new_sigmet)$/.test(pr)) return new Response("Fel params", { status: 400, headers: cors });
       if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
