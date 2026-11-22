@@ -40,14 +40,17 @@ function komboTimmar(p) {
 // Hämta alla ingående fält i tur och ordning
 async function komboHamta(auto) {
   const K = komboAktiv(); if (!K || P.upptagen) return;
+  // 22/11 kvall: "Snödrev – del 1 av 2 (snöfall)" star forst i varje status medan delarna hamtas (status() i index.html),
+  // och stapeln under visar anropen for den del som hamtas
   try {
-    for (const p of K.delar) {
+    for (let di = 0; di < K.delar.length; di++) { const p = K.delar[di];
       if (stoppad && P.komboStopp) break;
       P.vOverride = p; P.listaOverride = komboTimmar(p); P.komboStopp = true;
-      status("Kombination " + K.namn + ": hämtar " + PPARAM[p].namn.split(",")[0].toLowerCase() + " …", "");
+      P.komboDel = K.namn + " – del " + (di + 1) + " av " + K.delar.length + " (" + PPARAM[p].namn.split(",")[0].toLowerCase() + ")";
+      status("Hämtar …");
       await probHamta(auto === true);
     }
-  } finally { P.vOverride = null; P.listaOverride = null; P.komboStopp = false; await probVisa(); }
+  } finally { P.vOverride = null; P.listaOverride = null; P.komboStopp = false; P.komboDel = null; await probVisa(); }
 }
 
 // Sannolikheten för ett sparat område e (det första fältets rutnät). null om något saknas.
@@ -122,7 +125,7 @@ async function komboVisa(g, rensa) {
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa: PPARAM[K.delar[0]], visa: "sannolikhet", kombo: K } : null;
   let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
   if (!vis.length) {
-    if (!P.upptagen && !P.fragar) status("Kombinationen " + K.namn + " behöver " + K.delar.map(p => PPARAM[p].namn.split(",")[0].toLowerCase()).join(", ") +
+    if (!P.upptagen && !P.fragar && !P.vOverride) status("Kombinationen " + K.namn + " behöver " + K.delar.map(p => PPARAM[p].namn.split(",")[0].toLowerCase()).join(", ") +
       " för perioden" + (fav ? " – hämtas …" : " – tryck Hämta fält.") , "");
     $("pSam").textContent = ""; return;
   }

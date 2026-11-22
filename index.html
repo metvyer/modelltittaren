@@ -809,10 +809,12 @@ function rensaGammalCache() {
 let lage = "th";   // "th" = tid-hojd, "p" = sannolikhet
 // Vid fel visas en lank till met.no:s driftstatus (status.met.no), dar storningar pa thredds meddelas.
 function status(t, klass) {
+  if (lage === "p" && typeof P !== "undefined" && P.komboDel && t && klass !== "fel") t = P.komboDel + ": " + String(t).replace(/^Klart/, "klar");   // 22/11 kvall: kombinationens del forst
   const e = $(lage === "p" ? "pStatus" : "iStatus"); e.textContent = t;
   // 22/11: farg efter lage nar inget annat anges - orange = hamtar/laddar (snurra), gron = klart, rod = fel
   if (!klass && t) { const s_ = String(t).trim();
-    if (/^(Klart|Hämtat|Färdig|Allt)/i.test(s_)) klass = "stOk";
+    if (typeof P !== "undefined" && P.komboDel) klass = "stVant";
+    else if (/^(Klart|Hämtat|Färdig|Allt)/i.test(s_)) klass = "stOk";
     else if (/^(Hämtar|Kollar|Laddar|Startar|Räknar|Söker|Väntar|Försöker)|…\s*$|\.\.\.\s*$|hämtas …/i.test(s_)) klass = "stVant"; }
   e.className = klass || "";
   if (klass === "fel" && /thredds|svar \d|servern|körning|misslyckades/i.test(t)) {   // bara serverfel, inte inmatningsfel
@@ -2728,7 +2730,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 })();
 </script>
 <script src="sannolikhet.js?v=20261122-2245"></script>
-<script src="kombo.js?v=20261122-2120"></script>
+<script src="kombo.js?v=20261122-2300"></script>
 <script src="m0karta.js?v=20261122-2245"></script>
 <script src="taf.js?v=20261122-0800"></script>
 <script src="rita.js?v=20261121-1300"></script>
