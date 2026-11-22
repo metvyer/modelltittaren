@@ -32,6 +32,21 @@ const AWC = "https://aviationweather.gov/api/data/";
 const IMGW = "https://aviation-api.imgw.pl/data/last?format=json&count=1&params=", CACHE_IMGW = 240;   // + metar / taf
 // NYTT 22/11: SMHI:s vadervarningar (konsekvensbaserade, IBW) - /varningar (test: /varningar?test=1..5), cache 5 min
 const SMHI_VARN = "https://opendata-download-warnings.smhi.se/ibww/", CACHE_VARN = 300;
+// NYTT 22/11: omraden pa kartan - /omraden?k=TRA|RSTA|DNGA|CTR|TMAW|ATZ (LFV:s oppna AIP-data, WFS) eller k=SMHI
+// (SMHI:s varningsomraden: sjovaderomraden + lan). Andras sallan (LFV per AIRAC) -> cache 1 dygn.
+// Svaret gors om till en kompakt lista [{n,l,u,c,w,g}] med koordinater avrundade till 4 decimaler.
+const LFV_WFS = "https://daim.lfv.se/geoserver/mais/wfs?service=WFS&version=2.0.0&request=GetFeature&outputFormat=application/json&typeNames=mais:";
+const OMR_TYPER = ["TRA", "RSTA", "DNGA", "CTR", "TMAW", "ATZ", "SMHI"], CACHE_OMR = 86400;
+const omrR4 = g => Array.isArray(g) ? (typeof g[0] === "number" ? [Math.round(g[0] * 1e4) / 1e4, Math.round(g[1] * 1e4) / 1e4] : g.map(omrR4)) : g;
+const omrGeo = g => !g ? null : g.type === "Feature" ? omrGeo(g.geometry) : g.type === "GeometryCollection" ? { type: g.type, geometries: (g.geometries || []).map(omrGeo) } : { type: g.type, coordinates: omrR4(g.coordinates) };
+function omrKompakt(k, js) {
+  if (k === "SMHI") {
+    const lista = Array.isArray(js) ? js : (Object.values(js || {}).find(Array.isArray) || []);
+    return lista.filter(a => /SEA|COUNT/.test(a.code || "")).map(a => ({ n: a.sv || a.en || "", k: /SEA/.test(a.code) ? "SJO" : "LAN", g: omrGeo(a.area && (a.area.geometry || a.area)) })).filter(a => a.g);
+  }
+  return ((js && js.features) || []).map(f => { const p = f.properties || {};
+    return { n: String(p.NAMEOFAREA || "").trim(), l: p.LOWER, u: p.UPPER, c: [p.COMMENT_1, p.COMMENT_2].filter(Boolean).join("\n"), w: p.WEF || "", g: omrGeo(f.geometry) }; }).filter(a => a.g);
+}
 const DELA_MAX = 20000;   // 21/11: storre (ritlinjer foljer med). Delningar raderas inte automatiskt.
 const slump = (n, tecken) => { const b = crypto.getRandomValues(new Uint8Array(n)); return [...b].map(x => tecken[x % tecken.length]).join(""); };
 const UA = { "User-Agent": "Modelltittaren-mellanserver (github.com/metvyer/modelltittaren)" };
@@ -62,6 +77,7 @@ function typAv(url) {
   if (url.pathname === "/taf") return "taf";
   if (url.pathname === "/imgw") return "imgw";
   if (url.pathname === "/varningar") return "varningar";
+  if (url.pathname === "/omraden") return "omraden";
   if (url.search === "?time") return "koll";
   if (/meps_det/.test(url.pathname)) return "tidhojd";
   if (/meps_lagged/.test(url.pathname)) return "sannolikhet";
@@ -133,6 +149,9 @@ export class Kalla extends WorkerEntrypoint {
     } else if (url.pathname === "/varningar") {
       const t = url.searchParams.get("test");
       kalla = SMHI_VARN + (t ? "test/test_" + t + ".json" : "api/version/1/warning.json"); tid = CACHE_VARN;
+    } else if (url.pathname === "/omraden") {
+      const k = url.searchParams.get("k");
+      kalla = k === "SMHI" ? SMHI_VARN + "api/version/1/metadata/area.json" : LFV_WFS + k; tid = CACHE_OMR;
     } else {
       const fil = url.pathname.replace(/^\/mepslatest\//, "");
       kalla = THREDDS + fil + url.search; tid = cachetid(fil, url.search);
@@ -146,6 +165,10 @@ export class Kalla extends WorkerEntrypoint {
       const vem = ["Server", "Via"].map(k => svar.headers.get(k) ? k + "=" + svar.headers.get(k) : "").filter(Boolean).join(" ");
       feltext = (" || " + (vem ? vem + " | " : "") + txt.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()).slice(0, 250);
       svar = new Response(txt, { status: svar.status, headers: svar.headers });
+    }
+    if (url.pathname === "/omraden" && svar.status === 200) {
+      try { const js = await svar.json(); svar = new Response(JSON.stringify(omrKompakt(url.searchParams.get("k"), js)), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } }); }
+      catch (e) { feltext = " || kunde inte tolka källan"; svar = new Response("Kunde inte tolka källan", { status: 502, headers: { "Content-Type": "text/plain" } }); }
     }
     const h = new Headers();
     for (const k of ["Content-Type", "Content-Length"]) { const v = svar.headers.get(k); if (v) h.set(k, v); }
@@ -362,7 +385,12 @@ export default {
     }
 
     let vidare;
-    if (url.pathname === "/varningar") {
+    if (url.pathname === "/omraden") {
+      const k = url.searchParams.get("k") || "";
+      if (!OMR_TYPER.includes(k)) return new Response("Fel k", { status: 400, headers: cors });
+      if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
+      vidare = url.origin + "/omraden?k=" + k;
+    } else if (url.pathname === "/varningar") {
       const t = url.searchParams.get("test") || "";
       if (t && !/^[1-5]$/.test(t)) return new Response("Fel test", { status: 400, headers: cors });
       if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
