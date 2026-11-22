@@ -144,7 +144,9 @@ function expRitaProfil(pt, p, dp, K) {
   const pTopp = 200e2, pBott = Math.max(...p) + 500, yP = pp => TP + (Math.log(pp) - Math.log(pTopp)) / (Math.log(pBott) - Math.log(pTopp)) * (H - TP - BP);
   const serier = [["gr", "Graupel", "#7c3aed", 2.4], ["sn", "Snö", "#2563eb", 1.6], ["is", "Is", "#06b6d4", 1.4], ["lw", "Molnvatten", "#16a34a", 1.6]];
   let mx = 0; for (const [k] of serier) for (let i = 0; i < EXP_NIV; i++) if (p[i] >= pTopp && K[k][i] > 0) mx = Math.max(mx, K[k][i] * 1000);
-  mx = mx > 0 ? mx * 1.1 : 0.1; const xQ = v => VM + v / mx * (W - VM - HM);
+  // 22/11: fast skala 0-1 g/kg (sa man far kansla for vad som ar mycket); bara om nagot ar storre vaxer den (1 -> 2 -> 4 -> 8)
+  let skala = 1; while (mx > skala && skala < 64) skala *= 2; const utokad = skala > 1;
+  mx = skala * 1.1; const xQ = v => VM + v / mx * (W - VM - HM);
   const tMin = -50, tMax = 15, xT = tc => VM + (tc - tMin) / (tMax - tMin) * (W - VM - HM);
   const c = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || "#888";
   // axlar och flygnivaer
@@ -153,7 +155,7 @@ function expRitaProfil(pt, p, dp, K) {
     S.appendChild(el("text", { x: VM - 4, y: yP(pp) + 3, "font-size": 10, "text-anchor": "end", fill: c("--dim") }, "FL" + String(fl).padStart(3, "0"))); }
   S.appendChild(el("line", { x1: VM, x2: VM, y1: TP, y2: H - BP, stroke: c("--fg") })); S.appendChild(el("line", { x1: VM, x2: W - HM, y1: H - BP, y2: H - BP, stroke: c("--fg") }));
   for (let i = 0; i <= 4; i++) { const v = mx / 1.1 * i / 4; S.appendChild(el("text", { x: xQ(v), y: H - BP + 13, "font-size": 10, "text-anchor": "middle", fill: c("--dim") }, v.toFixed(v < 0.1 ? 3 : 2).replace(".", ","))); }
-  S.appendChild(el("text", { x: (VM + W - HM) / 2, y: H - 6, "font-size": 10.5, "text-anchor": "middle", fill: c("--fg") }, "halt g/kg (temperatur: övre skala, °C)"));
+  S.appendChild(el("text", { x: (VM + W - HM) / 2, y: H - 6, "font-size": 10.5, "text-anchor": "middle", fill: utokad ? "#b45309" : c("--fg") }, "halt g/kg" + (utokad ? " – OBS skalan utökad till " + skala : "") + " (temperatur: övre skala, °C)"));
   for (const tc of [-40, -20, -10, 0, 10]) S.appendChild(el("text", { x: xT(tc), y: TP - 2, "font-size": 9.5, "text-anchor": "middle", fill: "#dc2626" }, String(tc)));
   // 0 och -10 grader: nivaerna dar temperaturen passerar
   const tc = K.ta.map(v => v - 273.15);
