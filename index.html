@@ -325,7 +325,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .meteohuvud { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 13px; }
 .meteoskroll { overflow-x: auto; }
 #pMeteoRuta.meteoStor { margin: 10px 0; }
-body:not(.p) #meteoNedre, body.fav #meteoNedre { display: none; }
+body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (expanderat meteogram doldes dar) */
 .testrad { background: #b91c1c; color: #fff; font-size: 12px; font-weight: 700; text-align: center; padding: 3px 6px; letter-spacing: .03em; }
 .testskylt { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
 .testskylt[hidden] { display: none; }
