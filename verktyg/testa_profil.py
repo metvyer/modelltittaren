@@ -7,11 +7,12 @@ kat = h("https://thredds.met.no/thredds/catalog/mepslatest/catalog.xml")
 fil = sorted(set(re.findall(r'(meps_det_2_5km_\d{8}T\d\dZ)\.ncml', kat)))[-1]
 D = "https://thredds.met.no/thredds/dodsC/mepslatest/" + fil + ".ncml"
 print("fil", fil)
-import subprocess; subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pyproj"], check=False)
-from pyproj import Proj
+def P(lon, lat):   # Lambert konform konisk, sfar R=6371 km, lat0=lat1=lat2=63.3, lon0=15 (MEPS)
+    r = math.pi / 180; R = 6371000; l1 = 63.3 * r; n = math.sin(l1); F = math.cos(l1) * math.tan(math.pi / 4 + l1 / 2) ** n / n
+    rho = R * F / math.tan(math.pi / 4 + lat * r / 2) ** n; rho0 = R * F / math.tan(math.pi / 4 + l1 / 2) ** n
+    return rho * math.sin(n * (lon - 15) * r), rho0 - rho * math.cos(n * (lon - 15) * r)
 x = [float(v) for v in h(D + ".ascii?x").split("\n", 5)[-1].replace("\n", ",").split(",") if v.strip() and re.match(r"^-?[\d.eE+]+$", v.strip())]
 y = [float(v) for v in h(D + ".ascii?y").split("\n", 5)[-1].replace("\n", ",").split(",") if v.strip() and re.match(r"^-?[\d.eE+]+$", v.strip())]
-P = Proj(proj="lcc", lat_0=63.3, lon_0=15, lat_1=63.3, lat_2=63.3, R=6371000)
 X, Y = P(17.5886, 59.8973); ix = min(range(len(x)), key=lambda i: abs(x[i] - X)); iy = min(range(len(y)), key=lambda i: abs(y[i] - Y))
 print("ix", ix, "iy", iy, len(x), len(y))
 tid = h(D + ".ascii?time"); tt = [float(v) for v in re.findall(r"[\d.]+e\+09|\b1[78]\d{8}\b", tid)]
