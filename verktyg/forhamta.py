@@ -34,12 +34,13 @@ PUNKTER = [
     ("Kallinge (Ronneby)", "ESDF", 56.2667, 15.265), ("Malmen", "ESCF", 58.3978, 15.5228), ("Såtenäs", "ESIB", 58.4264, 12.7144),
     ("Kallax", "ESPA", 65.5438, 22.122), ("Vidsel", "ESPE", 65.8753, 20.15), ("Uppsala", "ESCM", 59.8973, 17.5886),
     ("Visby", "ESSV", 57.6628, 18.3462), ("Sturup", "ESMS", 55.5363, 13.3762), ("Arlanda", "ESSA", 59.6519, 17.9186),
-    ("Landvetter", "ESGG", 57.6628, 12.2798), ("Hagshult", "ESMV", 57.2922, 14.1372), ("Kalmar", "ESMQ", 56.6855, 16.2876)]
+    ("Landvetter", "ESGG", 57.6628, 12.2798), ("Hagshult", "ESMV", 57.2922, 14.1372), ("Karlsborg", "ESIA", 58.5138, 14.5071)]
 # NYTT 21/11 - PARVIS HAMTNING (matprov Q): thredds vagrar samma variabel tva ganger i en fraga, men kostnaden
 # sitter i uppackningen av faltet, inte i antalet punkter. En "ruta" med steg = avstandet mellan tva orter ger
 # exakt de tva orterna (+ tva skraphorn) till ungefar samma tid som en ort. Svaret delas sedan upp i ett
 # vanligt enpunktssvar per ort (dela_par), sa sidan laser det som forut. Kalmar kom med "gratis" (par med Visby).
-PAR = [("ESDF", "ESMS"), ("ESCF", "ESIB"), ("ESPA", "ESPE"), ("ESCM", "ESSA"), ("ESSV", "ESMQ"), ("ESGG", "ESMV")]
+# 22/11 (Jakob): Kalmar ut, Karlsborg ESIA in. Paren omgjorda (avstandet spelar ingen roll for kostnaden).
+PAR = [("ESDF", "ESMS"), ("ESIB", "ESIA"), ("ESPA", "ESPE"), ("ESCM", "ESSA"), ("ESSV", "ESCF"), ("ESGG", "ESMV")]
 # Molnen och vinden pa modellnivaer hamtas upp till TOPP_FL (det tunga). Tryckytor och
 # isbildning hamtas hela vagen (litet). Valjer man hogre topp pa sidan hamtar den sjalv resten.
 TOPP_FL = 450   # 18/11: tillbaka till FL450 (FL200 sparade lite tid)
