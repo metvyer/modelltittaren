@@ -130,6 +130,10 @@ jobs:
           T=$(echo "$L" | python3 -c "import json,sys; l=json.load(sys.stdin); print(l[-1] if l else '')")
           [ -n "$T" ] && curl -s -o /dev/null -w "bild %{http_code} %{size_download} %{content_type}\n" -H 'Origin: https://metvyer.github.io' $R/$T.png || true
 
+      - name: Prov ra modellprofil Uppsala
+        if: contains(inputs.delar, 'Q2')
+        run: python3 verktyg/testa_profil.py
+
       - name: Spara resultatet
         if: always()
         uses: actions/upload-artifact@v4
