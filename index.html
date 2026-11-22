@@ -234,7 +234,7 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 .tidslinje span.ka::before { left: 0; } .tidslinje span.kb::after { right: 0; }
 .tidslinje span.ka, .tidslinje span.kb { cursor: ew-resize; }
 .tidslinje { overflow: visible; }
-.troskrad { margin-top: 6px; } .hamtval { margin-left: 2px; }
+.troskrad { margin-top: 6px; } .xst { margin-left: 8px; font-size: 12px; } .xst.vant { color: var(--dim); } .xst.ok { color: #15803d; } .xst.fel { color: #b45309; } .hamtval { margin-left: 2px; }
 .tidslinje span:hover { outline: 2px solid var(--fg); outline-offset: -2px; }
 .tidsetiketter { position: relative; height: 14px; font-size: 11px; color: var(--dim); }
 .tidsetiketter span { position: absolute; top: 0; white-space: nowrap; transform: translateX(2px); }
@@ -2594,6 +2594,6 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="dela.js?v=20261121-2030"></script>
 <script src="bild.js?v=20261121-1900"></script>
 <script src="obs.js?v=20261122-0710"></script>
-<script src="extra.js?v=20261121-2030"></script>
+<script src="extra.js?v=20261122-0715"></script>
 </body>
 </html>

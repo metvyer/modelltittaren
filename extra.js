@@ -23,7 +23,13 @@ let EXTRA_PA = (() => { try { return JSON.parse(lasa("mt:meteoExtra") || "{}"); 
 const EXTRA_C = new Map();   // cache: kalla|var|lat|lon -> {k: tid, d: data}
 const extraNyck = (k, v, lat, lon) => k + "|" + v + "|" + lat.toFixed(3) + "|" + lon.toFixed(3);
 
-async function extraJson(url) { const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }
+// 22/11: tidsgrans 30 s (Open-Meteo kan vara seg) - annars syns inget alls
+async function extraJson(url) {
+  const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 30000);
+  try { const r = await fetch(url, { signal: ac.signal }); if (!r.ok) throw new Error("svarade " + r.status); return await r.json(); }
+  catch (e) { throw new Error(e.name === "AbortError" ? "svarade inte inom 30 s" : e.message === "Failed to fetch" ? "nås inte" : e.message); }
+  finally { clearTimeout(tm); }
+}
 // en kalla for en punkt och parameter -> { tider: [ms], medl: [[varden per tid] ...] } (nowcast/nordic: en medlem)
 async function extraHamtaEn(kalla, v, lat, lon) {
   const X = EXTRA_VAR[v]; if (!X || (kalla === "nc" && !X.nc)) return null;
@@ -36,26 +42,38 @@ async function extraHamtaEn(kalla, v, lat, lon) {
     const j = await extraJson(url), H = j.hourly || {};
     const nycklar = Object.keys(H).filter(k => k === X.om || k.startsWith(X.om + "_member"));
     d = { tider: (H.time || []).map(t => t * 1000), medl: nycklar.map(k => H[k].map(w => w === null ? NaN : X.k(w))) };
-    if (!d.medl.some(r => r.some(isFinite))) d = null;   // t.ex. AIFS har ingen byvind (prov N)
+    if (!d.medl.some(r => r.some(isFinite))) d = { tom: "har inte " + PPARAM[v].namn.toLowerCase().split(",")[0] };   // t.ex. AIFS har ingen byvind (prov N)
   } else {
     const j = await extraJson("https://api.met.no/weatherapi/nowcast/2.0/complete?lat=" + (+la).toFixed(4) + "&lon=" + (+lo).toFixed(4));
     const ts = (j.properties && j.properties.timeseries) || [], kk = X.ncK || X.k;
     d = { tider: ts.map(t => Date.parse(t.time)), medl: [ts.map(t => { const w = t.data && t.data.instant && t.data.instant.details ? t.data.instant.details[X.nc] : undefined; return w === undefined || w === null ? NaN : kk(w); })], steg: 5 };
+    // nowcast har bara nederbord framat - ovriga bara for "nu" (prov N): en enda punkt ar inte vard en linje
+    if (d.medl[0].filter(isFinite).length < 3) d = { tom: "bara nederbörd framåt (övrigt bara för nu)" };
   }
   EXTRA_C.set(nyck, { k: Date.now(), d }); return d;
 }
 // hamta det som ar pa for meteogrammets punkt, rita om nar nagot kommit
+// 22/11: status per kalla bredvid knapparna - hamtas …, klar, finns inte, fel
 async function extraHamta(M1) {
-  if (!M1 || !EXTRA_VAR[M1.v]) { extraInfo(""); return; }
-  const pa = Object.keys(EXTRA_KALLOR).filter(k => EXTRA_PA[k]); if (!pa.length) { extraInfo(""); return; }
-  M1.extra = M1.extra || {}; const fel = [];
+  const pa = Object.keys(EXTRA_KALLOR).filter(k => EXTRA_PA[k]); if (!pa.length || !M1) { extraInfo({}); return; }
+  const st = {};
+  if (!EXTRA_VAR[M1.v]) { for (const k of pa) st[k] = ["fel", "finns inte för " + PPARAM[M1.v].namn.toLowerCase().split(",")[0]]; extraInfo(st); return; }
+  M1.extra = M1.extra || {};
+  for (const k of pa) st[k] = ["vant", "hämtas …"]; extraInfo(st);
   await Promise.all(pa.map(async k => {
-    try { const d = await extraHamtaEn(k, M1.v, M1.lat, M1.lon); if (d) M1.extra[k] = d; else fel.push(EXTRA_KALLOR[k].namn + " (har inte " + PPARAM[M1.v].namn.toLowerCase() + ")"); }
-    catch (e) { fel.push(EXTRA_KALLOR[k].namn + ": " + e.message); }
+    try { const d = await extraHamtaEn(k, M1.v, M1.lat, M1.lon);
+      if (!d) st[k] = ["fel", "finns inte för " + PPARAM[M1.v].namn.toLowerCase().split(",")[0]];
+      else if (d.tom) st[k] = ["fel", d.tom];
+      else { M1.extra[k] = d; st[k] = ["ok", d.medl.length > 1 ? "klar (" + d.medl.length + " medl.)" : "klar"]; }
+    } catch (e) { st[k] = ["fel", e.message]; }
+    if (P.meteo === M1) { ritaMeteogram(); extraInfo(st); }
   }));
-  if (P.meteo === M1) { ritaMeteogram(); extraInfo(fel.length ? "Saknas: " + fel.join(", ") : ""); }
 }
-function extraInfo(t) { const e = $("pMeteoExtraInfo"); if (e) e.textContent = t; }
+function extraInfo(st) {
+  const e = $("pMeteoExtraInfo"); if (!e) return; e.textContent = "";
+  for (const k of Object.keys(st)) { const sp = document.createElement("span"); sp.className = "xst " + st[k][0];
+    sp.textContent = EXTRA_KALLOR[k].namn + ": " + st[k][1]; e.appendChild(sp); }
+}
 
 // --- serier for ritningen, i meteogrammets timmar (h = timmar efter korningens start) ---
 // lage: nederbordens visning (ack/h1/h3/h6) eller null; start = ackumuleringens start (timme)
@@ -63,7 +81,7 @@ function extraSerier(M0, lage, start, bas, nt) {
   const ut = []; if (!M0.extra || !EXTRA_VAR[M0.v]) return ut;
   const summa = EXTRA_VAR[M0.v].summa;
   for (const k of Object.keys(EXTRA_KALLOR)) {
-    const d = M0.extra[k]; if (!EXTRA_PA[k] || !d || !d.medl.length) continue;
+    const d = M0.extra[k]; if (!EXTRA_PA[k] || !d || !d.medl || !d.medl.length) continue;
     const K = EXTRA_KALLOR[k];
     if (k === "nc") {   // 5-minuterssteg; nederbord: intensitet mm/h -> bara i "per timme"-lage (som mm/h)
       if (summa && lage !== "h1") continue;
@@ -129,6 +147,6 @@ function extraForkl(S) { return S.length ? " " + S.map(s => s.namn + " = " + (s.
   for (const k of Object.keys(EXTRA_KALLOR)) {
     const b = $("pMeteoX_" + k); if (!b) continue; b.setAttribute("aria-pressed", String(!!EXTRA_PA[k]));
     b.addEventListener("click", () => { EXTRA_PA[k] = !EXTRA_PA[k]; b.setAttribute("aria-pressed", String(EXTRA_PA[k])); lagra("mt:meteoExtra", JSON.stringify(EXTRA_PA));
-      if (P.meteo) { ritaMeteogram(); extraHamta(P.meteo); } });
+      if (P.meteo) { ritaMeteogram(); extraHamta(P.meteo); } else extraInfo(EXTRA_PA[k] ? { [k]: ["vant", "visas när du öppnar ett meteogram"] } : {}); });
   }
 })();
