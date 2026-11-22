@@ -669,7 +669,7 @@ async function probHamta(auto, utanSnabb) {
         if (!sakn.length) { status("Klart: från den förhämtade översikten (GitHub, " + sv.antal + " timmar, " + (sv.kb / 1024).toFixed(1) + " MB, " + ((performance.now() - t0) / 1000).toFixed(0) + " s) – ingen hämtning från met.no."); return; } }
       // 20/11 kvall: delvis utanfor rutan -> visa det som finns och fraga (som snabbfasen). Galler aven om
       // rutan redan var laddad (autoladdningen) - forsta trycket fragar, Hamta resten gar till met.no.
-      if (sv.delvis && !utanSnabb && SVIDX && sakn.every(t => SVIDX.tider.includes(t))) { visaRest = true; $("pRest").hidden = false;
+      if (sv.delvis && !utanSnabb && !P.vOverride && SVIDX && sakn.every(t => SVIDX.tider.includes(t))) {   // 22/11: inte under kombinationshamtning visaRest = true; $("pRest").hidden = false;
         status("Visar den förhämtade översikten (GitHub) – den täcker " + Math.round(sv.tackt * 100) + " % av ditt område. Flytta eller krympa ramen in i den gröna rutan, eller tryck Hämta resten för hela ditt område från met.no.", "");
         P.fragar = true; return; }
     }
@@ -677,7 +677,9 @@ async function probHamta(auto, utanSnabb) {
     if (!utanSnabb && sakn.length) {
       status("Kollar om området redan finns i mellanserverns cache …");
       const sf = await snabbFas(o, oH, sakn, pa);
-      if (sf.antal) {
+      // 22/11: tacker cachen nastan inget (0 %) eller hamtar vi en kombination (Favoriternas vinterknappar) - fraga inte, hamta vidare
+      if (sf.antal && (P.vOverride || sf.tackt < 0.02)) { sakn = saknadeTimmar(o, lista); kb += sf.kb; }
+      else if (sf.antal) {
         sakn = saknadeTimmar(o, lista); visaRest = sakn.length > 0; $("pRest").hidden = !visaRest;
         kb += sf.kb; await probVisa(); ritaOmrade();
         if (!sakn.length) { status("Klart: allt fanns i mellanserverns cache (" + sf.antal + " områden, " + (sf.kb / 1024).toFixed(1) + " MB, " + ((performance.now() - t0) / 1000).toFixed(0) + " s) – ingen hämtning från met.no."); return; }
