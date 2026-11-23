@@ -1473,7 +1473,7 @@ const FAV_VINTER = [["snofok", "Snödrev"], ["ishalka", "Ishalka"], ["rimfrost",
 function favVinter(k) {
   // 22/11: Favoriter galler hela Sverige - kombinationerna hamtas fran met.no (3 falt x 30 medlemmar), sa i 10 km
   // (5 km for hela Sverige blir for stort, ca 400 MB for en halv dag). Perioden = den valda i tidslinjen.
-  if (+$("pUppl").value < 4) { $("pUppl").value = "4"; $("pUppl").dispatchEvent(new Event("change")); }
+  if (!P.detalj && +$("pUppl").value < 4) { $("pUppl").value = "4"; $("pUppl").dispatchEvent(new Event("change")); }
   komboVal(k); favMarkera();
   // 22/11: P.komboTom i stallet for !P.varden, och vanta tills en pagaende hamtning (bytet till 10 km startar en) ar klar
   // - annars gjorde forsta trycket ingenting.
@@ -1484,6 +1484,7 @@ function favVinter(k) {
     for (; i < 240 && P.upptagen; i++) { if (i % 2 === 0) status(namn + " – väntar på pågående hämtning (" + Math.round(i / 2) + " s) …"); await new Promise(r => setTimeout(r, 500)); }
     if ($("pKombo").value !== k) { P.komboVantar = false; return; }
     if (P.upptagen) { P.komboVantar = false; status(namn + " hämtades inte – en annan hämtning pågår fortfarande efter 2 min. Tryck " + namn + " igen när den är klar (eller Stopp).", "fel"); P.fragar = true; return; }
+    if (P.detalj) { P.komboVantar = false; await favDetaljHamta(); return; }   // 23/11: detaljlaget hamtar alltid for detaljrutan
     await probVisa(); P.komboVantar = false; if (P.komboTom) komboHamta(false); else status("Klart: " + namn + " – allt fanns redan sparat."); });
 }
 function favKnappar() {
@@ -1505,6 +1506,7 @@ function favVal(v, g) {
   if (typeof komboVal === "function" && $("pKombo").value) komboVal("");   // 21/11: vanlig favorit = ingen kombination
   const sel = $("pParam"); if (sel.value !== v) { sel.value = v; sel.dispatchEvent(new Event("change")); }
   $("pTrosk").value = g; lagra("mt:pTrosk:" + v, String(g)); lagra("mt:favVal", v + ":" + g); sattParam(true); favMarkera(); probVisa();
+  if (P.detalj) favDetaljHamta();   // 23/11: nytt falt i detaljlaget hamtas for detaljrutan
 }
 async function favIn() {
   favSpar = {}; for (const id of FAV_FALT) favSpar[id] = $(id).value;
@@ -1525,11 +1527,58 @@ async function favIn() {
   if (idx.v.includes(v)) favVal(v, +g); else favVal("by", 27);
   ritaOmrade(); probVisa();
 }
+// ===================================================================
+// 23/11: DETALJ HAR (Favoriter). Knappen -> nasta klick pa kartan valjer mitten. Valt falt (eller vald
+// vinterkombination) hamtas fran met.no for 400 x 400 km i 2,5 km (161 x 161 rutor = ungefar lika mycket som
+// hela Sverige i 10 km). Detaljrutan ritas ovanpa oversikten (finast overst). "Hela Sverige" = tillbaka till
+// den forhamtade rutan, det hamtade ligger kvar. Byter man favorit i detaljlaget hamtas den for samma ruta.
+// ===================================================================
+const DETALJ_KM = 400, DETALJ_UPPL = "1";
+let favDetaljVantar = false;
+function favDetaljKnappar() {
+  const b = $("favDetalj"), h = $("favHela"); if (!b) return;
+  b.setAttribute("aria-pressed", String(favDetaljVantar)); h.hidden = !P.detalj;
+  $("karta").classList.toggle("valjDetalj", favDetaljVantar);
+  $("favDetaljInfo").textContent = favDetaljVantar ? "Klicka på kartan där du vill ha detalj …" :
+    P.detalj ? "400 × 400 km i 2,5 km runt " + P.detalj.lat.toFixed(2) + "N " + P.detalj.lon.toFixed(2) + "E" : "";
+}
+function favDetaljKlick(e) {
+  if (!fav || !favDetaljVantar) return false;
+  const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y);
+  favDetaljVantar = false;
+  if (!P.detalj) P.detaljSpar = { pStorlek: $("pStorlek").value, pUppl: $("pUppl").value };
+  P.detalj = { lat: ll.lat, lon: ll.lon };
+  $("lat").value = ll.lat.toFixed(4); $("lon").value = ll.lon.toFixed(4); $("punkt").value = "egen";
+  $("pStorlek").value = String(DETALJ_KM); $("pUppl").value = DETALJ_UPPL;
+  favDetaljKnappar(); ritaMarkorer(); ritaOmrade(); favDetaljHamta();
+  return true;
+}
+async function favDetaljHamta() {
+  if (!P.detalj) return;
+  if (P.upptagen) { status("Detalj: en hämtning pågår – vänta tills den är klar och tryck igen.", "fel"); return; }
+  P.fragar = false; ritaOmrade();
+  if (typeof komboAktiv === "function" && komboAktiv()) { await komboHamta(false); return; }
+  // vOverride = samma falt: da fragar cache-/oversiktsfaserna inte "Hamta resten" (knappen finns inte i Favoriter) utan hamtar vidare
+  P.vOverride = $("pParam").value;
+  try { await probHamta(false); } finally { P.vOverride = null; await probVisa(); }
+}
+function favDetaljAv() {
+  favDetaljVantar = false;
+  if (P.detalj && P.detaljSpar) { $("pStorlek").value = P.detaljSpar.pStorlek; $("pUppl").value = P.detaljSpar.pUppl; }
+  P.detalj = null; P.detaljSpar = null; favDetaljKnappar();
+}
+(function favDetaljInit() {
+  const b = $("favDetalj"), h = $("favHela"); if (!b) return;
+  b.addEventListener("click", () => { favDetaljVantar = !favDetaljVantar; favDetaljKnappar();
+    if (favDetaljVantar) status("Klicka på kartan där du vill ha detalj (400 × 400 km i 2,5 km).", ""); });
+  h.addEventListener("click", () => { favDetaljAv(); ritaOmrade(); P.fragar = false; probVisa(); status("Hela den förhämtade rutan – detaljområdet ligger kvar ovanpå.", ""); });
+})();
 function favUt() {
   if (!favSpar) return;
   try { favUtInre(); } catch (e) { favSpar = null; }
 }
 function favUtInre() {
+  favDetaljAv();
   $("pKorningVal").value = favSpar.pKorningVal; const kv = $("pKorningVal").value; bytKorning(kv === "senaste" ? P.senast : kv);
   for (const id of FAV_FALT) if (favSpar[id] !== undefined) $(id).value = favSpar[id];   // efter korningsbytet (som annars flyttar perioden)
   favSpar = null; sattParam(true); if (typeof komboSynka === "function") komboSynka();

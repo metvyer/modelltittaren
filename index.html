@@ -90,7 +90,8 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #karta .okust { fill: none; stroke: var(--kustO); stroke-width: 1.1; } #karta .osjo { stroke-width: .7; }
 #karta .ograns { fill: none; stroke: var(--gransO); stroke-width: 1.4; stroke-dasharray: 6 3; }
 #karta .mk { cursor: pointer; }
-#karta.fri .mk { cursor: crosshair; }   /* fri punkt: markeringar ar inte klickbara */
+#karta.fri .mk { cursor: crosshair; }
+#karta.valjDetalj, #karta.valjDetalj .mk { cursor: crosshair; }   /* 23/11: Detalj har - valj punkt */   /* fri punkt: markeringar ar inte klickbara */
 #karta .mk text { fill: var(--mkfg); paint-order: stroke; stroke: var(--land); font-family: var(--font); font-weight: 600; }
 .kartforklaring { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--dim); }
 .kartforklaring .mk { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--mkfg); background: var(--mkbg); vertical-align: -1px; margin-right: 4px; }
@@ -373,7 +374,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 <div id="testskylt" class="testskylt" hidden role="dialog" aria-modal="true" aria-labelledby="testskyltRubrik">
   <div class="testruta">
     <h2 id="testskyltRubrik">Testsida – inte för operativt bruk</h2>
-    <p>Modelltittaren är under utveckling och testas fortfarande. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
+    <p>Modelltittaren är en testsida och den är under utveckling. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
     <p><b>Använd inte sidan som underlag för operativa beslut eller prognoser.</b> Använd ordinarie verktyg och produkter.</p>
     <p><b>Det du tittar på kan andra se.</b> Med standardvalet går hämtningarna via en gemensam mellanserver, och andra användare kan se vilka områden och punkter som hämtats. En delad vy ser alla som har länken. Vill du lämna färre spår: välj <i>Osynligt</i> eller <i>Av</i> under ”Hämta MEPS via mellanservern” längst ner, och använd inte Dela. Helt spårlöst blir det inte – met.no, Cloudflare och övriga källor ser vad som hämtas – men det blir inte samlat och lätt att se för andra.</p>
     <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo.</p>
@@ -454,6 +455,8 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <div class="favrad"><b>Sikt &lt;</b><span id="favSikt"></span></div>
     <div class="favrad"><b>Molnbas &lt;</b><span id="favBas"></span></div>
     <div class="favrad" title="Kombinerad sannolikhet (per medlem och timme). Inte förhämtat – hämtas från met.no när du trycker (kan ta en stund första gången, sedan ur mellanserverns cache)."><b>Vinter</b><span id="favVinter"></span></div>
+    <!-- 23/11: Detalj har - en ruta 400 x 400 km i 2,5 km runt en punkt man klickar (lika mycket data som hela Sverige i 10 km) -->
+    <div class="favrad"><b>Detalj</b><button class="sek liten" id="favDetalj" aria-pressed="false" title="Tryck, klicka sedan på kartan: valt fält hämtas för 400 × 400 km i 2,5 km runt punkten (från met.no, ca 15–60 s). Detaljrutan ritas ovanpå översikten.">🔍 Detalj här</button><button class="sek liten" id="favHela" hidden title="Tillbaka till hela den förhämtade rutan. Det hämtade detaljområdet ligger kvar ovanpå.">Hela Sverige</button><span id="favDetaljInfo" class="dim"></span></div>
   </div>
   <div class="pkontroller">
     <div class="falt ejFav"><label for="pKorningVal">Körning</label><select id="pKorningVal"></select></div>
@@ -474,7 +477,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <div class="falt ejFav"><label>&nbsp;</label><label class="kryss"><input type="checkbox" id="pAuto" checked> Hämta automatiskt när jag stegar</label></div>
     <div class="falt doldfalt"><label for="pSteg">Steg</label><select id="pSteg"><option value="1">1 h</option><option value="per">periodens längd</option><option value="3">3 h</option><option value="6">6 h</option><option value="12">12 h</option></select></div>
     <div class="falt ejFav"><label for="pDt">Timmar att använda</label><select id="pDt"><option value="1">varje timme</option><option value="3">var 3:e timme</option><option value="6">var 6:e timme</option></select></div>
-    <div class="falt ejFav"><label for="pStorlek">Område</label><select id="pStorlek"><option value="75">75 km</option><option value="150" selected>150 km</option><option value="300">300 km</option><option value="600">600 km</option><option value="1000">1000 km</option><option value="sv">Hela förhämtade rutan (GitHub)</option></select></div>
+    <div class="falt ejFav"><label for="pStorlek">Område</label><select id="pStorlek"><option value="75">75 km</option><option value="150" selected>150 km</option><option value="300">300 km</option><option value="400">400 km</option><option value="600">600 km</option><option value="1000">1000 km</option><option value="sv">Hela förhämtade rutan (GitHub)</option></select></div>
     <div class="falt ejFav"><label for="pUppl">Upplösning</label><select id="pUppl"><option value="1">2,5 km</option><option value="2" selected>5 km</option><option value="4">10 km</option><option value="8">20 km</option></select></div>
     <button id="pHamta" class="ejFav">Hämta fält</button><select id="pHamtVal" class="ejFav hamtval" title="Vad Hämta fält hämtar: den valda perioden, eller fler timmar framåt på en gång (då går det snabbt att stega och dra perioden i tidslinjen). Valet sparas."><option value="per">▾ vald period</option><option value="6">▾ +6 h framåt</option><option value="12">▾ +12 h framåt</option><option value="24">▾ +24 h framåt</option><option value="alla">▾ hela körningen</option></select><button id="pRest" class="sek ejFav" hidden title="Hämta hela ditt område från met.no (det som visas nu kom ur mellanserverns cache och täcker inte allt)">Hämta resten</button><button id="pStopp" class="sek ejFav" disabled>Stopp</button>
   </div>
@@ -2604,6 +2607,7 @@ function kartKlick(e, mal) {
   if (typeof ritKlick === "function" && ritKlick(e, mal)) return;   // 21/11: ritlinjer (rita.js)
   if (mal && mal.closest && mal.closest(".varnsym") && typeof varnKlick === "function") { varnKlick(e, mal); return; }   /* 22/11: tryck pa varningssymbol = info */
   if (mal && mal.closest && mal.closest(".omretik") && typeof omrKlick === "function") { omrKlick(e, mal); return; }   /* 22/11: tryck pa omradesnamn = info */
+  if (lage === "p" && typeof favDetaljKlick === "function" && favDetaljKlick(e)) return;   /* 23/11: Detalj har (Favoriter) */
   const sel = $("punkt"), fri = friPunkt || e.shiftKey, mk = !fri && mal && mal.closest ? mal.closest(".mk") : null;
   // 21/11: TAF-fliken - klick pa en flygplats laggs till/tas bort i bevakningen
   if (lage === "taf") {
@@ -2729,7 +2733,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261123-1005"></script>
+<script src="sannolikhet.js?v=20261123-1040"></script>
 <script src="kombo.js?v=20261123-0950"></script>
 <script src="m0karta.js?v=20261123-0930"></script>
 <script src="taf.js?v=20261123-0925"></script>
