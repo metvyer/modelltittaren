@@ -172,15 +172,22 @@ function komboSynka() {
   if (K) { if (K.A) $("pKomboAEt").textContent = K.A.namn + " (" + K.A.enhet + ")"; $("pKomboBEt").textContent = K.B.namn + " (" + K.B.enhet + ")";
     if ($("pVisa").value !== "sannolikhet") { $("pVisa").value = "sannolikhet"; } }
   $("pVisa").disabled = !!K; $("pParam").disabled = !!K;
+  // 23/11: tala om VARFOR Visa (medlem, max, min, medel) ar last - forut syntes bara en gra ruta
+  const lv = document.querySelector('label[for="pVisa"]');
+  if (lv) { lv.textContent = K ? "Visa (låst – kombination vald)" : "Visa"; lv.title = K ? "Kombinationen " + K.namn + " är vald under Kombinera. Välj ”– ingen –” där för att kunna välja enskild medlem, max, min eller medel." : ""; }
+  $("pVisa").title = lv ? lv.title : "";
 }
 function komboVal(nyckel, A, B) {   // anvands av vinterknapparna i Favoriter och av Dela
   $("pKombo").value = nyckel || ""; const K = komboAktiv();
   if (K) { $("pKomboA").value = A !== undefined ? A : K.A ? K.A.std : ""; $("pKomboB").value = B !== undefined ? B : K.B.std; }
-  lagra("mt:pKombo", $("pKombo").value); komboSynka();
+  if (!fav) lagra("mt:pKombo", $("pKombo").value);   // 23/11: Favoriternas vinterknappar ska inte folja med till Sannolikhet
+  komboSynka();
 }
 (function komboInit() {
   const s = $("pKombo"); s.add(new Option("– ingen –", ""));
   for (const k in KOMBO) s.add(new Option(KOMBO[k].namn, k));
+  // 23/11: en gang - nollstall en kombination som Favoriterna lamnat kvar (den lasta Visa i Sannolikhet)
+  if (!lasa("mt:komboRensad")) { lagra("mt:pKombo", ""); lagra("mt:komboRensad", "1"); }
   const sp = lasa("mt:pKombo") || ""; s.value = KOMBO[sp] ? sp : "";
   const K = komboAktiv(); if (K) { $("pKomboA").value = lasa("mt:pKomboA:" + s.value) || (K.A ? K.A.std : ""); $("pKomboB").value = lasa("mt:pKomboB:" + s.value) || K.B.std; }
   komboSynka();

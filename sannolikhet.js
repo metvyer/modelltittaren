@@ -1614,6 +1614,7 @@ function favUtInre() {
   $("pKorningVal").value = favSpar.pKorningVal; const kv = $("pKorningVal").value; bytKorning(kv === "senaste" ? P.senast : kv);
   for (const id of FAV_FALT) if (favSpar[id] !== undefined) $(id).value = favSpar[id];   // efter korningsbytet (som annars flyttar perioden)
   favSpar = null; sattParam(true); if (typeof komboSynka === "function") komboSynka();
+  lagra("mt:pKombo", $("pKombo").value);   // 23/11: det som galler i Sannolikhet sparas (inte Favoriternas val)
 }
 function bytLage(nytt) {
   if (nytt !== (fav ? "f" : lage) && typeof visaTestskylt === "function") visaTestskylt();   // testskylt vid flikbyte (19/11 kvall)
