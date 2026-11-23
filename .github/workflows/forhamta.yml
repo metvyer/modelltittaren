@@ -60,6 +60,14 @@ jobs:
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
           rm -rf .git
 
+      # NYTT 23/11: samma oversikt till Cloudflare R2 (sidan laser darifran via mellanservern, GitHub ar reserv)
+      - name: Sverigeöversikten till R2
+        if: steps.ens.outputs.andrat == 'ja'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_HEMLIG }}
+        run: bash verktyg/till_r2.sh || echo "R2-uppladdningen misslyckades (sidan anvander GitHub)"
+
       - name: Publicera Sverigeöversikten direkt
         if: steps.ens.outputs.andrat == 'ja'
         env:

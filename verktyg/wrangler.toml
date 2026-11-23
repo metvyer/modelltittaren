@@ -27,6 +27,11 @@ binding = "DB"
 database_name = "modelltittaren-statistik"
 database_id = "7c2edb18-a928-492c-80fb-489aa41156b6"
 
+# NYTT 23/11: R2-lagring (Sverigeoversikten fran GitHub, SMHI-radarn 48 h). Aldrig publik - all lasning via /r2/...
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "modelltittaren-data"
+
 # SMHI-radarn samlas var 5:e minut (21/11 natt) - se smhiSamla i mellanserver.js
 [triggers]
 crons = ["*/5 * * * *"]

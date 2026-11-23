@@ -196,7 +196,8 @@ export class Kalla extends WorkerEntrypoint {
 // ms; png = bilden). Bilder aldre an 6 h tas bort. Sidan laser /radar/smhi/lista och /radar/smhi/<t>.png
 // och far darmed en hel loop direkt. Bara SMHI:s oppna data - inget om vem som tittar.
 const SMHI_RADAR = "https://opendata-download-radar.smhi.se/api/version/latest/area/sweden/product/comp";
-const SMHI_SPARA_H = 6;
+const SMHI_SPARA_H = 6;          // D1 (gammalt, tas bort efterhand)
+const SMHI_R2_H = 48;            // NYTT 23/11: i R2 sparas 48 h (radar/smhi/<t>.png)
 async function smhiSamla(env) {
   if (!env.DB) return "ingen DB";
   const j = await (await fetch(SMHI_RADAR + ".json", { headers: UA })).json();
@@ -204,15 +205,23 @@ async function smhiSamla(env) {
   if (!f) return "ingen png i lastFiles";
   const m = String(f.valid || "").match(/(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)/); if (!m) return "ingen tid";
   const t = Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5]);
-  const finns = await env.DB.prepare("SELECT 1 FROM radar_smhi WHERE t = ?").bind(t).first();
+  // 23/11: R2 om den finns (48 h), annars D1 som forut. Gamla D1-rader tas bort efter 6 h.
+  const finns = env.R2 ? await env.R2.head("radar/smhi/" + t + ".png") : await env.DB.prepare("SELECT 1 FROM radar_smhi WHERE t = ?").bind(t).first();
   let ut = "fanns redan " + f.valid;
   if (!finns) {
     const r = await fetch(SMHI_RADAR + "/latest.png?t=" + t, { headers: UA });
     ut = "png " + r.status;
     if (r.ok) { const b = await r.arrayBuffer();
-      if (b.byteLength > 1000) { await env.DB.prepare("INSERT OR IGNORE INTO radar_smhi (t, png, byte, hamtad) VALUES (?, ?, ?, ?)").bind(t, b, b.byteLength, new Date().toISOString()).run(); ut = "sparad " + f.valid + " " + b.byteLength + " B"; } }
+      if (b.byteLength > 1000) {
+        if (env.R2) await env.R2.put("radar/smhi/" + t + ".png", b, { httpMetadata: { contentType: "image/png" } });
+        else await env.DB.prepare("INSERT OR IGNORE INTO radar_smhi (t, png, byte, hamtad) VALUES (?, ?, ?, ?)").bind(t, b, b.byteLength, new Date().toISOString()).run();
+        ut = "sparad " + f.valid + " " + b.byteLength + " B" + (env.R2 ? " (R2)" : ""); } }
   }
   await env.DB.prepare("DELETE FROM radar_smhi WHERE t < ?").bind(Date.now() - SMHI_SPARA_H * 3600e3).run();
+  if (env.R2 && Math.random() < 0.1) {   // stada R2 ibland: bilder aldre an 48 h
+    const grans = Date.now() - SMHI_R2_H * 3600e3, l = await env.R2.list({ prefix: "radar/smhi/", limit: 1000 });
+    const bort = l.objects.map(o => o.key).filter(k => +k.slice(11, 24) < grans); if (bort.length) await env.R2.delete(bort.slice(0, 500));
+  }
   return ut;
 }
 
@@ -419,7 +428,12 @@ export default {
 
     // SMHI-radarn: lista med tider och bilderna (se smhiSamla)
     if (url.pathname === "/radar/smhi/lista") {
-      const rad = env.DB ? (await env.DB.prepare("SELECT t FROM radar_smhi ORDER BY t").all()).results : [];
+      let rad = env.DB ? (await env.DB.prepare("SELECT t FROM radar_smhi ORDER BY t").all()).results : [];
+      if (env.R2) {   // 23/11: R2 (48 h) + det som finns kvar i D1
+        const s = new Set(rad.map(r => r.t)); let cur;
+        do { const l = await env.R2.list({ prefix: "radar/smhi/", limit: 1000, cursor: cur }); for (const o of l.objects) s.add(+o.key.slice(11, 24)); cur = l.truncated ? l.cursor : null; } while (cur);
+        rad = [...s].filter(t => t > 0).sort((a, b) => a - b).map(t => ({ t }));
+      }
       // reserv om cron inte gatt: ar senaste bilden aldre an 7 min hamtas en ny i bakgrunden
       if (!rad.length || Date.now() - rad[rad.length - 1].t > 7 * 60e3) ctx.waitUntil(smhiSamla(env).catch(() => {}));
       return new Response(JSON.stringify(rad.map(r => r.t)), { headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=60" } });
@@ -434,9 +448,28 @@ export default {
     if (url.pathname === "/radar/smhi/samla") return new Response(String(await smhiSamla(env).catch(e => "fel: " + e)), { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
     const rm = url.pathname.match(/^\/radar\/smhi\/(\d{13})\.png$/);
     if (rm) {
+      if (env.R2) { const o = await env.R2.get("radar/smhi/" + rm[1] + ".png");
+        if (o) return new Response(o.body, { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400, immutable" } }); }
       const rad = env.DB ? await env.DB.prepare("SELECT png FROM radar_smhi WHERE t = ?").bind(+rm[1]).first() : null;
       if (!rad) return new Response("Finns inte", { status: 404, headers: cors });
       return new Response(new Uint8Array(rad.png), { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400, immutable" } });
+    }
+
+    // NYTT 23/11: R2 - Sverigeoversikten fran GitHub-forhamtningen. GET /r2/ens/index.json, /r2/ens/<DTG>/index.json,
+    // /r2/ens/<DTG>/<v>_<t>.bin.gz. Bara las, bara ens/. Cachas i Cloudflares cache (filerna andras aldrig: korningen
+    // ligger i namnet; index.json 60 s). R2 ar aldrig publik - det har ar enda vagen in.
+    const r2m = url.pathname.match(/^\/r2\/(ens\/(?:index\.json|\d{8}T\d{2}Z\/(?:index\.json|[a-z0-9]+_\d{1,2}\.bin\.gz)))$/);
+    if (r2m) {
+      if (!env.R2) return new Response("ingen R2", { status: 503, headers: cors });
+      const idx = /index\.json$/.test(r2m[1]), ck = new Request("https://r2.cache/" + r2m[1]);
+      let svar = idx ? null : await caches.default.match(ck);
+      if (!svar) {
+        const o = await env.R2.get(r2m[1]); if (!o) return new Response("Finns inte", { status: 404, headers: cors });
+        svar = new Response(o.body, { headers: { "Content-Type": idx ? "application/json" : "application/octet-stream", "Cache-Control": idx ? "public, max-age=60" : "public, max-age=86400, immutable" } });
+        if (!idx) ctx.waitUntil(caches.default.put(ck, svar.clone()));
+      }
+      const h = new Headers(svar.headers); for (const [k, v] of Object.entries(cors)) h.set(k, v);
+      return new Response(svar.body, { status: svar.status, headers: h });
     }
 
     // Statistik: senaste 31 dagarna per typ (oppet) + senaste hamtningarna fran kallorna.

@@ -562,10 +562,26 @@ async function snabbFasInre(o, oH, sakn, pa) {
 //  Hela Sverigerutan laggs in, sa kartan visar hela landet.
 // ===================================================================
 let SVIDX = null, SVT = 0;
+// NYTT 23/11: oversikten laggs ocksa i Cloudflare R2 (via mellanservern /r2/ens/...) med ett dygns korningar (idx.korningar).
+// R2 forst (ingen GitHub Pages-trafik), GitHub som reserv - och alltid GitHub med installningen "Av".
+const SV_R2 = "https://modelltittaren.metvyer.workers.dev/r2/ens/";
+const svR2ok = () => !(typeof VAG_LAGE !== "undefined" && VAG_LAGE === "av");
 async function svIndex() {
   if (SVIDX !== null && Date.now() - SVT < 300e3) return SVIDX;
-  try { const r = await fetch("forhamtat/ens/index.json", { cache: "no-store" }); SVIDX = r.ok ? await r.json() : false; } catch (e) { SVIDX = false; }
+  let r2 = null, gh = null;
+  if (svR2ok()) try { const r = await fetch(SV_R2 + "index.json", { cache: "no-store" }); if (r.ok) { r2 = await r.json(); r2.bas = SV_R2; } } catch (e) {}
+  try { const r = await fetch("forhamtat/ens/index.json", { cache: "no-store" }); if (r.ok) { gh = await r.json(); gh.bas = "forhamtat/ens/"; } } catch (e) {}
+  // nyast vinner (R2 och GitHub skrivs i samma korning, men en av dem kan ligga efter)
+  SVIDX = r2 && (!gh || r2.dtg >= gh.dtg) ? r2 : gh || false;
+  if (SVIDX && r2 && SVIDX !== r2) SVIDX.korningar = r2.korningar;   // aldre korningar finns bara i R2
   SVT = Date.now(); nyKorningInfo(); return SVIDX;
+}
+// index for en aldre korning (bara R2)
+const SVKOR = {};
+async function svIndexKor(dtg) {
+  if (SVKOR[dtg] !== undefined) return SVKOR[dtg];
+  try { const r = await fetch(SV_R2 + dtg + "/index.json"); SVKOR[dtg] = r.ok ? { ...(await r.json()), bas: SV_R2 } : null; } catch (e) { SVKOR[dtg] = null; }
+  return SVKOR[dtg];
 }
 // NYTT 21/11: skylt nar en ny korning finns hos met.no men den forhamtade oversikten pa GitHub annu ar fran forra.
 // Da hamtas nya korningens falt fran met.no (segare), och just medan korningen skrivs kan thredds hanga en stund.
@@ -578,15 +594,19 @@ function nyKorningInfo() {
     " och uppdateras nu på GitHub – det brukar ta 10–45 min. Under tiden hämtas nya körningens fält från met.no och kan gå segare; just när en körning skrivs kan thredds dessutom hänga en stund (sidan försöker då igen). Du kan välja körning " + gh.slice(9, 12) + " under Körning för att få det förhämtade direkt.";
 }
 setInterval(() => { if (SVIDX && P.senast && dtgDatum(P.senast) > dtgDatum(SVIDX.dtg)) { SVT = 0; svIndex(); } }, 120e3);   // titta efter ny GitHub-korning
-async function svFil(dtg, v, t) {
-  try { const r = await fetch("forhamtat/ens/" + dtg + "/" + v + "_" + t + ".bin.gz"); if (!r.ok) return null;
+async function svFil(dtg, v, t, bas) {
+  try { let r = await fetch((bas || "forhamtat/ens/") + dtg + "/" + v + "_" + t + ".bin.gz");
+    if (!r.ok && bas && bas !== "forhamtat/ens/") r = await fetch("forhamtat/ens/" + dtg + "/" + v + "_" + t + ".bin.gz");   // R2 svarade inte -> GitHub
+    if (!r.ok) return null;
     const gz = await r.arrayBuffer(), ds = new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"));
     const d = new Uint8Array(await new Response(ds).arrayBuffer()); d.gzKb = gz.byteLength / 1024; return d; } catch (e) { return null; }
 }
 // 23/11: varje parameter kan ha egen upplosning i oversikten (vinterfalten i 10 km: idx.vs = { sno: 4, ... })
 const svS = (idx, v) => (idx && idx.vs && idx.vs[v]) || (idx && idx.s) || 2;
 async function svFas(o, sakn) {
-  const idx = await svIndex(); if (!idx || idx.dtg !== o.dtg || !idx.v.includes(o.v) || o.s % svS(idx, o.v)) return { antal: 0 };
+  let idx = await svIndex();
+  if (idx && idx.dtg !== o.dtg && (idx.korningar || []).includes(o.dtg)) idx = await svIndexKor(o.dtg);   // 23/11: aldre korning ur R2
+  if (!idx || idx.dtg !== o.dtg || !idx.v.includes(o.v) || o.s % svS(idx, o.v)) return { antal: 0 };
   const S = svS(idx, o.v), b16 = PPARAM[o.v].bitar === 16;   // 16 bitar (nederbord/snofall): tva byte per varde, little-endian
   const r = svRektangel(o.s, idx);
   // 20/11 kvall: som snabbfasen - overlappar omradet rutan bara delvis tas den delen harifran (andelen = tackt)
@@ -601,7 +621,7 @@ async function svFas(o, sakn) {
   let antal = 0, kb = 0;
   for (const t of tider) {
     status("Hämtar den förhämtade översikten från GitHub: +" + t + " h …");
-    const d0 = await svFil(o.dtg, o.v, t); if (!d0) continue;
+    const d0 = await svFil(o.dtg, o.v, t, idx.bas); if (!d0) continue;
     const d = b16 ? new Uint16Array(d0.buffer, 0, Math.floor(d0.byteLength / 2)) : d0; if (d.length < ENS_MEDL * NY * NX) continue;
     kb += d0.gzKb || 0;
     let arr = d;

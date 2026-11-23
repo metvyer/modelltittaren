@@ -434,8 +434,9 @@ SV_PARAM = {
 # 23/11: VINTERFALTEN (bara 15 okt - 31 mars) i 10 km (s = 4): det sidan behover for Snodrev, Ishalka och Rimfrost.
 # Nederbord/snofall ackumulerat (summa) i 16 bitar (0,1 mm, little-endian, 65535 = saknas) - som PPARAM i sannolikhet.js.
 SV_VINTER = {
-    "sno": {"var": "snowfall_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 4},
-    "nb": {"var": "precipitation_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 4},
+    # 23/11 em: nederbord och snofall i 5 km (s = 2) - skurar/snobyar syns battre. Lagras i R2.
+    "sno": {"var": "snowfall_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 2},
+    "nb": {"var": "precipitation_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 2},
     "t0": {"var": "air_temperature_0m", "konv": lambda v: v - 273.15, "tabell": _trapp([[-50, 40, 1]]), "s": 4},
     "t2": {"var": "air_temperature_2m", "konv": lambda v: v - 273.15, "tabell": _trapp([[-50, 40, 1]]), "s": 4},
     "rh": {"var": "relative_humidity_2m", "konv": lambda v: __import__("numpy").minimum(100, __import__("numpy").where(v > 1.5, v, v * 100)), "tabell": None, "steg": 1, "s": 4},
@@ -523,7 +524,7 @@ def varv_ens(ut):
     if not dtg: print("Sverige: ingen komplett ensemblekorning hittad."); return 0
     vinter = vintersasong(dtg)
     params = dict(SV_PARAM); params.update(SV_VINTER if vinter else {})
-    if gammal.get("dtg") == dtg and gammal.get("klar") and all(gammal.get(k) == SV[k] for k in ("y0", "y1", "x0", "x1", "s")) and set(gammal.get("v", [])) == set(params):
+    if gammal.get("dtg") == dtg and gammal.get("klar") and all(gammal.get(k) == SV[k] for k in ("y0", "y1", "x0", "x1", "s")) and set(gammal.get("v", [])) == set(params) and gammal.get("vs", {}) == {v: pa["s"] for v, pa in params.items() if pa.get("s")}:
         print(f"Sverige: {dtg} finns redan."); return 0
     t0 = time.time(); STAT["anrop"] = 0; STAT["byte"] = 0
     y0, y1, x0, x1, s_ = SV["y0"], SV["y1"], SV["x0"], SV["x1"], SV["s"]
