@@ -42,7 +42,10 @@ async function komboHamta(auto) {
   const K = komboAktiv(); if (!K || P.upptagen) return;
   // 22/11 kvall: "Snödrev – del 1 av 2 (snöfall)" star forst i varje status medan delarna hamtas (status() i index.html),
   // och stapeln under visar anropen for den del som hamtas
-  const t0 = Date.now();
+  // 23/11: misslyckas en del STOPPAR kombinationen och felet star kvar i rott med delens namn (forut nollstallde
+  // nasta del felflaggan och felet skrevs over av "behover ... hamtas ..." som stod kvar for alltid). Blir
+  // kombinationen tom fast alla delar ar hamtade sags vad som saknas (falt, timme, rutnat).
+  const t0 = Date.now(); let fel = null;
   try {
     for (let di = 0; di < K.delar.length; di++) { const p = K.delar[di];
       if (stoppad && P.komboStopp) break;
@@ -50,9 +53,17 @@ async function komboHamta(auto) {
       P.komboDel = K.namn + " – del " + (di + 1) + " av " + K.delar.length + " (" + PPARAM[p].namn.split(",")[0].toLowerCase() + ")";
       status("Hämtar …");
       await probHamta(auto === true);
+      if (P.fragar) { fel = P.komboDel + " avbröts: " + $("pStatus").textContent.replace(/^.*?\): /, ""); break; }
     }
-  } finally { P.vOverride = null; P.listaOverride = null; P.komboStopp = false; P.komboDel = null; await probVisa();
-    if (P.komboTom === false && !/fel/.test($("pStatus").className)) status("Klart: " + K.namn + " – alla delar hämtade (" + Math.round((Date.now() - t0) / 1000) + " s)."); }
+  } finally { const delNamn = P.komboDel; P.vOverride = null; P.listaOverride = null; P.komboStopp = false; P.komboDel = null;
+    P.komboSakn = null; await probVisa();
+    if (fel) { status(fel, "fel"); P.fragar = true; }
+    else if (stoppad) { /* Stoppad-texten fran probHamta far sta kvar */ }
+    else if (P.komboTom === false && !/fel/.test($("pStatus").className)) status("Klart: " + K.namn + " – alla delar hämtade (" + Math.round((Date.now() - t0) / 1000) + " s).");
+    else if (P.komboTom) { const s = P.komboSakn;
+      status(K.namn + " kunde inte räknas" + (s ? ": " + PPARAM[s.p].namn.split(",")[0].toLowerCase() + " saknas för " + tidText(s.t) + " i det valda området (rutnät " +
+        (s.s * 2.5).toLocaleString("sv-SE") + " km)" : "") + ". Tryck " + (fav ? K.namn : "Hämta fält") + " igen – kvarstår det, byt till 3-timmarssteg eller kortare period.", "fel");
+      P.fragar = true; } }
 }
 
 // Sannolikheten för ett sparat område e (det första fältets rutnät). null om något saknas.
@@ -69,10 +80,10 @@ async function komboOmrade(e, K, A, B) {
     const h = {}, sakn = {};
     for (const p of K.delar) {
       const pa = PPARAM[p], ms = SAKN[pa.bitar], T = pa.tabell;
-      const d = await timData({ ...o, v: p }, t); if (!d) return null;
+      const d = await timData({ ...o, v: p }, t); if (!d) { P.komboSakn = { p, t, s: o.s }; return null; }
       const v = new Float32Array(N);
       if (pa.agg === "summa") {   // mangd per timme = (ack(t) - ack(t - dt)) / dt
-        const f = t - dt >= 0 ? await timData({ ...o, v: p }, t - dt) : null; if (t - dt >= 0 && !f) return null;
+        const f = t - dt >= 0 ? await timData({ ...o, v: p }, t - dt) : null; if (t - dt >= 0 && !f) { P.komboSakn = { p, t: t - dt, s: o.s }; return null; }
         for (let i = 0; i < N; i++) v[i] = d[i] === ms || (f && f[i] === ms) ? NaN : Math.max(0, d[i] - (f ? f[i] : 0)) * pa.steg / (f ? dt : 1);
       } else for (let i = 0; i < N; i++) v[i] = d[i] === ms ? NaN : T ? T[d[i]] : d[i] * pa.steg;
       h[p] = v;
@@ -127,8 +138,9 @@ async function komboVisa(g, rensa) {
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa: PPARAM[K.delar[0]], visa: "sannolikhet", kombo: K } : null;
   let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
   if (!vis.length) {
-    if (!P.upptagen && !P.fragar && !P.vOverride) status("Kombinationen " + K.namn + " behöver " + K.delar.map(p => PPARAM[p].namn.split(",")[0].toLowerCase()).join(", ") +
-      " för perioden" + (fav ? " – hämtas …" : " – tryck Hämta fält.") , "");
+    // 23/11: aldrig "hamtas ..." har (det lat som om nagot pagick) - i Favoriter skriver favVinter/komboHamta statusen
+    if (!P.upptagen && !P.fragar && !P.vOverride && !P.komboVantar) status("Kombinationen " + K.namn + " behöver " + K.delar.map(p => PPARAM[p].namn.split(",")[0].toLowerCase()).join(", ") +
+      " för perioden – tryck " + (fav ? K.namn : "Hämta fält") + ".", "");
     $("pSam").textContent = ""; return;
   }
   if (!komboRitade && typeof kartTomSkylt === "function") kartTomSkylt("Fältet är inläst – ingen ruta når " + PKLASS[0][0] + " % för " + K.namn.toLowerCase() + " (" + K.text(A, B) + "). Högsta sannolikhet " + Math.round(pmax * 100) + " %. Prova andra trösklar A/B.");

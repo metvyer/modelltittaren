@@ -1477,9 +1477,15 @@ function favVinter(k) {
   komboVal(k); favMarkera();
   // 22/11: P.komboTom i stallet for !P.varden, och vanta tills en pagaende hamtning (bytet till 10 km startar en) ar klar
   // - annars gjorde forsta trycket ingenting.
-  ritaOmrade(); P.komboTom = true;
-  probVisa().then(async () => { for (let i = 0; i < 240 && P.upptagen; i++) await new Promise(r => setTimeout(r, 500));
-    if ($("pKombo").value !== k) return; await probVisa(); if (P.komboTom) komboHamta(false); });
+  // 23/11: tydlig status under vantan, och sager till om vantan tar slut (forut stod "behover ... hamtas ..." kvar)
+  ritaOmrade(); P.komboTom = true; P.komboVantar = true; const namn = KOMBO[k] ? KOMBO[k].namn : k;
+  status(namn + " – förbereder …");
+  probVisa().then(async () => { let i = 0;
+    for (; i < 240 && P.upptagen; i++) { if (i % 2 === 0) status(namn + " – väntar på pågående hämtning (" + Math.round(i / 2) + " s) …"); await new Promise(r => setTimeout(r, 500)); }
+    P.komboVantar = false;
+    if ($("pKombo").value !== k) return;
+    if (P.upptagen) { status(namn + " hämtades inte – en annan hämtning pågår fortfarande efter 2 min. Tryck " + namn + " igen när den är klar (eller Stopp).", "fel"); P.fragar = true; return; }
+    await probVisa(); if (P.komboTom) komboHamta(false); else status("Klart: " + namn + " – allt fanns redan sparat."); });
 }
 function favKnappar() {
   const vb_ = $("favVinter"); vb_.textContent = "";
