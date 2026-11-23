@@ -212,6 +212,9 @@ body.kombo .ejKombo { display: none; }
 .delarad.pausad { background: #ffedd5; border-color: #ea580c; color: #7c2d12; }
 @media (prefers-color-scheme: dark) { .delarad.foljer { background: #0f3d22; color: #bbf7d0; } .delarad.pausad { background: #4a2408; color: #fed7aa; } }
 .delarad[hidden] { display: none; }
+/* 23/11 kvall: nagon ber att fa sanda - fast gul rad overst hos agaren, oavsett om sandningsraden ar oppen */
+.delarad.delafragafast { position: sticky; top: 0; z-index: 51; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,.2); background: #fef3c7; border-color: #d97706; color: #78350f; }
+@media (prefers-color-scheme: dark) { .delarad.delafragafast { background: #4a3206; color: #fde68a; } }
 .delarad .delanamn { font-weight: 700; }
 .delarad.styr { position: sticky; top: 0; z-index: 50; font-weight: 500; box-shadow: 0 2px 6px rgba(0,0,0,.15); background: #dbeafe; border-color: #2563eb; color: #1e3a8a; }
 @media (prefers-color-scheme: dark) { .delarad.styr { background: #172554; color: #bfdbfe; } }
@@ -402,6 +405,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 </div>
 
 <div class="nykorning" id="nyKorning" hidden role="status"></div>
+<div class="delarad delafragafast" id="delaFragaFast" hidden role="alert"></div>
 <div class="delarad" id="delaRad" hidden role="status"></div>
 <div class="kontroller ejTaf">
   <div class="falt"><label for="punkt">Punkt</label><select id="punkt"></select></div>
@@ -2798,7 +2802,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="m0karta.js?v=20261123-1730"></script>
 <script src="taf.js?v=20261123-1145"></script>
 <script src="rita.js?v=20261121-1300"></script>
-<script src="dela.js?v=20261123-2145"></script>
+<script src="dela.js?v=20261123-2155"></script>
 <script src="bild.js?v=20261121-1900"></script>
 <script src="obs.js?v=20261123-1830"></script>
 <script src="exp.js?v=20261123-0945"></script>
