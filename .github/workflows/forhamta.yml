@@ -89,6 +89,24 @@ jobs:
       - name: Städa QFF (ska inte med på grenen data)
         run: rm -rf forhamtat/qff
 
+      # NYTT 23/11 kvall: modellens yttemp/temp/daggpunkt i 2,5 km for alla VViS-stationer (+2..+6) - bara till R2
+      - name: Hämta modellvärden för VViS-stationerna
+        id: vvmod
+        run: python3 verktyg/forhamta.py forhamtat vvmod || echo "VViS-modell misslyckades"
+
+      - name: VViS-modellvärden till R2
+        if: steps.vvmod.outputs.vvmod == 'ja'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_HEMLIG }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: aws s3 cp forhamtat/vvmod/senaste.json s3://modelltittaren-data/vvmod/senaste.json --endpoint-url https://64ff6e697fe9bcc9d141dd2798b79eee.r2.cloudflarestorage.com --content-type application/json --only-show-errors || echo "till R2 misslyckades"
+
+      - name: Städa VViS-modellvärden
+        run: rm -rf forhamtat/vvmod
+
       - name: Förhämta ny körning (varv 1, moln och vind)
         id: hamta
         run: python3 verktyg/forhamta.py forhamtat

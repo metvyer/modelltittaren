@@ -559,10 +559,10 @@ export default {
     // NYTT 23/11: R2 - Sverigeoversikten fran GitHub-forhamtningen. GET /r2/ens/index.json, /r2/ens/<DTG>/index.json,
     // /r2/ens/<DTG>/<v>_<t>.bin.gz. Bara las, bara ens/. Cachas i Cloudflares cache (filerna andras aldrig: korningen
     // ligger i namnet; index.json 60 s). R2 ar aldrig publik - det har ar enda vagen in.
-    const r2m = url.pathname.match(/^\/r2\/((?:ens|qff)\/(?:index\.json|\d{8}T\d{2}Z\/(?:index\.json|[a-z0-9]+_\d{1,2}\.bin\.gz)))$/);   // 23/11 kvall: + qff/
+    const r2m = url.pathname.match(/^\/r2\/((?:ens|qff)\/(?:index\.json|\d{8}T\d{2}Z\/(?:index\.json|[a-z0-9]+_\d{1,2}\.bin\.gz))|vvmod\/senaste\.json)$/);   // 23/11 kvall: + qff/
     if (r2m) {
       if (!env.R2) return new Response("ingen R2", { status: 503, headers: cors });
-      const idx = /index\.json$/.test(r2m[1]), ck = new Request("https://r2.cache/" + r2m[1]);
+      const idx = /(index|senaste)\.json$/.test(r2m[1]), ck = new Request("https://r2.cache/" + r2m[1]);
       let svar = idx ? null : await caches.default.match(ck);
       if (!svar) {
         const o = await env.R2.get(r2m[1]); if (!o) return new Response("Finns inte", { status: 404, headers: cors });

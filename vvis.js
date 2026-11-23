@@ -65,14 +65,26 @@ function vvJmfLage() {   // -> {ok, p (VViS-falt), v (MBR0-falt), text} eller {o
   if (!M0F.data || !M0F.o || M0F.t === null) return { ok: false, varfor: "Modellfältet är inte hämtat än." };
   const kt = M0F.t0 + M0F.t * 3600e3, nu = VV.lista.reduce((m, s) => s.t > m ? s.t : m, ""), dt = nu ? Math.abs(new Date(nu) - kt) / 3600e3 : 99;
   if (dt > 1) return { ok: false, varfor: "Kartans tid ligger " + Math.round(dt) + " h från mätningarna – stega till nu (±1 h)." };
+  vvM25Hamta();
   return { ok: true, p: j[0], v: M0F.v, text: j[1] };
 }
-function vvModellIKarta(s) {   // MBR0-faltets varde i stationens ruta (visningsenhet)
+// 23/11 kvall: forst stationens EGEN 2,5 km-ruta (forhamtat per korning, R2 vvmod/senaste.json, +2..+6) om kartan visar
+// samma korning och timme - annars MBR0-faltets 5 km-punkt (varannan ruta, inte medelvarde).
+const VV_M25 = "https://modelltittaren.metvyer.workers.dev/r2/vvmod/senaste.json";
+async function vvM25Hamta() {
+  if (VV.m25T && Date.now() - VV.m25T < 10 * 60e3) return;
+  VV.m25T = Date.now();
+  try { const r = await fetch(VV_M25, { cache: "no-store" }); if (r.ok) { VV.m25 = await r.json(); if (VV.par === "jmf") vvRita(); } } catch (e) {}
+}
+function vvModellIKarta(s) {   // -> { v, upp } i visningsenhet, eller null
+  const m = VV.m25, hi = m && m.dtg === M0F.dtg ? m.tider.indexOf(M0F.t) : -1, rad = hi >= 0 && m.st[s.id] && m.st[s.id][hi];
+  if (rad) { const [t0, t2, td] = rad, v = M0F.v === "t0" ? t0 : M0F.v === "t2" ? t2 : M0F.v === "td" ? td : M0F.v === "spread" && t0 != null && td != null ? +(t0 - td).toFixed(1) : null;
+    if (v != null) return { v, upp: "2,5 km" }; }
   const o = M0F.o, d = M0F.data, f = rutaF(s.lat, s.lon), y = Math.round((f.fy - o.y0) / o.s), x = Math.round((f.fx - o.x0) / o.s);
   if (y < 0 || y >= o.ny || x < 0 || x >= o.nx) return null;
-  const w = d[y * o.nx + x]; return isFinite(w) ? w : null;
+  const w = d[y * o.nx + x]; return isFinite(w) ? { v: w, upp: "5 km" } : null;
 }
-function vvDiff(s, J) { const ob = vvVarde(s, J.p), mo = vvModellIKarta(s); return ob == null || mo == null ? null : { ob, mo, d: +(ob - mo).toFixed(1) }; }
+function vvDiff(s, J) { const ob = vvVarde(s, J.p), mo = vvModellIKarta(s); return ob == null || !mo ? null : { ob, mo: mo.v, upp: mo.upp, d: +(ob - mo.v).toFixed(1) }; }
 // ---- ritning ----
 function vvFarg(s, J) {
   const p = VV.par, x = vvVarde(s, p);
@@ -217,7 +229,7 @@ function vvTipsText(s, diag) {
   const yta = [s.is && "is", s.sn && "snö", s.va && "vatten"].filter(Boolean);
   if (yta.length || s.g != null) rad.push('Vägbana: ' + (yta.length ? yta.join(", ") : "–") + (s.g != null ? ' · friktion ' + f(s.g, "", 2) : ''));
   if (VV.par === "jmf") { const J = vvJmfLage(), d = J.ok && vvDiff(s, J);
-    rad.push(J.ok ? (d ? 'VViS − modell: <b>' + (d.d > 0 ? "+" : "") + d.d.toFixed(1) + '°</b> (obs ' + d.ob.toFixed(1) + '°, modell ' + d.mo.toFixed(1) + '° – ' + J.text + ')' : 'VViS − modell: saknar värde') : '<span style="color:#6b7280">' + J.varfor + '</span>'); }
+    rad.push(J.ok ? (d ? 'VViS − modell: <b>' + (d.d > 0 ? "+" : "") + d.d.toFixed(1) + '°</b> (obs ' + d.ob.toFixed(1) + '°, modell ' + d.mo.toFixed(1) + '° i ' + d.upp + '-ruta – ' + J.text + ')' : 'VViS − modell: saknar värde') : '<span style="color:#6b7280">' + J.varfor + '</span>'); }
   rad.push(diag || '<span style="color:#6b7280">Diagram: håll musen still …</span>');
   rad.push('<span style="color:#6b7280;font-size:11px;display:inline-block;max-width:500px;line-height:1.3">Trafikverket VViS (observation). Vägtemp = en punkt i vägbanan; modellens yttemp = hudtemperaturen för en hel 2,5 km-ruta (skog, åker, snö) – jämför trender och fel, inte exakta grader. ' +
     'Nederbördstypen kommer från en optisk givare: runt 0 °C kan blötsnö och regn blandas ihop, och underkylt regn missas ibland. Alla stationer har inte typgivare. Halkrisken är Modelltittarens enkla tolkning.</span>');

@@ -639,6 +639,58 @@ def varv_qff(ut):
     return 0
 
 
+# NYTT 23/11 kvall: MODELLVARDEN I 2,5 KM FOR ALLA VVIS-STATIONER (VViS − modell i Karta MBR0, vvis.js).
+# En gang per korning: ett Sverige-utsnitt i FULL upplosning for yttemp, temp 2 m och fukt 2 m, timmarna +2..+6
+# (de som galler "nu" medan korningen ar den senaste). Stationernas rutor plockas ut har; bara ~833 x 5 x 3 varden
+# gar vidare (R2 vvmod/senaste.json). Stationslistan fran mellanserverns /vvis.
+VVMOD_TIDER = (2, 6)
+
+
+def varv_vvmod(ut):
+    import numpy as np
+    vdir = os.path.join(ut, "vvmod"); os.makedirs(vdir, exist_ok=True)
+    dtg, nt = senaste_korning()
+    if not dtg: print("VViS-modell: ingen korning."); return 0
+    def las(url):
+        req = urllib.request.Request(url, headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=60) as r: return json.load(r)
+    try:
+        g = las("https://modelltittaren.metvyer.workers.dev/r2/vvmod/senaste.json")
+        if g.get("dtg") == dtg: print(f"VViS-modell: {dtg} finns redan."); return 0
+    except Exception as e: print(f"VViS-modell: ingen tidigare fil ({e})", flush=True)
+    try: st = las("https://modelltittaren.metvyer.workers.dev/vvis")
+    except Exception as e: print(f"VViS-modell: stationslistan gick inte att hamta ({e})"); return 0
+    rr = {}
+    for x in st:
+        try: r_ = ruta(float(x["lat"]), float(x["lon"]))
+        except Exception: r_ = None
+        if r_: rr[str(x["id"])] = r_
+    if not rr: print("VViS-modell: inga stationer."); return 0
+    y0 = min(r[0] for r in rr.values()); y1 = max(r[0] for r in rr.values()); x0 = min(r[1] for r in rr.values()); x1 = max(r[1] for r in rr.values())
+    ny, nx = y1 - y0 + 1, x1 - x0 + 1; n = ny * nx; a, b = VVMOD_TIDER; nh = b - a + 1
+    t0 = time.time(); STAT["anrop"] = 0; STAT["byte"] = 0
+    print(f"VViS-modell: {dtg}, {len(rr)} stationer, utsnitt {ny}x{nx} (2,5 km), +{a}..+{b}", flush=True)
+    falt = {}
+    for k, var in (("t0", "air_temperature_0m"), ("t2", "air_temperature_2m"), ("rh", "relative_humidity_2m")):
+        vals = hamta_bin(BAS + FIL(dtg) + ".dods?" + enc(f"{var}[{a}:1:{b}][0][{y0}:1:{y1}][{x0}:1:{x1}]"), nh * n)
+        if vals is None: print(f"  {var}: misslyckades - avbryter"); return 0
+        falt[k] = np.asarray(vals, dtype=np.float64).reshape(nh, ny, nx)
+    def r1(v): return None if not math.isfinite(v) or abs(v) > 1e30 else round(v, 1)
+    ut_st = {}
+    for sid, (iy, ix) in rr.items():
+        T0 = falt["t0"][:, iy - y0, ix - x0] - 273.15; T2 = falt["t2"][:, iy - y0, ix - x0] - 273.15; RH = falt["rh"][:, iy - y0, ix - x0]
+        RH = np.where(RH > 1.5, RH / 100, RH)
+        with np.errstate(all="ignore"):
+            gg = np.log(np.clip(RH, 1e-6, 1)) + 17.62 * T2 / (243.12 + T2); TD = 243.12 * gg / (17.62 - gg)
+        ut_st[sid] = [[r1(T0[h]), r1(T2[h]), r1(TD[h])] for h in range(nh)]
+    js = {"dtg": dtg, "tider": list(range(a, b + 1)), "falt": ["t0", "t2", "td"], "st": ut_st,
+          "skapad": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
+    with open(os.path.join(vdir, "senaste.json"), "w", encoding="utf-8") as f: json.dump(js, f, separators=(",", ":"))
+    print(f"VViS-modell klar: {time.time() - t0:.0f} s, {STAT['anrop']} anrop, {STAT['byte'] / 1e6:.1f} MB fran thredds, {os.path.getsize(os.path.join(vdir, 'senaste.json')) / 1e3:.0f} kB")
+    with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as f: f.write("vvmod=ja\n")
+    return 0
+
+
 def main():
     ut = sys.argv[1] if len(sys.argv) > 1 else "forhamtat"
     if len(sys.argv) > 2 and sys.argv[2] == "tq":   # varv 2 (NYTT 19/11 em)
@@ -647,6 +699,8 @@ def main():
         return varv_ens(ut)
     if len(sys.argv) > 2 and sys.argv[2] == "qff":  # NYTT 23/11 kvall - marktryck for isobarerna (bara R2)
         return varv_qff(ut)
+    if len(sys.argv) > 2 and sys.argv[2] == "vvmod":  # NYTT 23/11 kvall - modellvarden 2,5 km for VViS-stationerna (bara R2)
+        return varv_vvmod(ut)
     thdir = os.path.join(ut, "th")
     os.makedirs(thdir, exist_ok=True)
     idxfil = os.path.join(thdir, "index.json")
