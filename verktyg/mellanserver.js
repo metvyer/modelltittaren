@@ -387,30 +387,7 @@ export default {
       return json({ id, andrad: nu });
     }
 
-    if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
-
-    // SMHI-radarn: lista med tider och bilderna (se smhiSamla)
-    if (url.pathname === "/radar/smhi/lista") {
-      const rad = env.DB ? (await env.DB.prepare("SELECT t FROM radar_smhi ORDER BY t").all()).results : [];
-      // reserv om cron inte gatt: ar senaste bilden aldre an 7 min hamtas en ny i bakgrunden
-      if (!rad.length || Date.now() - rad[rad.length - 1].t > 7 * 60e3) ctx.waitUntil(smhiSamla(env).catch(() => {}));
-      return new Response(JSON.stringify(rad.map(r => r.t)), { headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=60" } });
-    }
-    if (url.pathname === "/gh/status") {
-      const rad = env.DB ? (await env.DB.prepare("SELECT nyckel, tid, status FROM gh_start ORDER BY tid DESC LIMIT 20").all().catch(() => ({ results: [] }))).results : [];
-      return new Response(JSON.stringify({ nyckel: !!env.GH_NYCKEL, starter: rad }), { headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
-    }
-    if (url.pathname === "/gh/koll") {      // kor kollen nu (startar bara om nagot ar nytt - samma regler som cron)
-      return new Response(String(await ghForhamta(env).catch(e => "fel: " + e)), { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
-    }
-    if (url.pathname === "/radar/smhi/samla") return new Response(String(await smhiSamla(env).catch(e => "fel: " + e)), { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
-    const rm = url.pathname.match(/^\/radar\/smhi\/(\d{13})\.png$/);
-    if (rm) {
-      const rad = env.DB ? await env.DB.prepare("SELECT png FROM radar_smhi WHERE t = ?").bind(+rm[1]).first() : null;
-      if (!rad) return new Response("Finns inte", { status: 404, headers: cors });
-      return new Response(new Uint8Array(rad.png), { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400, immutable" } });
-    }
-
+    // (23/11: dessa tva POST-vagar maste ligga fore "Bara GET" nedan)
     // NYTT 23/11: TRAFIK FRAN GITHUB PAGES. Sidan summerar hur manga kB den laddat fran metvyer.github.io (PerformanceObserver,
     // transferSize - 0 om webblasaren hade filen sparad) och skickar summan med sendBeacon: POST /gh-trafik?kb=N.
     // Bara en siffra per dag sparas (ingen IP, inget om vad). GitHub Pages har en mjuk grans pa 100 GB/manad.
@@ -435,6 +412,30 @@ export default {
           .bind(idag(), new Date().toISOString().slice(11, 13), kor, k).run();
       } catch (e) {}
       return new Response(null, { status: 204, headers: cors });
+    }
+
+    if (req.method !== "GET") return new Response("Bara GET", { status: 405, headers: cors });
+
+    // SMHI-radarn: lista med tider och bilderna (se smhiSamla)
+    if (url.pathname === "/radar/smhi/lista") {
+      const rad = env.DB ? (await env.DB.prepare("SELECT t FROM radar_smhi ORDER BY t").all()).results : [];
+      // reserv om cron inte gatt: ar senaste bilden aldre an 7 min hamtas en ny i bakgrunden
+      if (!rad.length || Date.now() - rad[rad.length - 1].t > 7 * 60e3) ctx.waitUntil(smhiSamla(env).catch(() => {}));
+      return new Response(JSON.stringify(rad.map(r => r.t)), { headers: { ...cors, "Content-Type": "application/json", "Cache-Control": "public, max-age=60" } });
+    }
+    if (url.pathname === "/gh/status") {
+      const rad = env.DB ? (await env.DB.prepare("SELECT nyckel, tid, status FROM gh_start ORDER BY tid DESC LIMIT 20").all().catch(() => ({ results: [] }))).results : [];
+      return new Response(JSON.stringify({ nyckel: !!env.GH_NYCKEL, starter: rad }), { headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+    }
+    if (url.pathname === "/gh/koll") {      // kor kollen nu (startar bara om nagot ar nytt - samma regler som cron)
+      return new Response(String(await ghForhamta(env).catch(e => "fel: " + e)), { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
+    }
+    if (url.pathname === "/radar/smhi/samla") return new Response(String(await smhiSamla(env).catch(e => "fel: " + e)), { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8" } });
+    const rm = url.pathname.match(/^\/radar\/smhi\/(\d{13})\.png$/);
+    if (rm) {
+      const rad = env.DB ? await env.DB.prepare("SELECT png FROM radar_smhi WHERE t = ?").bind(+rm[1]).first() : null;
+      if (!rad) return new Response("Finns inte", { status: 404, headers: cors });
+      return new Response(new Uint8Array(rad.png), { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400, immutable" } });
     }
 
     // Statistik: senaste 31 dagarna per typ (oppet) + senaste hamtningarna fran kallorna.
