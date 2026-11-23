@@ -1,8 +1,12 @@
 # Prov GR (23/11): raknas graupel in i snofallet? Jamfor precipitation_amount_acc med regn + sno (+ graupel) i det-filen
 # och nederbord - snofall i ensemblen. Avgor om "flytande = nederbord - snofall" (Ishalka) ar ratt.
 import re, urllib.request
+import urllib.error
 def h(u):
-    with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "modelltittaren-test"}), timeout=180) as r: return r.read().decode()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "modelltittaren-test"}), timeout=180) as r: return r.read().decode()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"{e.code} {u[-120:]} :: {e.read()[:300]!r}")
 BAS = "https://thredds.met.no/thredds/dodsC/mepslatest/"
 kat = h("https://thredds.met.no/thredds/catalog/mepslatest/catalog.xml")
 det = sorted(set(re.findall(r"(meps_det_2_5km_\d{8}T\d\dZ)\.ncml", kat)))[-1]
@@ -22,7 +26,8 @@ def faltet(fil, var, idx):
 # ett stort glest omrade, timme 12 (ackumulerat fran start)
 dims = {}
 for t, n, d in re.findall(r"^\s*(\w+)\s+(\w+)(\[[^;]*);", dds, re.M): dims[n] = d.count("[")
-for v in namn:
+print("dims precipitation_amount_acc:", re.findall(r"precipitation_amount_acc(\[[^;]*);", dds)[:1])
+for v in [n for n in namn if not n.endswith(('_ml', '_pl'))]:
     nd = dims.get(v, 0)
     idx = "[12][0][0:20:940][0:20:880]" if nd == 4 else "[12][0:20:940][0:20:880]" if nd == 3 else None
     if not idx: print("  hoppar", v, nd, "dim"); continue
