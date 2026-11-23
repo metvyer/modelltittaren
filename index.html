@@ -144,13 +144,19 @@ body.obs #karta { width: 100%; height: 80vh; aspect-ratio: auto; margin: 0 auto;
 /* 23/11: satellit/radar - rutan kan dras i nedre hogra hornet (bredd OCH hojd), formen sparas (obs.js obsForm) */
 body.obs .kartram { resize: both; overflow: hidden; height: 80vh; max-width: 100%; min-width: 240px; min-height: 200px; }
 body.obs .kartram > #karta { height: 100%; }
+/* 23/11 kvall: ALLA flikar med karta (body.formbar, satts i obs.js) - rutan kan dras i hornet pa dator, formen sparas per flik */
+@media (min-width: 861px) { body.formbar .kartram { resize: both; overflow: hidden; max-width: 100%; min-width: 240px; min-height: 200px; }
+  body.formbar.egenForm .kartram > #karta { height: 100%; aspect-ratio: auto; }
+  body.formbar.egenForm .arbete { grid-template-columns: auto minmax(300px, 1fr); }
+  body.formbar.egenForm .kartram { max-width: calc(100vw - 380px); } }
 /* 23/11 (Jakob): tydligare dra-handtag - liten ruta nere till hoger som lyser upp nar musen ar over bilden */
-body.obs .kartram::before { content: "⇲"; position: absolute; right: 1px; bottom: 1px; width: 22px; height: 22px; display: grid; place-items: center; font-size: 16px; line-height: 1;
+body.formbar .kartram::before, body.obs .kartram::before { content: "⇲"; position: absolute; right: 1px; bottom: 1px; width: 22px; height: 22px; display: grid; place-items: center; font-size: 16px; line-height: 1;
   color: var(--dim); background: var(--panel); border: 1px solid var(--line); border-radius: 5px 0 4px 0; opacity: 0.75; pointer-events: none; z-index: 4; transition: all .15s; }
-body.obs .kartram:hover::before { color: #fff; background: var(--acc, #1f6feb); border-color: var(--acc, #1f6feb); opacity: 1; box-shadow: 0 0 0 3px rgba(31,111,235,.25); }
+body.formbar .kartram:hover::before, body.obs .kartram:hover::before { color: #fff; background: var(--acc, #1f6feb); border-color: var(--acc, #1f6feb); opacity: 1; box-shadow: 0 0 0 3px rgba(31,111,235,.25); }
 /* 23/11: egen form -> den vita panelen krymper med bilden (kolumnen far rutans bredd) */
-@media (min-width: 861px) { body.obs.obsForm .arbete { grid-template-columns: auto minmax(300px, 1fr); }
-  body.obs.obsForm .kartram { max-width: calc(100vw - 380px); } }
+@media (min-width: 861px) { body.obs.egenForm .arbete { grid-template-columns: auto minmax(300px, 1fr); }
+  body.obs.egenForm .kartram { max-width: calc(100vw - 380px); } }
+@media (max-width: 860px) { body.formbar .kartram::before { display: none; } }
 body.exp .baraTH, body.exp .baraP, body.exp .ejTaf { display: none !important; }
 body.exp #kProb, body.exp #kM0, body.exp #kSiff, body.exp #kOmr { display: none; } body:not(.exp) #kExp { display: none; }
 .exprub { margin: 0 0 4px; font-size: 15px; }
@@ -427,6 +433,8 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
     <button class="sek liten" id="kamKnapp" aria-pressed="false" title="Webbkameror (Windy.com) i kartutsnittet. Hovra = bild, klick = kamerans sida.">📷 Kameror</button>
     <button class="sek liten" id="vvisKnapp" aria-pressed="false" title="Vägväder från Trafikverkets VViS-stationer (vägtemp, luft, daggpunkt, vind, sikt, nederbördstyp, halkrisk). Observationer – gäller nu, inte kartans prognostid.">🛣 Vägväder</button><select id="vvisPar" class="liten" hidden title="Vad stationerna färgas efter. Halkrisk: röd = is/snö rapporterad eller underkylt regn, orange = vägtemp < +0,5 och vägtemp ≤ daggpunkt eller fukt/nederbörd (nu eller inom 3 h), gul = vägtemp ≤ +1 och nära daggpunkten, grön = ingen tydlig risk. VViS − modell: jämför med fältet i Karta MBR0."></select><select id="vvisH" class="liten" hidden title="Hur långt bakåt diagrammet i hovringsrutan visar (stationens mätningar). Modellens yttemp finns bara ca 1 dygn bakåt."><option value="6">6 h</option><option value="24">24 h</option><option value="72">72 h</option></select>
+    <button class="sek liten" id="qffKnapp" aria-pressed="false" title="Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan.">〰 Isobarer</button><select id="qffSteg" class="liten" hidden title="Avstånd mellan isobarerna"><option value="4">4 hPa</option><option value="2">2 hPa</option></select>
+    <button class="sek liten" id="formAter" hidden title="Kartrutans form: dra i nedre högra hörnet (⇲) för att ändra bredd och höjd – sparas per flik. Den här knappen återställer fliken.">⇲ Återställ form</button>
     <button class="sek liten" id="ritKnapp" aria-pressed="false" title="Rita en linje på kartan med en kort text (t.ex. Norr om denna: snö). Klicka punkt för punkt, högerklick, dubbelklick eller Enter = klar. Klicka på en linje för att ändra eller ta bort den. Följer med när du delar.">✏ Rita</button>
     <button class="sek liten" id="matKnapp" aria-pressed="false" title="Mät avstånd (NM och km) och kurs i kartan: klicka punkt för punkt. Högerklick, dubbelklick, Enter eller Esc = klar. Snabbare: högerklicka i kartan och välj Mät härifrån (mobil: håll fingret still på kartan).">📏 Mät</button><button class="sek liten" id="ritRensa" hidden title="Ta bort allt du ritat (alla linjer och områden). Klicka två gånger.">🗑 Rensa ritat</button>
     <span class="kartpos" id="kartPos"></span>
@@ -439,7 +447,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -2646,7 +2654,7 @@ function kartTips(e) {
   if (!mk && typeof omrTips === "function" && omrTips(e)) return;   /* 22/11: omraden (omr.js) */
   if (!mk && typeof kamTips === "function" && kamTips(e)) return;   /* 23/11: webbkameror (kam.js) */
   if (!mk && typeof vvisTips === "function" && vvisTips(e)) return;   /* 23/11: vagvader VViS (vvis.js) */
-  if ($("kTips").style.maxWidth === "420px") $("kTips").style.maxWidth = "";
+  if ($("kTips").style.maxWidth === "420px" || $("kTips").style.maxWidth === "520px") $("kTips").style.maxWidth = "";
   if (!mk && lage === "p" && e.pointerType !== "touch") { probTips(e); return; }
   if (!mk && lage === "m0" && e.pointerType !== "touch" && !friPunkt && m0Tips(e)) return;
   if (!mk || friPunkt || e.shiftKey || e.pointerType === "touch") { $("kTips").hidden = true; return; }
@@ -2792,13 +2800,14 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261122-2250"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261123-1115"></script>
+<script src="obs.js?v=20261123-1830"></script>
 <script src="exp.js?v=20261123-0945"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>
 <script src="omr.js?v=20261123-1115"></script>
 <script src="kam.js?v=20261123-1400"></script>
-<script src="vvis.js?v=20261123-1730"></script>
+<script src="vvis.js?v=20261123-1830"></script>
+<script src="qff.js?v=20261123-1830"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>

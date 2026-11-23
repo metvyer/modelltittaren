@@ -409,33 +409,44 @@ function kartLegend() {
 })();
 
 // ===================================================================
-// 23/11: FORM PA RUTAN (satellit/radar). .kartram far resize: both i CSS nar body har klassen obs. Storleken
-// sparas per flik (mt:obsForm:sat / mt:obsForm:rad) och satts bara i satellit/radar - i ovriga flikar tas den bort.
-// Med egen form far body klassen obsForm: da krymper den vita panelen med bilden (CSS i index.html).
+// 23/11: FORM PA RUTAN. Forst satellit/radar, 23/11 kvall ALLA flikar med karta (Jakob): body far klassen formbar
+// (pa dator kan .kartram dras i hornet, CSS i index.html). Storleken sparas per flik (mt:form:<flik>, f = Favoriter;
+// satellit/radar laser aven de gamla mt:obsForm:sat/rad). Med egen form far body klassen egenForm (+ obsForm i sat/rad):
+// da far kartan rutans hojd och den vita panelen krymper med bilden.
 // Kartans viewBox foljer rutans form av sig sjalv (ResizeObserver pa #karta i index.html).
 // ===================================================================
 (function obsForm() {
   const ram = document.querySelector(".kartram"); if (!ram || !window.ResizeObserver) return;
-  const nyckel = () => "mt:obsForm:" + (lage === "rad" ? "rad" : "sat");
-  const las = () => { try { const f = JSON.parse(lasa(nyckel()) || "null"); return f && f.w > 100 && f.h > 100 ? f : null; } catch (e) { return null; } };
+  const FLIKAR = ["th", "p", "m0", "taf", "sat", "rad"];
+  const flik = () => (typeof fav !== "undefined" && fav) ? "f" : lage;
+  const formbar = () => FLIKAR.includes(lage) && matchMedia("(min-width: 861px)").matches;
+  const nyckel = () => "mt:form:" + flik();
+  const las = () => { for (const k of [nyckel(), lage === "rad" ? "mt:obsForm:rad" : lage === "sat" ? "mt:obsForm:sat" : ""]) { if (!k) continue;
+    try { const f = JSON.parse(lasa(k) || "null"); if (f && f.w > 100 && f.h > 100) return f; } catch (e) {} } return null; };
+  const egen = on => { document.body.classList.toggle("egenForm", on); document.body.classList.toggle("obsForm", on && document.body.classList.contains("obs"));
+    const b = document.getElementById("formAter"); if (b) b.hidden = !on || document.body.classList.contains("obs"); };
   let senast = "";
-  const satt = () => { const ob = document.body.classList.contains("obs"), f = ob ? las() : null, k = ob ? nyckel() : "";
-    if (k === senast && (!ob || ram.style.width)) { document.body.classList.toggle("obsForm", ob && !!ram.style.width); panelBredd(); return; }   // samma flik - lat dragningen vara
+  const satt = () => { const fb = formbar(); document.body.classList.toggle("formbar", fb);
+    const f = fb ? las() : null, k = fb ? nyckel() : "";
+    if (k === senast && (!fb || ram.style.width)) { egen(fb && !!ram.style.width); panelBredd(); return; }   // samma flik - lat dragningen vara
     senast = k;
-    if (ob && f) { ram.style.width = Math.min(f.w, innerWidth - 380) + "px"; ram.style.height = f.h + "px"; }
+    if (fb && f) { ram.style.width = Math.min(f.w, innerWidth - 380) + "px"; ram.style.height = f.h + "px"; }
     else { ram.style.width = ""; ram.style.height = ""; }
-    document.body.classList.toggle("obsForm", ob && !!f); panelBredd(); };
-  // 23/11: den vita panelen far samma bredd som bilden (verktygsraden radbryts) - annars blir den kvar lika bred
+    egen(fb && !!f); panelBredd(); };
+  // den vita panelen far samma bredd som bilden (verktygsraden radbryts) - annars blir den kvar lika bred
   const panel = document.querySelector(".kartpanel");
-  const panelBredd = () => { if (!panel) return; panel.style.width = document.body.classList.contains("obsForm") && ram.style.width ? (ram.offsetWidth + 18) + "px" : ""; };
+  const panelBredd = () => { if (!panel) return; panel.style.width = document.body.classList.contains("egenForm") && ram.style.width ? (ram.offsetWidth + 18) + "px" : ""; };
   let klar = false, tm = 0;
-  new ResizeObserver(() => { if (!klar || !document.body.classList.contains("obs") || !ram.style.width && !ram.style.height) return;
-    document.body.classList.add("obsForm"); panelBredd();
+  new ResizeObserver(() => { if (!klar || !document.body.classList.contains("formbar") || !ram.style.width && !ram.style.height) return;
+    egen(true); panelBredd();
     clearTimeout(tm); tm = setTimeout(() => lagra(nyckel(), JSON.stringify({ w: Math.round(ram.offsetWidth), h: Math.round(ram.offsetHeight) })), 300); }).observe(ram);
   // nar anvandaren drar i hornet satter webblasaren style.width/height sjalv - da sparas det ovan
-  new MutationObserver(() => { klar = false; satt(); setTimeout(() => { klar = true; }, 100); }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
-  ram.addEventListener("pointerdown", () => { if (document.body.classList.contains("obs")) klar = true; });
-  const b = document.getElementById("obsFormAter");
-  if (b) b.addEventListener("click", () => { lagra(nyckel(), ""); ram.style.width = ""; ram.style.height = ""; document.body.classList.remove("obsForm"); panelBredd(); });
-  satt(); setTimeout(() => { klar = true; }, 100);
+  let forraFlik = "";
+  new MutationObserver(() => { const k = flik(); if (k === forraFlik) return; forraFlik = k;   // bara vid flikbyte (egna klassbyten ignoreras)
+    klar = false; satt(); setTimeout(() => { klar = true; }, 100); }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  ram.addEventListener("pointerdown", () => { if (document.body.classList.contains("formbar")) klar = true; });
+  const ater = () => { lagra(nyckel(), ""); if (lage === "sat" || lage === "rad") lagra("mt:obsForm:" + lage, ""); ram.style.width = ""; ram.style.height = ""; egen(false); panelBredd(); };
+  for (const id of ["obsFormAter", "formAter"]) { const b = document.getElementById(id); if (b) b.addEventListener("click", ater); }
+  addEventListener("resize", () => { if (formbar() !== document.body.classList.contains("formbar")) { senast = ""; satt(); } });
+  forraFlik = flik(); satt(); setTimeout(() => { klar = true; }, 100);
 })();

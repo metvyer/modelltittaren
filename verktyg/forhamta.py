@@ -598,12 +598,55 @@ def varv_ens(ut):
     return 0
 
 
+# NYTT 23/11 kvall: MARKTRYCK QFF for isobarerna (qff.js). HELA MEPS-omradet i 10 km (var 4:e ruta, 268 x 238) -
+# isobarer och H/L blir fel om bara ett utsnitt finns. +0..+36 ur det-filen (medlem 0), hPa i 16 bitar (0,1 hPa,
+# little-endian, 65535 = saknas). Bara till R2 (qff/<DTG>/p_<t>.bin.gz + qff/index.json) - inte grenen data.
+# Hoppar over om R2 redan har korningen (laser mellanserverns /r2/qff/index.json).
+QFF = {"y0": 0, "y1": 1068, "x0": 0, "x1": 948, "s": 4, "tider": 37}
+QFF_PA = {"var": "air_pressure_at_sea_level", "konv": lambda v: v / 100.0, "tabell": None, "steg": 0.1, "bitar": 16}
+
+
+def varv_qff(ut):
+    import gzip
+    qdir = os.path.join(ut, "qff"); os.makedirs(qdir, exist_ok=True)
+    dtg, nt = senaste_korning()
+    if not dtg: print("QFF: ingen komplett korning."); return 0
+    try:
+        req = urllib.request.Request("https://modelltittaren.metvyer.workers.dev/r2/qff/index.json", headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=30) as r: g = json.load(r)
+        if g.get("dtg") == dtg and g.get("klar"): print(f"QFF: {dtg} finns redan i R2."); return 0
+    except Exception as e: print(f"QFF: inget index i R2 ({e})", flush=True)
+    t0 = time.time(); STAT["anrop"] = 0; STAT["byte"] = 0
+    y0, y1, x0, x1, s_ = QFF["y0"], QFF["y1"], QFF["x0"], QFF["x1"], QFF["s"]
+    ny, nx = (y1 - y0) // s_ + 1, (x1 - x0) // s_ + 1; n = ny * nx
+    nt_ = min(QFF["tider"], nt)
+    dirn = os.path.join(qdir, dtg); os.makedirs(dirn, exist_ok=True)
+    for a in range(0, nt_, 13):
+        b = min(nt_ - 1, a + 12)
+        fr = enc(f"{QFF_PA['var']}[{a}:1:{b}][0][{y0}:{s_}:{y1}][{x0}:{s_}:{x1}]")
+        vals = hamta_bin(BAS + FIL(dtg) + ".dods?" + fr, (b - a + 1) * n)
+        if vals is None: print(f"QFF +{a}..+{b}: misslyckades - avbryter"); return 1
+        kod = _koda_np(QFF_PA, vals)
+        for k in range(b - a + 1):
+            with gzip.open(os.path.join(dirn, f"p_{a + k}.bin.gz"), "wb", compresslevel=6) as f: f.write(kod[k * n:(k + 1) * n].tobytes())
+        print(f"  QFF +{a}..+{b} klart ({time.time() - t0:.0f} s)", flush=True)
+    idx = {"dtg": dtg, "klar": True, "y0": y0, "y1": y1, "x0": x0, "x1": x1, "s": s_, "ny": ny, "nx": nx, "tider": list(range(nt_)),
+           "steg": 0.1, "enhet": "hPa", "skapad": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
+    with open(os.path.join(qdir, "index.json"), "w", encoding="utf-8") as f: json.dump(idx, f, ensure_ascii=False)
+    mb = sum(os.path.getsize(os.path.join(dirn, x)) for x in os.listdir(dirn)) / 1e6
+    print(f"QFF klart: {dtg}, {ny}x{nx}, {nt_} tider, {time.time() - t0:.0f} s, {STAT['anrop']} anrop, {STAT['byte'] / 1e6:.1f} MB fran thredds, {mb:.1f} MB filer")
+    with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as f: f.write("qff=ja\n")
+    return 0
+
+
 def main():
     ut = sys.argv[1] if len(sys.argv) > 1 else "forhamtat"
     if len(sys.argv) > 2 and sys.argv[2] == "tq":   # varv 2 (NYTT 19/11 em)
         return varv_tq(ut)
     if len(sys.argv) > 2 and sys.argv[2] == "ens":  # varv 0 (NYTT 20/11) - Sverigeoversikten
         return varv_ens(ut)
+    if len(sys.argv) > 2 and sys.argv[2] == "qff":  # NYTT 23/11 kvall - marktryck for isobarerna (bara R2)
+        return varv_qff(ut)
     thdir = os.path.join(ut, "th")
     os.makedirs(thdir, exist_ok=True)
     idxfil = os.path.join(thdir, "index.json")

@@ -74,6 +74,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow run publicera.yml -R "${{ github.repository }}" --ref main || echo "Kunde inte starta Publicera"
 
+      # NYTT 23/11 kvall: marktryck QFF (hela MEPS-omradet, 10 km, +0..+36) for isobarerna - bara till R2
+      - name: Hämta QFF
+        id: qff
+        run: python3 verktyg/forhamta.py forhamtat qff || echo "QFF misslyckades"
+
+      - name: QFF till R2
+        if: steps.qff.outputs.qff == 'ja'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_HEMLIG }}
+        run: bash verktyg/qff_till_r2.sh || echo "QFF till R2 misslyckades"
+
+      - name: Städa QFF (ska inte med på grenen data)
+        run: rm -rf forhamtat/qff
+
       - name: Förhämta ny körning (varv 1, moln och vind)
         id: hamta
         run: python3 verktyg/forhamta.py forhamtat

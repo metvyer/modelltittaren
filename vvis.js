@@ -149,7 +149,7 @@ async function vvModell(s) {   // MEPS yttemp (medlem 0) i stationens ruta: sena
   const d = { ny, aldst }; VV.mod.set(k, { t: Date.now(), d }); return d;
 }
 function vvDiagram(h, m) {   // SVG-strang. h = historik, m = modell (kan vara null)
-  const W = 400, H = 190, vL = 30, hR = 8, top = 8, nbH = 28, botT = H - 18, tempB = botT - nbH - 6;
+  const W = 500, H = 240, vL = 44, hR = 8, top = 8, nbH = 36, botT = H - 18, tempB = botT - nbH - 6;
   const nu = Date.now(), fram = VV.h === 6 ? 3 : VV.h === 24 ? 12 : 24, x0 = nu - VV.h * 3600e3, x1 = nu + fram * 3600e3;
   const X = t => vL + (t - x0) / (x1 - x0) * (W - vL - hR);
   const obs = h.obs.map(o => ({ ...o, ms: new Date(o.t).getTime() })).filter(o => o.ms >= x0);
@@ -171,13 +171,22 @@ function vvDiagram(h, m) {   // SVG-strang. h = historik, m = modell (kan vara n
   // nederbord: staplar (regn gront, sno blatt ovanpa), underkylt = rod markering ovanfor. Skala: hogsta stapeln, minst 0,3 mm
   const per = obs.length && obs[0].p || 5, nbTop = tempB + 6, nbMax = Math.max(0.3, ...obs.map(o => (o.r || 0) + (o.s || 0)));
   const bw = Math.max(1, X(x0 + per * 60e3) - X(x0) - 0.3);
-  s += '<line x1="' + vL + '" x2="' + (W - hR) + '" y1="' + botT + '" y2="' + botT + '" stroke="#d1d5db"/><text x="' + (vL - 3) + '" y="' + (nbTop + 9) + '" text-anchor="end" fill="#6b7280">nb</text>';
+  // 23/11 kvall: tydlig skala - stapelns hojd = mangd under en matperiod (5 min), toppen = hogsta vardet i perioden
+  const nbEtik = v => v.toFixed(v < 0.1 ? 2 : 1).replace(".", ",");
+  s += '<line x1="' + vL + '" x2="' + (W - hR) + '" y1="' + botT + '" y2="' + botT + '" stroke="#d1d5db"/>' +
+    '<line x1="' + vL + '" x2="' + (W - hR) + '" y1="' + (botT - nbH) + '" y2="' + (botT - nbH) + '" stroke="#eef0f3" stroke-dasharray="2 2"/>' +
+    '<line x1="' + (vL - 2) + '" x2="' + (vL - 2) + '" y1="' + (botT - nbH) + '" y2="' + botT + '" stroke="#9ca3af"/>' +
+    '<text x="' + (vL - 4) + '" y="' + (botT - nbH + 4) + '" text-anchor="end" fill="#6b7280">' + nbEtik(nbMax) + '</text>' +
+    '<text x="' + (vL - 4) + '" y="' + (botT - 1) + '" text-anchor="end" fill="#6b7280">0</text>' +
+    '<text x="2" y="' + (botT - nbH / 2 + 3) + '" fill="#6b7280" font-size="9">mm/' + per + '</text>';
   for (const o of obs) { const x = X(o.ms) - bw, hr = (o.r || 0) / nbMax * nbH, hs = (o.s || 0) / nbMax * nbH;
     if (hr > 0) s += '<rect x="' + x.toFixed(1) + '" y="' + (botT - hr).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hr.toFixed(1) + '" fill="#16a34a"/>';
     if (hs > 0) s += '<rect x="' + x.toFixed(1) + '" y="' + (botT - hr - hs).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hs.toFixed(1) + '" fill="#3b82f6"/>';
     if (o.nb === "freezing_rain") s += '<rect x="' + x.toFixed(1) + '" y="' + (nbTop - 4) + '" width="' + Math.max(2, bw).toFixed(1) + '" height="3" fill="#dc2626"/>';
     else if (o.nb && o.nb !== "no" && !hr && !hs) s += '<rect x="' + x.toFixed(1) + '" y="' + (botT - 1.5) + '" width="' + bw.toFixed(1) + '" height="1.5" fill="#9ca3af"/>'; }
-  s += '<text x="' + (W - hR) + '" y="' + (nbTop + 8) + '" text-anchor="end" fill="#6b7280">max ' + nbMax.toFixed(2).replace(".", ",") + ' mm/' + per + ' min</text>';
+  const sumR = obs.reduce((a, o) => a + (o.r || 0), 0), sumS = obs.reduce((a, o) => a + (o.s || 0), 0);
+  s += '<text x="' + (W - hR) + '" y="' + (nbTop + 8) + '" text-anchor="end" fill="#374151">summa ' + VV.h + ' h: ' + (sumR + sumS).toFixed(1).replace(".", ",") + ' mm' +
+    (sumS > 0.05 && sumR > 0.05 ? ' (regn ' + sumR.toFixed(1).replace(".", ",") + ', snö ' + sumS.toFixed(1).replace(".", ",") + ')' : sumS > 0.05 ? ' (snö)' : sumR > 0.05 ? ' (regn)' : '') + '</text>';
   // modell: aldsta korningen svag, senaste tydlig (streckad)
   s += linje(mser[0], 'stroke="#f97316" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="1 2"');
   s += linje(mser[1], 'stroke="#ea580c" stroke-width="1.8" stroke-dasharray="5 3"');
@@ -188,7 +197,7 @@ function vvDiagram(h, m) {   // SVG-strang. h = historik, m = modell (kan vara n
   const kt = r => r.dtg.slice(6, 8) + "/" + r.dtg.slice(9, 11) + "Z";
   return s + '</svg>' +
     '<div style="font-size:11px;color:#374151;margin-top:3px;line-height:1.35"><b style="color:#111827">━</b> vägtemp · <span style="color:#15803d">╌</span> daggpunkt · <span style="color:#9ca3af">━</span> lufttemp · ' +
-    '<span style="color:#16a34a">■</span> regn <span style="color:#3b82f6">■</span> snö <span style="color:#dc2626">▬</span> underkylt' +
+    '<span style="color:#16a34a">■</span> regn <span style="color:#3b82f6">■</span> snö <span style="color:#dc2626">▬</span> underkylt (staplar = mm per ' + per + ' min, skalan till vänster, vatteninnehåll)' +
     (m && (m.ny || m.aldst) ? '<br><span style="color:#ea580c">╌</span> MEPS yttemp, körning ' + (m.ny ? kt(m.ny) : "–") +
       (m.aldst ? ' · <span style="color:#f97316;opacity:.6">┄</span> äldre körning ' + kt(m.aldst) + ' (vad modellen trodde för ~1 dygn sedan)' : "") : '<br>(modellens yttemp kunde inte hämtas)') +
     (VV.h === 72 && m ? '<br>Modellen finns bara ca 1 dygn bakåt (met.no sparar 8 körningar).' : '') + '</div>';
@@ -210,7 +219,7 @@ function vvTipsText(s, diag) {
   if (VV.par === "jmf") { const J = vvJmfLage(), d = J.ok && vvDiff(s, J);
     rad.push(J.ok ? (d ? 'VViS − modell: <b>' + (d.d > 0 ? "+" : "") + d.d.toFixed(1) + '°</b> (obs ' + d.ob.toFixed(1) + '°, modell ' + d.mo.toFixed(1) + '° – ' + J.text + ')' : 'VViS − modell: saknar värde') : '<span style="color:#6b7280">' + J.varfor + '</span>'); }
   rad.push(diag || '<span style="color:#6b7280">Diagram: håll musen still …</span>');
-  rad.push('<span style="color:#6b7280;font-size:11px;display:inline-block;max-width:400px;line-height:1.3">Trafikverket VViS (observation). Vägtemp = en punkt i vägbanan; modellens yttemp = hudtemperaturen för en hel 2,5 km-ruta (skog, åker, snö) – jämför trender och fel, inte exakta grader. ' +
+  rad.push('<span style="color:#6b7280;font-size:11px;display:inline-block;max-width:500px;line-height:1.3">Trafikverket VViS (observation). Vägtemp = en punkt i vägbanan; modellens yttemp = hudtemperaturen för en hel 2,5 km-ruta (skog, åker, snö) – jämför trender och fel, inte exakta grader. ' +
     'Nederbördstypen kommer från en optisk givare: runt 0 °C kan blötsnö och regn blandas ihop, och underkylt regn missas ibland. Alla stationer har inte typgivare. Halkrisken är Modelltittarens enkla tolkning.</span>');
   return rad.join("\n");
 }
@@ -218,7 +227,7 @@ function vvTipsText(s, diag) {
 function vvVisa(s, x, y) {
   VV.tipsXY = [x, y]; const c = VV.hist.get(s.id + ":" + VV.h), cm = VV.mod.get(vvRuta(s).join(":"));
   const klar = c && Date.now() - c.t < 5 * 60e3 && cm;
-  $("kTips").style.maxWidth = "420px";
+  $("kTips").style.maxWidth = "520px";
   visaKTips(vvTipsText(s, klar ? vvDiagram(c.d, cm.d) : null), x, y, true);
   if (klar || VV.tipsId === s.id) return;
   VV.tipsId = s.id; clearTimeout(VV.tipsTim);
