@@ -26,6 +26,8 @@ async def main():
             if await t.evaluate("lage") == "sat": break
             await t.wait_for_timeout(100)
         print(f"flikbyte hos tittaren efter {time.time() - t0:.1f} s:", await t.evaluate("lage"))
+        await a.wait_for_timeout(5000)
+        print("knapp agare:", await a.evaluate("$('delaKnapp').textContent + ' | ' + $('delaKnapp').title.split('\\n')[0]"), " | knapp tittare:", await t.evaluate("$('delaKnapp').textContent"))
         print("info tittare:", await t.evaluate("$('delaInfo') ? $('delaInfo').textContent.slice(0, 120) : ''"))
         # del 1b: mottagaren ber att fa sanda -> gul rad overst hos agaren, aven med sandningsraden stangd
         await a.evaluate("DELA.panel = false; delaBygg()"); await t.evaluate("DELA.vem = 'Mottagare'; delaBeOmStyr()"); await a.wait_for_timeout(6000)
