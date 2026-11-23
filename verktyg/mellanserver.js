@@ -455,6 +455,31 @@ export default {
       return new Response(new Uint8Array(rad.png), { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400, immutable" } });
     }
 
+    // NYTT 23/11: WEBBKAMEROR fran Windy Webcams API (gratisnivan). Nyckeln WINDY_NYCKEL ar en Secret i Cloudflare.
+    // GET /kameror?bbox=N,E,S,W (grader, avrundas till 0,5) -> [{id, n, lat, lon, b (liten bild), t (senast), u (kamerans sida)}]
+    // Bildlankarna fran Windy galler 10 min -> cache 8 min. Max 50 kameror per fraga (Windys grans), mest populara forst.
+    if (url.pathname === "/kameror") {
+      const p = (url.searchParams.get("bbox") || "").split(",").map(Number);
+      if (!ok || p.length !== 4 || p.some(x => !isFinite(x)) || !env.WINDY_NYCKEL) return new Response("[]", { status: env.WINDY_NYCKEL ? 400 : 503, headers: { ...cors, "Content-Type": "application/json" } });
+      const r5 = x => Math.round(x * 2) / 2, [N, O, S, V] = [Math.min(85, r5(p[0]) + 0.5), r5(p[1]) + 0.5, Math.max(-85, r5(p[2]) - 0.5), r5(p[3]) - 0.5];
+      const ck = new Request("https://kameror.cache/" + [N, O, S, V].join(","));
+      let svar = await caches.default.match(ck);
+      if (!svar) {
+        const wu = "https://api.windy.com/webcams/api/v3/webcams?limit=50&offset=0&sortKey=popularity&sortDirection=desc&include=location,images,urls&bbox=" + [N, O, S, V].join(",");
+        const r = await fetch(wu, { headers: { "x-windy-api-key": env.WINDY_NYCKEL, ...UA } });
+        if (!r.ok) return new Response(JSON.stringify({ fel: r.status, text: (await r.text()).slice(0, 200) }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+        const js = await r.json();
+        const ut = (js.webcams || []).map(w => ({ id: w.webcamId, n: w.title || "", lat: w.location && w.location.latitude, lon: w.location && w.location.longitude,
+          b: w.images && w.images.current && (w.images.current.preview || w.images.current.thumbnail || w.images.current.icon) || "",
+          t: w.lastUpdatedOn || "", u: (w.urls && w.urls.detail) || ("https://www.windy.com/webcams/" + w.webcamId) })).filter(w => isFinite(w.lat) && isFinite(w.lon));
+        svar = new Response(JSON.stringify(ut), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=480" } });
+        ctx.waitUntil(caches.default.put(ck, svar.clone()));
+        await raknaAnrop(env.DB, "kameror");
+      }
+      const h = new Headers(svar.headers); for (const [k, v] of Object.entries(cors)) h.set(k, v);
+      return new Response(svar.body, { headers: h });
+    }
+
     // NYTT 23/11: R2 - Sverigeoversikten fran GitHub-forhamtningen. GET /r2/ens/index.json, /r2/ens/<DTG>/index.json,
     // /r2/ens/<DTG>/<v>_<t>.bin.gz. Bara las, bara ens/. Cachas i Cloudflares cache (filerna andras aldrig: korningen
     // ligger i namnet; index.json 60 s). R2 ar aldrig publik - det har ar enda vagen in.
