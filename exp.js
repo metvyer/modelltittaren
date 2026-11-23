@@ -8,7 +8,7 @@
 //      INTEGRERAD MANGD (kg/m2) = summan over nivaerna av graupel x lagrets massa (dp/g) - som radarns VIL, fast graupel
 //      MAX I KOLUMNEN (g/kg) - hogsta halten oavsett hojd (som radarns max-CAPPI); hojden for max visas i tipsrutan
 //  - Klick i en av de sma kartorna: kolumnens profil (graupel, sno, is, molnvatten + temperatur) hamtas for punkten
-//    och ritas bredvid, med 0- och -10-gradersnivaerna markerade.
+//    och ritas bredvid, med 0-, -10- och -25-gradersnivaerna markerade (23/11: -25 + laddningszonen).
 // Trycket pa nivaerna: p = ap + b * marktryck (hybridkoordinaten). Hojd som flygniva enligt standardatmosfaren.
 // Allt hamtas av webblasaren som ovrig MEPS-data (via mellanservern enligt valet langst ner).
 const EXP_STORLEK = [[75, "75 km"], [150, "150 km"], [250, "250 km"]];
@@ -180,11 +180,17 @@ function expRitaProfil(pt, p, dp, K) {
   for (let i = 0; i <= 4; i++) { const v = mx / 1.1 * i / 4; S.appendChild(el("text", { x: xQ(v), y: H - BP + 13, "font-size": 10, "text-anchor": "middle", fill: c("--dim") }, v.toFixed(v < 0.1 ? 3 : 2).replace(".", ","))); }
   S.appendChild(el("text", { x: (VM + W - HM) / 2, y: H - 6, "font-size": 10.5, "text-anchor": "middle", fill: utokad ? "#b45309" : c("--fg") }, "halt g/kg" + (utokad ? " – OBS skalan utökad till " + skala : "") + " (temperatur: övre skala, °C)"));
   for (const tc of [-40, -20, -10, 0, 10]) S.appendChild(el("text", { x: xT(tc), y: TP - 2, "font-size": 9.5, "text-anchor": "middle", fill: "#dc2626" }, String(tc)));
-  // 0 och -10 grader: nivaerna dar temperaturen passerar
+  // 0, -10 och -25 grader: nivaerna dar temperaturen passerar (23/11: -25 tillagd + svagt band -10..-25 = laddningszonen)
   const tc = K.ta.map(v => v - 273.15);
-  for (const [gr, f] of [[0, "#dc2626"], [-10, "#f97316"]]) for (let k = 1; k < EXP_NIV; k++) {
-    const a = tc[k - 1], b = tc[k]; if (!(isFinite(a) && isFinite(b)) || (a - gr) * (b - gr) > 0 || a === b) continue;
-    const pp = p[k - 1] + (p[k] - p[k - 1]) * (gr - a) / (b - a); if (pp < pTopp) continue;
+  const passage = gr => { const u = []; for (let k = 1; k < EXP_NIV; k++) { const a = tc[k - 1], b = tc[k];
+    if (!(isFinite(a) && isFinite(b)) || (a - gr) * (b - gr) > 0 || a === b) continue; u.push(p[k - 1] + (p[k] - p[k - 1]) * (gr - a) / (b - a)); } return u; };
+  { const p10 = passage(-10), p25 = passage(-25);
+    if (p10.length && p25.length) { const pa = Math.max(...p10), pb = Math.max(...p25);   // lagsta passagen (hogst tryck) av var och en
+      if (pb < pa) { const y1 = yP(Math.max(pb, pTopp)), y2 = yP(Math.min(pa, pBott));
+        if (pa >= pTopp) { S.appendChild(el("rect", { x: VM, y: y1, width: W - VM - HM, height: Math.max(0, y2 - y1), fill: "#7c3aed", opacity: 0.08 }));
+          S.appendChild(el("text", { x: VM + 4, y: y1 + 11, "font-size": 9.5, fill: "#7c3aed" }, "laddningszon −10 till −25 °C")); } } } }
+  for (const [gr, f] of [[0, "#dc2626"], [-10, "#f97316"], [-25, "#7c3aed"]]) for (const pp of passage(gr)) {
+    if (pp < pTopp) continue;
     S.appendChild(el("line", { x1: VM, x2: W - HM, y1: yP(pp), y2: yP(pp), stroke: f, "stroke-width": 1, "stroke-dasharray": "4 3" }));
     S.appendChild(el("text", { x: W - HM + 3, y: yP(pp) + 3, "font-size": 9.5, fill: f }, gr + " °C"));
   }
