@@ -32,6 +32,13 @@ async def main():
         print("fraga hos agaren:", await a.evaluate("$('delaFragaFast').hidden ? 'dold' : $('delaFragaFast').textContent + ' | sticky ' + getComputedStyle($('delaFragaFast')).position"))
         await a.evaluate("delaAgarSvar('neka')"); await a.wait_for_timeout(1500)
         print("efter Nej:", await a.evaluate("$('delaFragaFast').hidden ? 'dold' : 'syns'"))
+        # del 1c: agaren har ritat och stoppar sandningen -> fragan Rensa?
+        await a.evaluate("RIT.linjer.push({p: [[60, 15], [61, 17]], typ: 'linje'}); ritSpara(); DELA.panel = true; delaBygg()"); await a.wait_for_timeout(500)
+        await a.evaluate("[...document.querySelectorAll('#delaRad button')].find(b => b.textContent.includes('Stoppa')).click()"); await a.wait_for_timeout(500)
+        print("rensa-fraga:", await a.evaluate("$('delaFragaFast').hidden ? 'dold' : $('delaFragaFast').textContent"))
+        await a.evaluate("[...document.querySelectorAll('#delaFragaFast button')].find(b => b.textContent.includes('Rensa')).click()"); await a.wait_for_timeout(500)
+        print("efter Rensa:", await a.evaluate("RIT.linjer.length + ' linjer, raden ' + ($('delaFragaFast').hidden ? 'dold' : 'syns')"))
+        await a.evaluate("DELA.sander = true; delaBygg()")
         await a.evaluate(f"fetch(DELA_URL + '?id={d['id']}&nyckel={d['nyckel']}&tabort=1', {{method: 'POST'}})"); await a.wait_for_timeout(1500)
         # del 2: DELAREN saknar direktlank (WebSocket stoppad i agarens sida) - tittaren ska fraga tatt och folja inom nagra s
         a2 = await b.new_page(viewport={"width": 1300, "height": 1000}); t2 = await b.new_page(viewport={"width": 1300, "height": 1000})

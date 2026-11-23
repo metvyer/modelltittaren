@@ -216,8 +216,24 @@ async function delaAgarSvar(ge) {
   DELA.fraga = null; delaFragaVisa(); await delaAgarPuls(); delaBygg();
 }
 // 23/11 kvall (Jakob): fragan om att fa sanda visas som en fast gul rad overst - syns aven nar sandningsraden ar stangd
+// 23/11 kvall (Jakob): nar man slutar sanda eller ta emot och har ritat/matt eget -> fraga om det ska rensas
+function delaRensaFraga() {
+  const rit = typeof RIT !== "undefined" && RIT.linjer && RIT.linjer.length, mat = typeof MAT !== "undefined" && MAT.p && MAT.p.length > 1;
+  if (!rit && !mat) return;
+  DELA.rensaFraga = { rit: !!rit, mat: !!mat }; delaFragaVisa();
+  clearTimeout(DELA.rensaTim); DELA.rensaTim = setTimeout(() => { DELA.rensaFraga = null; delaFragaVisa(); }, 30000);   // forsvinner efter 30 s
+}
 function delaFragaVisa() {
   const f = $("delaFragaFast"); if (!f) return;
+  if (DELA.rensaFraga && !(DELA.fraga && aktivDelning() && DELA.sander)) {
+    const q = DELA.rensaFraga, klar = () => { DELA.rensaFraga = null; clearTimeout(DELA.rensaTim); delaFragaVisa(); };
+    f.hidden = false; f.textContent = "";
+    f.append(nyEl("span", {}, "Du har " + [q.rit && "ritat", q.mat && "mätt"].filter(Boolean).join(" och ") + " på kartan. Rensa?"),
+      knappEl("🗑 Rensa", () => { if (q.rit && typeof RIT !== "undefined") { RIT.linjer = []; RIT.vald = -1; ritSpara(); ritRita(); if (typeof ritRad === "function") ritRad(); }
+        if (q.mat && typeof matRensa === "function") matRensa(); klar(); }, "Ta bort det du ritat och mätt"),
+      knappEl("Behåll", klar, "", true));
+    return;
+  }
   const visa = !!(DELA.fraga && aktivDelning() && DELA.sander); f.hidden = !visa; f.textContent = ""; if (!visa) return;
   f.append(nyEl("span", {}, "✋ " + (DELA.fraga.namn || "(namnlös)") + " vill ta över och sända i «" + DELA.aktivId + "»"),
     knappEl("Lämna över", () => delaAgarSvar("fraga"), "Hen sänder, alla (även du) tar emot. Du kan alltid ta tillbaka."),
@@ -366,7 +382,7 @@ function delaBygg() {
       else rad.append(knappEl("✋ Be om att sända", delaBeOmStyr, "Fråga den som sänder om du får ta över – då tar alla (även hen) emot det du gör", true));
     }
     rad.append(knappEl("Sluta ta emot", async () => { if (DELA.jagStyr) { try { await delaFraga("POST", "?id=" + encodeURIComponent(DELA.folj) + "&styrnyckel=" + DELA.jagStyr + "&lamna=1"); } catch (e) {} DELA.jagStyr = null; }
-      if (DELA.agarFoljer) { DELA.agarFoljer = false; DELA.sander = false; } delaLamna(); }, "Sluta ta emot sändningen", true),
+      if (DELA.agarFoljer) { DELA.agarFoljer = false; DELA.sander = false; } delaLamna(); delaRensaFraga(); }, "Sluta ta emot sändningen", true),
       vemFalt(), nyEl("span", { id: "delaFel", className: "delafel" }));
     rad.append(nyEl("div", { id: "delaNot", className: "delanot" }));
   } else if (DELA.panel) {
@@ -395,7 +411,7 @@ function delaBygg() {
       const l = nyEl("input", { readOnly: true, value: delaLank(d.id), className: "delalank" }); l.addEventListener("focus", () => l.select());
       const kopiera = async (text, k, klar) => { try { await navigator.clipboard.writeText(text); } catch (x) {} const f = k.textContent; k.textContent = klar || "Kopierad ✓"; setTimeout(() => { k.textContent = f; }, 2200); };
       const kl = knappEl("Kopiera länk", e => kopiera(l.value, e.currentTarget, "Länk kopierad ✓"), "Länken att skicka till mottagare. Den som själv skriver sändningens namn under Ta emot sändning (eller klickar på den i listan Pågående) behöver inte länken.");
-      const sk = knappEl(DELA.sander ? "■ Stoppa sändning" : "▶ Starta sändning", () => { DELA.sander = !DELA.sander; if (DELA.sander) { DELA.senastSkickat = ""; DELA.skickadTid = 0; delaSkicka(); delaAgarPuls(); } delaBygg(); },
+      const sk = knappEl(DELA.sander ? "■ Stoppa sändning" : "▶ Starta sändning", () => { DELA.sander = !DELA.sander; if (!DELA.sander) delaRensaFraga(); if (DELA.sander) { DELA.senastSkickat = ""; DELA.skickadTid = 0; delaSkicka(); delaAgarPuls(); } delaBygg(); },
         DELA.sander ? "Sluta skicka ändringar – mottagarna ser vyn som den är nu. Namnet och länken finns kvar, starta igen när du vill." : "Börja skicka det du ser till mottagarna", !DELA.sander);
       const ag = knappEl("Ägarlänk (hemlig)", e => kopiera(delaLank(d.id) + "&agare=" + d.nyckel, e.currentTarget, "Ägarlänk kopierad ✓"), "Bara för dig själv: öppna den här länken en gång i en annan webbläsare eller dator (t.ex. jobbdatorn) så blir du ägare av samma sändning där och kan sända därifrån. Skicka den INTE till mottagare – den som har den kan styra vad alla ser.", true);
       const lb = nyEl("label", { className: "kryss", title: "Visa sändningen i listan Pågående för alla som öppnar Sändning (bara medan du sänder). Utan kryss syns den inte där – mottagarna behöver då namnet eller länken. Sidan är öppen på internet." });
