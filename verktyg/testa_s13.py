@@ -28,5 +28,22 @@ async def main():
         print(f"flikbyte hos tittaren efter {time.time() - t0:.1f} s:", await t.evaluate("lage"))
         print("info tittare:", await t.evaluate("$('delaInfo') ? $('delaInfo').textContent.slice(0, 120) : ''"))
         await a.evaluate(f"fetch(DELA_URL + '?id={d['id']}&nyckel={d['nyckel']}&tabort=1', {{method: 'POST'}})"); await a.wait_for_timeout(1500)
+        # del 2: DELAREN saknar direktlank (WebSocket stoppad i agarens sida) - tittaren ska fraga tatt och folja inom nagra s
+        a2 = await b.new_page(viewport={"width": 1300, "height": 1000}); t2 = await b.new_page(viewport={"width": 1300, "height": 1000})
+        await a2.add_init_script("window.WebSocket = function () { throw new Error('stoppad i provet'); };")
+        await a2.goto(SIDA); await a2.wait_for_timeout(4000)
+        await a2.evaluate("$('testskylt').hidden = true; DELA.vem = 'Utan'; bytLage('m0')"); await a2.wait_for_timeout(2000)
+        await a2.evaluate("delaSkapa('')"); await a2.wait_for_timeout(2500)
+        d2 = json.loads(await a2.evaluate("JSON.stringify(aktivDelning())"))
+        await t2.goto(SIDA.split("?")[0] + "#v=" + d2["id"]); await t2.wait_for_timeout(9000)
+        print("del 2 ws agare:", await a2.evaluate("delaWsUppe()"), " ws tittare:", await t2.evaluate("delaWsUppe()"), " sandare enligt rummet:", await t2.evaluate("WS.sandare"), " realtid:", await t2.evaluate("delaRealtid()"))
+        for flik in ("sat", "rad"):
+            t0 = time.time(); await a2.evaluate(f"bytLage('{flik}')")
+            for i in range(200):
+                if await t2.evaluate("lage") == flik: break
+                await t2.wait_for_timeout(100)
+            print(f"del 2 flikbyte till {flik} hos tittaren efter {time.time() - t0:.1f} s:", await t2.evaluate("lage"))
+            await t2.wait_for_timeout(2000)
+        await a2.evaluate(f"fetch(DELA_URL + '?id={d2['id']}&nyckel={d2['nyckel']}&tabort=1', {{method: 'POST'}})"); await a2.wait_for_timeout(1500)
         print("fel:", fel[:6]); await b.close()
 asyncio.run(main())

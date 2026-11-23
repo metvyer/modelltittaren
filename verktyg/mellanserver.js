@@ -678,7 +678,14 @@ export class DelaRum extends DurableObject {
     const roll = url.searchParams.get("roll") === "s" ? "s" : "t";
     this.ctx.acceptWebSocket(server, [roll]);
     server.serializeAttachment({ roll, namn: (url.searchParams.get("namn") || "").slice(0, 30) });
+    this.status(null);
     return new Response(null, { status: 101, webSocket: klient });
+  }
+  // 23/11 kvall: hur manga sandare (roll s) ar uppkopplade - foljarna fragar tatt via D1 om ingen sandare har direktlanken
+  status(utom) {
+    const alla = this.ctx.getWebSockets().filter(w => w !== utom), n = alla.filter(w => (w.deserializeAttachment() || {}).roll === "s").length;
+    const t = JSON.stringify({ typ: "status", sandare: n });
+    for (const w of alla) { try { w.send(t); } catch (e) {} }
   }
   async webSocketMessage(ws, msg) {
     const a = ws.deserializeAttachment() || {};
@@ -688,6 +695,6 @@ export class DelaRum extends DurableObject {
     const ut = JSON.stringify(m.typ === "mus" ? { typ: "mus", x: +m.x, y: +m.y, ut: !!m.ut, namn: a.namn } : { typ: "vy", vy: m.vy, namn: a.namn });
     for (const w of this.ctx.getWebSockets()) if (w !== ws) { try { w.send(ut); } catch (e) {} }
   }
-  async webSocketClose(ws, code) { try { ws.close(code === 1005 ? 1000 : code, "hej"); } catch (e) {} }
-  async webSocketError(ws) { try { ws.close(1011, "fel"); } catch (e) {} }
+  async webSocketClose(ws, code) { try { ws.close(code === 1005 ? 1000 : code, "hej"); } catch (e) {} this.status(ws); }
+  async webSocketError(ws) { try { ws.close(1011, "fel"); } catch (e) {} this.status(ws); }
 }
