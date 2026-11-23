@@ -480,6 +480,48 @@ export default {
       return new Response(svar.body, { headers: h });
     }
 
+    // NYTT 23/11: VVIS - Trafikverkets vagvaderstationer (API Oppna Data, CC0). Nyckeln TRV_NYCKEL ar en Secret i Cloudflare.
+    // GET /vvis -> [{id, n, lat, lon, t (matttid), ty (vagtemp), tl (lufttemp), td (daggpunkt), rh, s (sikt m), v (vind m/s),
+    //   vb (max 3 s-vind 30 min), vr (riktning), nb (nederbordstyp), mm (nederbord 30 min), is, sn, va (is/sno/vatten pa vagen), g (friktion)}]
+    // Alla stationer i ett anrop, cache 5 min -> Trafikverket far hogst ett anrop per 5 min oavsett antal tittare.
+    // ?ra=1 visar de tva forsta stationerna ratt fran Trafikverket (felsokning, utan nyckel).
+    if (url.pathname === "/vvis") {
+      if (!env.TRV_NYCKEL) return new Response("[]", { status: 503, headers: { ...cors, "Content-Type": "application/json" } });
+      const ra = url.searchParams.get("ra") === "1";
+      const ck = new Request("https://vvis.cache/v1" + (ra ? "ra" : ""));
+      let svar = await caches.default.match(ck);
+      if (!svar) {
+        const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+        let js = null, fel = "";
+        for (const [sv, ns] of [["2.1", "Road.WeatherInfo"], ["2", ""]]) {   // nyaste schemat forst, aldre som reserv
+          const kropp = '<REQUEST><LOGIN authenticationkey="' + esc(env.TRV_NYCKEL) + '"/><QUERY objecttype="WeatherMeasurepoint"' +
+            (ns ? ' namespace="' + ns + '"' : "") + ' schemaversion="' + sv + '"><FILTER><EQ name="Deleted" value="false"/></FILTER></QUERY></REQUEST>';
+          const r = await fetch("https://api.trafikinfo.trafikverket.se/v2/data.json", { method: "POST", headers: { "Content-Type": "text/xml", ...UA }, body: kropp });
+          const j = await r.json().catch(() => null);
+          const res = j && j.RESPONSE && j.RESPONSE.RESULT && j.RESPONSE.RESULT[0];
+          if (r.ok && res && Array.isArray(res.WeatherMeasurepoint)) { js = res.WeatherMeasurepoint; break; }
+          fel += sv + ": " + r.status + " " + JSON.stringify(res && res.ERROR || j && j.RESPONSE && j.RESPONSE.RESULT || "").slice(0, 200) + "; ";
+        }
+        if (!js) return new Response(JSON.stringify({ fel }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+        const v = o => { const x = o && typeof o === "object" ? o.Value : o; return typeof x === "number" && isFinite(x) ? x : (typeof x === "string" && x !== "" && isFinite(x) ? +x : null); };
+        const ut = ra ? js.slice(0, 2) : js.map(m => {
+          const g = String(m.Geometry && m.Geometry.WGS84 || "").match(/\(\s*([-\d.]+)\s+([-\d.]+)/);
+          const o = m.Observation || {}, a = o.Air || {}, y = o.Surface || {}, w = Array.isArray(o.Wind) ? o.Wind[0] || {} : o.Wind || {};
+          const a30 = o.Aggregated30minutes || {}, np = (o.Weather && o.Weather.Precipitation) || "";
+          return { id: m.Id || "", n: m.Name || "", lat: g ? +g[2] : null, lon: g ? +g[1] : null, t: o.Sample || "",
+            ty: v(y.Temperature), tl: v(a.Temperature), td: v(a.Dewpoint), rh: v(a.RelativeHumidity), s: v(a.VisibleDistance),
+            v: v(w.Speed), vr: v(w.Direction), vb: v(a30.Wind && a30.Wind.SpeedMax),
+            nb: typeof np === "string" ? np : "", mm: v(a30.Precipitation && a30.Precipitation.TotalWaterEquivalent),
+            is: y.Ice === true, sn: y.Snow === true, va: y.Water === true, g: v(y.Grip) };
+        }).filter(s => isFinite(s.lat) && isFinite(s.lon) && s.lat > 50);
+        svar = new Response(JSON.stringify(ut), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" } });
+        ctx.waitUntil(caches.default.put(ck, svar.clone()));
+        await raknaAnrop(env.DB, "vvis");
+      }
+      const h = new Headers(svar.headers); for (const [k, x] of Object.entries(cors)) h.set(k, x);
+      return new Response(svar.body, { headers: h });
+    }
+
     // NYTT 23/11: R2 - Sverigeoversikten fran GitHub-forhamtningen. GET /r2/ens/index.json, /r2/ens/<DTG>/index.json,
     // /r2/ens/<DTG>/<v>_<t>.bin.gz. Bara las, bara ens/. Cachas i Cloudflares cache (filerna andras aldrig: korningen
     // ligger i namnet; index.json 60 s). R2 ar aldrig publik - det har ar enda vagen in.
