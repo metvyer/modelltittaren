@@ -454,7 +454,10 @@ function delaUppdatera() {
   if (a) { a.textContent = ""; const egna = new Set(DELA.mina.map(x => x.id)), l = DELA.aktiva.filter(x => !egna.has(x.id));
     if (l.length) { a.append(nyEl("span", {}, "Pågående sändningar: ")); for (const x of l) a.append(knappEl(x.id + (x.vem ? " – " + x.vem : "") + " · " + x.antal + " tittar" + (x.anteckning ? " · 📝 " + x.anteckning : ""), () => delaFolj(x.id), "Ta emot den här sändningen", true)); }
     else a.append(nyEl("span", { className: "dim" }, "Inga synliga sändningar just nu (bara de som kryssat i «Synlig i listan» visas).")); }
-  const dk = $("delaKnapp"); dk.setAttribute("aria-pressed", String(!!(aktivDelning() && DELA.sander))); dk.textContent = aktivDelning() && DELA.sander ? "● Sänder «" + DELA.aktivId + "»" : DELA.folj ? "📡 Tar emot «" + DELA.folj + "»" : "📡 Sändning";
+  const dk = $("delaKnapp"); dk.setAttribute("aria-pressed", String(!!(aktivDelning() && DELA.sander))); const nT = DELA.tittare.length, antal = (DELA.sander && aktivDelning()) || DELA.folj ? " · 👁 " + nT : "";   // 23/11 kvall: antal pa knappen, namnen vid hovring
+  dk.textContent = (aktivDelning() && DELA.sander ? "● Sänder «" + DELA.aktivId + "»" : DELA.folj ? "📡 Tar emot «" + DELA.folj + "»" : "📡 Sändning") + antal;
+  dk.title = antal ? tittText() + (nT ? "" : "") + "\n(Uppdateras ungefär var 30:e s – den som lämnat försvinner efter ca 2 min.)" :
+    "Sändning: sänd det du tittar på (mottagarna följer med direkt, även din muspekare) eller ta emot någon annans sändning.";
 }
 
 function delaKnappKlick() {
