@@ -2334,8 +2334,8 @@ async function hamtaAllt() {
     if (!M || M.dtg !== dtg || M.iy !== r.iy || M.ix !== r.ix || M.nt !== nt) { M = nyModell(dtg, nt, r.iy, r.ix); await laddaCache(); }
     let franGH = false; const hadeLokalt = !!M.stat;
     if (!M.stat) franGH = await hamtaForhamtat();
-    thOppning(r, dtg, hadeLokalt, franGH);   // 23/11: statistik - varifran tid-hojd-datat kom
     else if (!lasa(nyckel() + "tq")) { const idx = await forhamtatIndex(); if (idx && idx.tq && idx.dtg === M.dtg) await hamtaForhamtat(); }   // T + q har kommit sedan sist
+    thOppning(r, dtg, hadeLokalt, franGH);   // 23/11: statistik - varifran tid-hojd-datat kom
     M.lat = lat; M.lon = lon; M.ny = ny; M.vald = val !== "senaste";
     if (!M.stat) {
       F.fas = "Hämtar fasta data (tider, nivåer, markhöjd) …"; status("Hämtar fasta data …"); visaForlopp();
