@@ -433,7 +433,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
     <button class="sek liten" id="kamKnapp" aria-pressed="false" title="Webbkameror (Windy.com) i kartutsnittet. Hovra = bild, klick = kamerans sida.">📷 Kameror</button>
     <button class="sek liten" id="vvisKnapp" aria-pressed="false" title="Vägväder från Trafikverkets VViS-stationer (vägtemp, luft, daggpunkt, vind, sikt, nederbördstyp, halkrisk). Observationer – gäller nu, inte kartans prognostid.">🛣 Vägväder</button><select id="vvisPar" class="liten" hidden title="Vad stationerna färgas efter. Halkrisk: röd = is/snö rapporterad eller underkylt regn, orange = vägtemp < +0,5 och vägtemp ≤ daggpunkt eller fukt/nederbörd (nu eller inom 3 h), gul = vägtemp ≤ +1 och nära daggpunkten, grön = ingen tydlig risk. VViS − modell: jämför med fältet i Karta MBR0."></select><select id="vvisH" class="liten" hidden title="Hur långt bakåt diagrammet i hovringsrutan visar (stationens mätningar). Modellens yttemp finns bara ca 1 dygn bakåt."><option value="6">6 h</option><option value="24">24 h</option><option value="72">72 h</option></select>
-    <button class="sek liten" id="qffKnapp" aria-pressed="false" title="Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan.">〰 Isobarer</button><select id="qffSteg" class="liten" hidden title="Avstånd mellan isobarerna"><option value="4">4 hPa</option><option value="2">2 hPa</option></select>
+    <button class="sek liten" id="qffKnapp" aria-pressed="false" title="Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan.">〰 Isobarer</button><select id="qffSteg" class="liten" hidden title="Avstånd mellan isobarerna"><option value="2">2 hPa</option><option value="5">5 hPa</option><option value="10">10 hPa</option></select>
     <button class="sek liten" id="formAter" hidden title="Kartrutans form: dra i nedre högra hörnet (⇲) för att ändra bredd och höjd – sparas per flik. Den här knappen återställer fliken.">⇲ Återställ form</button>
     <button class="sek liten" id="ritKnapp" aria-pressed="false" title="Rita en linje på kartan med en kort text (t.ex. Norr om denna: snö). Klicka punkt för punkt, högerklick, dubbelklick eller Enter = klar. Klicka på en linje för att ändra eller ta bort den. Följer med när du delar.">✏ Rita</button>
     <button class="sek liten" id="matKnapp" aria-pressed="false" title="Mät avstånd (NM och km) och kurs i kartan: klicka punkt för punkt. Högerklick, dubbelklick, Enter eller Esc = klar. Snabbare: högerklicka i kartan och välj Mät härifrån (mobil: håll fingret still på kartan).">📏 Mät</button><button class="sek liten" id="ritRensa" hidden title="Ta bort allt du ritat (alla linjer och områden). Klicka två gånger.">🗑 Rensa ritat</button>
@@ -2807,7 +2807,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="omr.js?v=20261123-1115"></script>
 <script src="kam.js?v=20261123-1400"></script>
 <script src="vvis.js?v=20261123-1830"></script>
-<script src="qff.js?v=20261123-1840"></script>
+<script src="qff.js?v=20261123-1845"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>

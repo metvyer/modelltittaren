@@ -2,10 +2,10 @@
 // Data: forhamtat i GitHub Actions till R2 (forhamta.py qff): HELA MEPS-omradet i 10 km, +0..+66, de 4 senaste korningarna,
 // via mellanservern /r2/qff/... Utanfor det (eller om R2 inte svarar) hamtas timmen direkt ur senaste korningen (~250 kB).
 // Tid: Karta MBR0 = kartans tid, Sannolikhet/Favoriter = vald timme (ingenting vid en period), ovriga flikar = narmaste hela timme nu.
-// Faltet jamnas ut latt (3x3 tva ganger) - 2,5 km-trycket ar brusigt over fjallen. Linjer var 4 (eller 2) hPa,
-// H och L = lokala hogsta/lagsta varden inom ca 300 km (inte vid kanten), med tryckvarde.
+// Faltet jamnas ut latt (3x3 tva ganger) - 2,5 km-trycket ar brusigt over fjallen. Linjer var 2, 5 eller 10 hPa (5 forvalt),
+// centra = lokala hogsta/lagsta varden inom ca 300 km (inte vid kanten): bara trycket, blatt = hog, rott = lag.
 const QFF_R2 = "https://modelltittaren.metvyer.workers.dev/r2/qff/";
-let QF = { pa: lasa("mt:qff") === "ja", steg: lasa("mt:qffSteg") === "2" ? 2 : 4, idx: null, idxT: 0, falt: new Map(), tim: 0, nyckel: "", info: "" };
+let QF = { pa: lasa("mt:qff") === "ja", steg: [2, 5, 10].includes(+lasa("mt:qffSteg")) ? +lasa("mt:qffSteg") : 5, idx: null, idxT: 0, falt: new Map(), tim: 0, nyckel: "", info: "" };
 function qffTid() {   // giltig tid (ms) for fliken som visas, eller null
   if (typeof lage === "undefined" || lage === "exp") return null;
   if (lage === "m0") return typeof M0F !== "undefined" && M0F.t0 && M0F.t !== null ? M0F.t0 + M0F.t * 3600e3 : null;
@@ -83,23 +83,34 @@ async function qffRita() {
   if (!d.j) { d.j = qffJamna(d.f, d.o); d.c = qffCentra(d.j, d.o); }
   const f = d.j, o = d.o;
   let mn = Infinity, mx = -Infinity; for (const w of f) if (isFinite(w)) { if (w < mn) mn = w; if (w > mx) mx = w; }
-  for (let v = Math.ceil(mn / QF.steg) * QF.steg; v <= mx; v += QF.steg) {
+  const niv = []; for (let v = Math.ceil(mn / QF.steg) * QF.steg; v <= mx; v += QF.steg) niv.push(v);
+  const tS = niv.some(v => v % 20 === 0) ? 20 : 10;   // tjock var 20:e hPa (1000, 1020 ...), var 10:e om ingen sadan finns i faltet
+  for (const v of niv) {
     const dd = isoSegment(f, o, v); if (!dd) continue;
-    const tjock = v % 20 === 0;   // var 20:e hPa (1000, 1020 ...) lite tjockare
+    const tjock = v % tS === 0;
     g.appendChild(el("path", { d: dd, fill: "none", stroke: "#ffffff", "stroke-width": tjock ? 4.4 : 3.4, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.75 }));
     g.appendChild(el("path", { d: dd, fill: "none", stroke: "#111827", "stroke-width": tjock ? 2.2 : 1.4, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
-    if (typeof isoEtiketter === "function") isoEtiketter(g, dd, String(v));
+    if (tjock) qffEtiketter(g, dd, String(v));   // 23/11 kvall (Jakob): varden bara pa tjocka linjer, halften sa tatt
   }
-  const fs = (typeof vb !== "undefined" ? vb.w : 949) / 28;
+  // 23/11 kvall (Jakob): inget H/L - bara trycket i centrum, blatt = hogtryck, rott = lagtryck
+  const fs = (typeof vb !== "undefined" ? vb.w : 949) / 40;
   for (const c of d.c) { const X = o.x0 + c.x * o.s, Y = KY - 1 - (o.y0 + c.y * o.s), fa = c.typ === "H" ? "#1d4ed8" : "#b91c1c";
-    g.appendChild(el("text", { x: X, y: Y, class: "qffHL", "font-size": fs, "font-weight": 800, "text-anchor": "middle", "dominant-baseline": "central", fill: fa, stroke: "#fff", "stroke-width": fs / 7, "paint-order": "stroke" }, c.typ));
-    g.appendChild(el("text", { x: X, y: Y + fs * 0.85, class: "qffHLv", "font-size": fs * 0.5, "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central", fill: fa, stroke: "#fff", "stroke-width": fs / 12, "paint-order": "stroke" }, String(Math.round(c.v)))); }
+    g.appendChild(el("text", { x: X, y: Y, class: "qffHL", "font-size": fs, "font-weight": 800, "text-anchor": "middle", "dominant-baseline": "central", fill: fa, stroke: "#fff", "stroke-width": fs / 5, "paint-order": "stroke" }, String(Math.round(c.v)))); }
   const tid = new Date(T);
   QF.info = "Isobarer QFF var " + QF.steg + " hPa, " + p2(tid.getUTCHours()) + "Z " + tid.getUTCDate() + "/" + (tid.getUTCMonth() + 1) + " (körning " + d.dtg.slice(6, 8) + "/" + d.dtg.slice(9, 11) + "Z +" + d.t + ", MEPS medlem 0, 10 km" + (d.kalla === "direkt" ? ", hämtad direkt" : "") + ")." +
     (lage === "m0" ? "" : lage === "p" ? " Vald timme." : " Närmaste hela timme nu.");
   qffKnapp();
 }
-function qffKnapp() { const b = $("qffKnapp"); if (b) b.title = (QF.pa && QF.info ? QF.info + "\n" : "") + "Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan. H/L = högtryck/lågtryck med värde. Förhämtat för hela MEPS-området, +0 till +66 h. Visas inte när en period (flera timmar) är vald."; }
+// varden pa linjen: som isoEtiketter i sannolikhet.js men dubbelt sa glest
+function qffEtiketter(g, d, text) {
+  const seg = [...d.matchAll(/M([-\d.]+) ([-\d.]+)L([-\d.]+) ([-\d.]+)/g)].map(m => [(+m[1] + +m[3]) / 2, (+m[2] + +m[4]) / 2]);
+  const vw = typeof vb !== "undefined" ? vb.w : 949, avst = vw / 1.75, fs = vw / 62, satta = [];
+  for (let i = 0; i < seg.length && satta.length < 20; i += 3) { const [x, y] = seg[i];
+    if (satta.some(([a, b]) => Math.hypot(a - x, b - y) < avst)) continue; satta.push([x, y]);
+    g.appendChild(el("text", { x, y, class: "isoEtikett", "font-size": fs, "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central",
+      fill: "#111827", stroke: "#ffffff", "stroke-width": fs / 4, "paint-order": "stroke" }, text)); }
+}
+function qffKnapp() { const b = $("qffKnapp"); if (b) b.title = (QF.pa && QF.info ? QF.info + "\n" : "") + "Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan. Siffror i blått = högtryckscentrum, rött = lågtryckscentrum. Värden på de tjocka linjerna (var 20:e hPa). Förhämtat för hela MEPS-området, +0 till +66 h. Visas inte när en period (flera timmar) är vald."; }
 function qffSnart() { clearTimeout(QF.tim); QF.tim = setTimeout(qffRita, 250); }
 (function qffInit() {
   const b = $("qffKnapp"), st = $("qffSteg"); if (!b) return;
@@ -110,9 +121,8 @@ function qffSnart() { clearTimeout(QF.tim); QF.tim = setTimeout(qffRita, 250); }
   const mo = new MutationObserver(() => { if (QF.pa) qffSnart(); });
   for (const id of ["kartTid", "kartTidM0"]) { const e = $(id); if (e) mo.observe(e, { childList: true, subtree: true, characterData: true }); }
   mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-  const svg = $("karta"); if (svg) new MutationObserver(() => { if (!QF.pa) return; const fs = vb.w / 28;
-    document.querySelectorAll(".qffHL").forEach(t => { t.setAttribute("font-size", fs); t.setAttribute("stroke-width", fs / 7); });
-    document.querySelectorAll(".qffHLv").forEach(t => { t.setAttribute("font-size", fs * 0.5); t.setAttribute("stroke-width", fs / 12); }); }).observe(svg, { attributes: true, attributeFilter: ["viewBox"] });
+  const svg = $("karta"); if (svg) new MutationObserver(() => { if (!QF.pa) return; const fs = vb.w / 40;
+    document.querySelectorAll(".qffHL").forEach(t => { t.setAttribute("font-size", fs); t.setAttribute("stroke-width", fs / 5); }); }).observe(svg, { attributes: true, attributeFilter: ["viewBox"] });
   setInterval(() => { if (QF.pa && !document.hidden && lage !== "m0" && lage !== "p") qffRita(); }, 10 * 60e3);   // "nu"-flikarna: ny timme
   if (QF.pa) setTimeout(qffRita, 1500);
 })();
