@@ -27,6 +27,11 @@ async def main():
             await t.wait_for_timeout(100)
         print(f"flikbyte hos tittaren efter {time.time() - t0:.1f} s:", await t.evaluate("lage"))
         print("info tittare:", await t.evaluate("$('delaInfo') ? $('delaInfo').textContent.slice(0, 120) : ''"))
+        # del 1b: mottagaren ber att fa sanda -> gul rad overst hos agaren, aven med sandningsraden stangd
+        await a.evaluate("DELA.panel = false; delaBygg()"); await t.evaluate("DELA.vem = 'Mottagare'; delaBeOmStyr()"); await a.wait_for_timeout(6000)
+        print("fraga hos agaren:", await a.evaluate("$('delaFragaFast').hidden ? 'dold' : $('delaFragaFast').textContent + ' | sticky ' + getComputedStyle($('delaFragaFast')).position"))
+        await a.evaluate("delaAgarSvar('neka')"); await a.wait_for_timeout(1500)
+        print("efter Nej:", await a.evaluate("$('delaFragaFast').hidden ? 'dold' : 'syns'"))
         await a.evaluate(f"fetch(DELA_URL + '?id={d['id']}&nyckel={d['nyckel']}&tabort=1', {{method: 'POST'}})"); await a.wait_for_timeout(1500)
         # del 2: DELAREN saknar direktlank (WebSocket stoppad i agarens sida) - tittaren ska fraga tatt och folja inom nagra s
         a2 = await b.new_page(viewport={"width": 1300, "height": 1000}); t2 = await b.new_page(viewport={"width": 1300, "height": 1000})
