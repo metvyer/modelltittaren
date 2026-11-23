@@ -513,13 +513,15 @@ export default {
         const sedan = h => new Date(Date.now() - h * 3600e3).toISOString();
         let ut;
         if (hist) {
-          const [js, fel] = await trv("WeatherObservation", '<FILTER><AND><EQ name="Measurepoint.Id" value="' + sid + '"/><GT name="Sample" value="' + sedan(hh) + '"/></AND></FILTER>');
+          const [js, fel] = await trv("WeatherObservation", '<FILTER><AND><EQ name="Measurepoint.Id" value="' + sid + '"/><GT name="Sample" value="' + sedan(hh) + '"/></AND></FILTER>' +
+            (ra ? "" : ["Sample", "Measurepoint.Name", "Surface.Temperature", "Air.Temperature", "Air.Dewpoint", "Weather.Precipitation",
+              "Aggregated5minutes.Precipitation", "Aggregated10minutes.Precipitation", "Aggregated30minutes.Precipitation"].map(x => "<INCLUDE>" + x + "</INCLUDE>").join("")));
           if (!js) return new Response(JSON.stringify({ fel }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
           if (ra) ut = js.slice(0, 3);
           else {
             const obs = js.map(o => {
-              const a = o.Air || {}, y = o.Surface || {}, ag = o.Aggregated10minutes || o.Aggregated30minutes || o.Aggregated5minutes || null;
-              const p = o.Aggregated10minutes ? 10 : o.Aggregated30minutes ? 30 : o.Aggregated5minutes ? 5 : 0, pr = ag && ag.Precipitation || {};
+              const a = o.Air || {}, y = o.Surface || {}, ag = o.Aggregated5minutes || o.Aggregated10minutes || o.Aggregated30minutes || null;   // matning var 5:e min -> 5-min-summan overlappar inte
+              const p = o.Aggregated5minutes ? 5 : o.Aggregated10minutes ? 10 : o.Aggregated30minutes ? 30 : 0, pr = ag && ag.Precipitation || {};
               return { t: o.Sample || "", ty: v(y.Temperature), tl: v(a.Temperature), td: v(a.Dewpoint),
                 r: v(pr.RainSum), s: v(pr.SnowSum && pr.SnowSum.WaterEquivalent), p, nb: (o.Weather && typeof o.Weather.Precipitation === "string") ? o.Weather.Precipitation : "" };
             }).filter(o => o.t).sort((a, b) => a.t < b.t ? -1 : 1);
