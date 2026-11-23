@@ -426,6 +426,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <button class="sek liten baraP" id="visaOmr" aria-pressed="true" title="Visa eller dölj ramarna runt områden där ensembledata redan är hämtad">Hämtade områden</button>
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
     <button class="sek liten" id="kamKnapp" aria-pressed="false" title="Webbkameror (Windy.com) i kartutsnittet. Hovra = bild, klick = kamerans sida.">📷 Kameror</button>
+    <button class="sek liten" id="vvisKnapp" aria-pressed="false" title="Vägväder från Trafikverkets VViS-stationer (vägtemp, luft, daggpunkt, vind, sikt, nederbördstyp, halkrisk). Observationer – gäller nu, inte kartans prognostid.">🛣 Vägväder</button><select id="vvisPar" class="liten" hidden title="Vad stationerna färgas efter. Halkrisk: röd = is/snö rapporterad eller underkylt regn, orange = vägtemp ≤ 0 och vägtemp ≤ daggpunkt eller fukt/nederbörd, eller snö och vägtemp ≤ +1, gul = vägtemp ≤ +1 och nära daggpunkten, grön = ingen tydlig risk."></select>
     <button class="sek liten" id="ritKnapp" aria-pressed="false" title="Rita en linje på kartan med en kort text (t.ex. Norr om denna: snö). Klicka punkt för punkt, högerklick, dubbelklick eller Enter = klar. Klicka på en linje för att ändra eller ta bort den. Följer med när du delar.">✏ Rita</button>
     <button class="sek liten" id="matKnapp" aria-pressed="false" title="Mät avstånd (NM och km) och kurs i kartan: klicka punkt för punkt. Högerklick, dubbelklick, Enter eller Esc = klar. Snabbare: högerklicka i kartan och välj Mät härifrån (mobil: håll fingret still på kartan).">📏 Mät</button><button class="sek liten" id="ritRensa" hidden title="Ta bort allt du ritat (alla linjer och områden). Klicka två gånger.">🗑 Rensa ritat</button>
     <span class="kartpos" id="kartPos"></span>
@@ -438,7 +439,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -2644,6 +2645,7 @@ function kartTips(e) {
   if (!mk && typeof varnTips === "function" && varnTips(e)) return;   /* 22/11: SMHI-varningar (varn.js) */
   if (!mk && typeof omrTips === "function" && omrTips(e)) return;   /* 22/11: omraden (omr.js) */
   if (!mk && typeof kamTips === "function" && kamTips(e)) return;   /* 23/11: webbkameror (kam.js) */
+  if (!mk && typeof vvisTips === "function" && vvisTips(e)) return;   /* 23/11: vagvader VViS (vvis.js) */
   if ($("kTips").style.maxWidth === "420px") $("kTips").style.maxWidth = "";
   if (!mk && lage === "p" && e.pointerType !== "touch") { probTips(e); return; }
   if (!mk && lage === "m0" && e.pointerType !== "touch" && !friPunkt && m0Tips(e)) return;
@@ -2655,6 +2657,7 @@ function kartKlick(e, mal) {
   if (typeof ritKlick === "function" && ritKlick(e, mal)) return;   // 21/11: ritlinjer (rita.js)
   if (mal && mal.closest && mal.closest(".varnsym") && typeof varnKlick === "function") { varnKlick(e, mal); return; }   /* 22/11: tryck pa varningssymbol = info */
   if (mal && mal.closest && mal.closest(".omretik") && typeof omrKlick === "function") { omrKlick(e, mal); return; }
+  if (typeof vvisKlick === "function" && vvisKlick(e, mal)) return;   /* 23/11: vagvader VViS (vvis.js) */
   if (typeof kamKlick === "function" && kamKlick(e, mal)) return;   /* 23/11: webbkamera -> Windy */   /* 22/11: tryck pa omradesnamn = info */
   if (lage === "p" && typeof favDetaljKlick === "function" && favDetaljKlick(e)) return;   /* 23/11: Detalj har (Favoriter) */
   const sel = $("punkt"), fri = friPunkt || e.shiftKey, mk = !fri && mal && mal.closest ? mal.closest(".mk") : null;
@@ -2795,6 +2798,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="varn.js?v=20261122-0940"></script>
 <script src="omr.js?v=20261123-1115"></script>
 <script src="kam.js?v=20261123-1400"></script>
+<script src="vvis.js?v=20261123-1440"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>
