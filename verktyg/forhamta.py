@@ -431,9 +431,26 @@ SV_PARAM = {
 }
 
 
+# 23/11: VINTERFALTEN (bara 15 okt - 31 mars) i 10 km (s = 4): det sidan behover for Snodrev, Ishalka och Rimfrost.
+# Nederbord/snofall ackumulerat (summa) i 16 bitar (0,1 mm, little-endian, 65535 = saknas) - som PPARAM i sannolikhet.js.
+SV_VINTER = {
+    "sno": {"var": "snowfall_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 4},
+    "nb": {"var": "precipitation_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 4},
+    "t0": {"var": "air_temperature_0m", "konv": lambda v: v - 273.15, "tabell": _trapp([[-50, 40, 1]]), "s": 4},
+    "t2": {"var": "air_temperature_2m", "konv": lambda v: v - 273.15, "tabell": _trapp([[-50, 40, 1]]), "s": 4},
+    "rh": {"var": "relative_humidity_2m", "konv": lambda v: __import__("numpy").minimum(100, __import__("numpy").where(v > 1.5, v, v * 100)), "tabell": None, "steg": 1, "s": 4},
+}
+
+
+def vintersasong(dtg):
+    d = datetime.strptime(dtg, "%Y%m%dT%HZ")
+    return d.month in (11, 12, 1, 2, 3) or (d.month == 10 and d.day >= 15)
+
+
 def _koda_np(pa, a):
-    """Som koda() i sannolikhet.js men for en hel numpy-vektor (float32) -> uint8, 255 = saknas."""
+    """Som koda() i sannolikhet.js men for en hel numpy-vektor (float32) -> uint8 (255 = saknas) eller uint16 (65535)."""
     import numpy as np
+    b16 = pa.get("bitar") == 16; sakn = 65535 if b16 else 255
     a = np.asarray(a, dtype=np.float64); ok = np.isfinite(a) & (np.abs(a) < 1e30)
     v = pa["konv"](np.where(ok, a, 0.0)); T = pa["tabell"]
     if T:
@@ -441,8 +458,8 @@ def _koda_np(pa, a):
         k = np.searchsorted(T, v, side="right") - 1
         k = np.clip(k, 0, len(T) - 1)
     else:
-        k = np.clip(np.floor(v + 0.5), 0, 254)
-    return np.where(ok, k, 255).astype(np.uint8)
+        k = np.clip(np.floor(v / pa.get("steg", 1) + 0.5), 0, sakn - 1)
+    return np.where(ok, k, sakn).astype("<u2" if b16 else np.uint8)
 
 
 def _koda(pa, raa):
@@ -504,7 +521,9 @@ def varv_ens(ut):
     except Exception: pass
     dtg = senaste_ens()
     if not dtg: print("Sverige: ingen komplett ensemblekorning hittad."); return 0
-    if gammal.get("dtg") == dtg and gammal.get("klar") and all(gammal.get(k) == SV[k] for k in ("y0", "y1", "x0", "x1", "s")):
+    vinter = vintersasong(dtg)
+    params = dict(SV_PARAM); params.update(SV_VINTER if vinter else {})
+    if gammal.get("dtg") == dtg and gammal.get("klar") and all(gammal.get(k) == SV[k] for k in ("y0", "y1", "x0", "x1", "s")) and set(gammal.get("v", [])) == set(params):
         print(f"Sverige: {dtg} finns redan."); return 0
     t0 = time.time(); STAT["anrop"] = 0; STAT["byte"] = 0
     y0, y1, x0, x1, s_ = SV["y0"], SV["y1"], SV["x0"], SV["x1"], SV["s"]
@@ -517,11 +536,18 @@ def varv_ens(ut):
     dirn = os.path.join(endir, dtg); os.makedirs(dirn, exist_ok=True)
     print(f"Sverige: {dtg}, {ny}x{nx} punkter (5 km), forra korningen {'finns' if forra else 'saknas'}", flush=True)
     ateranvant = 0
-    for v, pa in SV_PARAM.items():
+    gvs = gammal.get("vs", {}) if forra else {}
+    for v, pa in params.items():
+        # 23/11: egen upplosning per parameter (vinterfalten 10 km)
+        s_ = pa.get("s", SV["s"]); ny, nx = (y1 - y0) // s_ + 1, (x1 - x0) // s_ + 1; n = ny * nx
+        import numpy as np
+        b16 = pa.get("bitar") == 16; sakn = 65535 if b16 else 255
+        dt_ = np.dtype("<u2") if b16 else np.dtype(np.uint8)
+        forra_v = forra if (forra and (v in SV_PARAM or gvs.get(v) == s_)) else None
         for a, b in SV_BLOCK:
             nt = b - a + 1
             import numpy as np
-            koder = [np.full(ENS_MEDL * n, 255, dtype=np.uint8) for _ in range(nt)]
+            koder = [np.full(ENS_MEDL * n, sakn, dtype=dt_) for _ in range(nt)]
             # medlem 0-14
             fr = enc(f"{pa['var']}[{a}:1:{b}][0][0:{ENS_NYA - 1}][{y0}:{s_}:{y1}][{x0}:{s_}:{x1}]")
             vals = hamta_bin(BAS + ENS_FILN(dtg) + ".dods?" + fr, nt * ENS_NYA * n)
@@ -531,10 +557,12 @@ def varv_ens(ut):
             # medlem 15-29: forra korningens 0-14 vid t+3, annars hamta
             saknas = []
             for k in range(nt):
-                t = a + k; gf = os.path.join(endir, forra, f"{v}_{t + 3}.bin.gz") if forra else None
+                t = a + k; gf = os.path.join(endir, forra_v, f"{v}_{t + 3}.bin.gz") if forra_v else None
                 if gf and os.path.exists(gf):
                     with gzip.open(gf, "rb") as f: g = f.read()
-                    koder[k][ENS_NYA * n:] = np.frombuffer(g, dtype=np.uint8, count=ENS_NYA * n); ateranvant += 1
+                    if len(g) >= ENS_MEDL * n * dt_.itemsize:
+                        koder[k][ENS_NYA * n:] = np.frombuffer(g, dtype=dt_, count=ENS_NYA * n); ateranvant += 1
+                    else: saknas.append(k)
                 else: saknas.append(k)
             if saknas:
                 ka, kb = saknas[0], saknas[-1]
@@ -544,7 +572,7 @@ def varv_ens(ut):
                 kod = _koda_np(pa, vals)
                 for kk in range(kb - ka + 1): koder[ka + kk][ENS_NYA * n:] = kod[kk * ENS_NYA * n:(kk + 1) * ENS_NYA * n]
             # medlem 0:s sikt/molnbas ur det-filen
-            if v in ("sikt", "bas") and all((ko[:n] == 255).all() for ko in koder):
+            if v in ("sikt", "bas") and all((ko[:n] == sakn).all() for ko in koder):
                 fr = enc(f"{pa['var']}[{a}:1:{b}][0][{y0}:{s_}:{y1}][{x0}:{s_}:{x1}]")
                 vals = hamta_bin(BAS + FIL(dtg) + ".dods?" + fr, nt * n)
                 if vals is not None:
@@ -557,7 +585,9 @@ def varv_ens(ut):
     for d in os.listdir(endir):
         if d != dtg and os.path.isdir(os.path.join(endir, d)):
             import shutil; shutil.rmtree(os.path.join(endir, d))
-    idx = {"dtg": dtg, "klar": True, "y0": y0, "y1": y1, "x0": x0, "x1": x1, "s": s_, "tider": SV_TIDER, "v": list(SV_PARAM),
+    s_ = SV["s"]
+    idx = {"dtg": dtg, "klar": True, "y0": y0, "y1": y1, "x0": x0, "x1": x1, "s": s_, "tider": SV_TIDER, "v": list(params),
+           "vs": {v: pa["s"] for v, pa in params.items() if pa.get("s")}, "vinter": vinter,
            "skapad": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
     with open(idxfil, "w", encoding="utf-8") as f: json.dump(idx, f, ensure_ascii=False)
     mb = sum(os.path.getsize(os.path.join(dirn, x)) for x in os.listdir(dirn)) / 1e6

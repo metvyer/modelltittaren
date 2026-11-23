@@ -145,6 +145,11 @@ jobs:
         if: contains(inputs.delar, 'D2')
         run: python3 verktyg/testa_dds.py
 
+      # 23/11: raknas graupel in i snofallet? (Ishalka = nederbord - snofall)
+      - name: Prov graupel i snofallet
+        if: contains(inputs.delar, 'GR')
+        run: python3 verktyg/testa_graupel.py
+
       # 22/11: fallstudie (verktyg/fall.py) - text + bilder i grenen matprov-fall
       - name: Fallstudie
         if: contains(inputs.delar, 'FALL')

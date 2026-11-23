@@ -300,7 +300,7 @@ function ritaOmrade() {
       const t = el("rect", { x: rr.x0 - rr.s / 2, y: KY - 1 - rr.y1 - rr.s / 2, width: rr.x1 - rr.x0 + rr.s, height: rr.y1 - rr.y0 + rr.s, fill: "var(--mkhamt)", "fill-opacity": 0.13, stroke: "var(--mkhamt)", "stroke-width": 1.5, "vector-effect": "non-scaling-stroke" });
       const tt = el("title"); tt.textContent = "Snabbhämtat: finns i mellanserverns cache (" + PPARAM[o.v].namn.split(",")[0].toLowerCase() + ", " + (o.s * 2.5).toLocaleString("sv-SE") + " km)"; t.appendChild(tt); g.appendChild(t); } }
   // NYTT 20/11: Sverigeoversikten pa GitHub = alltid snabbt (gront) for byvind/sikt/molnbas, 5/10/20 km, +0..+36
-  if (visaSnabb && P.dtg && SVIDX && SVIDX.dtg === P.dtg && SVIDX.v.includes(o.v) && o.s % SVIDX.s === 0) {
+  if (visaSnabb && P.dtg && SVIDX && SVIDX.dtg === P.dtg && SVIDX.v.includes(o.v) && o.s % svS(SVIDX, o.v) === 0) {
     const t = el("rect", { x: SVIDX.x0 - SVIDX.s / 2, y: KY - 1 - SVIDX.y1 - SVIDX.s / 2, width: SVIDX.x1 - SVIDX.x0 + SVIDX.s, height: SVIDX.y1 - SVIDX.y0 + SVIDX.s,
       fill: "var(--mkhamt)", "fill-opacity": 0.07, stroke: "var(--mkhamt)", "stroke-width": 1.5, "stroke-dasharray": "8 4", "vector-effect": "non-scaling-stroke" });
     const tt = el("title"); tt.textContent = "Förhämtat (GitHub): " + PPARAM[o.v].namn.split(",")[0].toLowerCase() + ", +0 till +" + Math.max(...SVIDX.tider) + " h, 5/10/20 km – laddas direkt utan met.no"; t.appendChild(tt); g.appendChild(t); }
@@ -465,8 +465,10 @@ const overlappar = (a, b) => a.y0 <= b.y1 && b.y0 <= a.y1 && a.x0 <= b.x1 && b.x
 // Snabbfasen: returnerar { antal, tackt (0-1), kb } - antal cachade bitar som lades in
 // 22/11: nedrakning medan cachen kollas - registret far max 10 s och varje cachad bit max 20 s, sa vi vet ett tak
 function snabbTick() {
-  const kvar = Math.max(0, Math.ceil((P.snabbSlut - Date.now()) / 1000));
-  status("Kollar om området redan finns i mellanserverns cache" + (P.snabbN ? " – bit " + Math.min(P.snabbI, P.snabbN) + " av " + P.snabbN : " – registret") + " · högst " + kvar + " s kvar …");
+  // 23/11: nar taket passerats star det inte "0 s kvar" (sag ut som att sidan hangt sig) utan hur lange det dragit over
+  const kvar = Math.ceil((P.snabbSlut - Date.now()) / 1000);
+  status("Kollar om området redan finns i mellanserverns cache" + (P.snabbN ? " – bit " + Math.min(P.snabbI, P.snabbN) + " av " + P.snabbN : " – registret") +
+    (kvar > 0 ? " · högst " + kvar + " s kvar …" : " · tar längre tid än beräknat (" + (-kvar) + " s över) – mellanservern svarar långsamt, väntar …"));
 }
 async function snabbFas(o, oH, sakn, pa) {
   if (!visaSnabb || VAG !== "mellan" || !sakn.length) return { antal: 0, tackt: 0, kb: 0, traff: 0 };
@@ -581,8 +583,11 @@ async function svFil(dtg, v, t) {
     const gz = await r.arrayBuffer(), ds = new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"));
     const d = new Uint8Array(await new Response(ds).arrayBuffer()); d.gzKb = gz.byteLength / 1024; return d; } catch (e) { return null; }
 }
+// 23/11: varje parameter kan ha egen upplosning i oversikten (vinterfalten i 10 km: idx.vs = { sno: 4, ... })
+const svS = (idx, v) => (idx && idx.vs && idx.vs[v]) || (idx && idx.s) || 2;
 async function svFas(o, sakn) {
-  const idx = await svIndex(); if (!idx || idx.dtg !== o.dtg || !idx.v.includes(o.v) || o.s % idx.s) return { antal: 0 };
+  const idx = await svIndex(); if (!idx || idx.dtg !== o.dtg || !idx.v.includes(o.v) || o.s % svS(idx, o.v)) return { antal: 0 };
+  const S = svS(idx, o.v), b16 = PPARAM[o.v].bitar === 16;   // 16 bitar (nederbord/snofall): tva byte per varde, little-endian
   const r = svRektangel(o.s, idx);
   // 20/11 kvall: som snabbfasen - overlappar omradet rutan bara delvis tas den delen harifran (andelen = tackt)
   if (o.y1 < r.y0 || o.y0 > r.y1 || o.x1 < r.x0 || o.x0 > r.x1) return { antal: 0 };
@@ -590,16 +595,17 @@ async function svFas(o, sakn) {
   const tackt = ((Math.min(o.y1, r.y1) - Math.max(o.y0, r.y0)) / o.s + 1) * ((Math.min(o.x1, r.x1) - Math.max(o.x0, r.x0)) / o.s + 1) / (o.ny * o.nx);
   const e0 = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === r.y0 && x.y1 === r.y1 && x.x0 === r.x0 && x.x1 === r.x1);
   const tider = sakn.filter(t => idx.tider.includes(t) && !(e0 && e0.tider.includes(t))); if (!tider.length) return { antal: 0, delvis, tackt };
-  const k = o.s / idx.s, NY = (idx.y1 - idx.y0) / idx.s + 1, NX = (idx.x1 - idx.x0) / idx.s + 1, ny = (r.y1 - r.y0) / o.s + 1, nx = (r.x1 - r.x0) / o.s + 1;
+  const k = o.s / S, NY = Math.floor((idx.y1 - idx.y0) / S) + 1, NX = Math.floor((idx.x1 - idx.x0) / S) + 1, ny = (r.y1 - r.y0) / o.s + 1, nx = (r.x1 - r.x0) / o.s + 1;
   let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === r.y0 && x.y1 === r.y1 && x.x0 === r.x0 && x.x1 === r.x1);
   if (!e) { e = { dtg: o.dtg, v: o.v, s: o.s, ...r, tider: [] }; P.index.push(e); }
   let antal = 0, kb = 0;
   for (const t of tider) {
     status("Hämtar den förhämtade översikten från GitHub: +" + t + " h …");
-    const d = await svFil(o.dtg, o.v, t); if (!d || d.length < ENS_MEDL * NY * NX) continue;
-    kb += d.gzKb || 0;
+    const d0 = await svFil(o.dtg, o.v, t); if (!d0) continue;
+    const d = b16 ? new Uint16Array(d0.buffer, 0, Math.floor(d0.byteLength / 2)) : d0; if (d.length < ENS_MEDL * NY * NX) continue;
+    kb += d0.gzKb || 0;
     let arr = d;
-    if (k > 1) { arr = new Uint8Array(ENS_MEDL * ny * nx);
+    if (k > 1) { arr = b16 ? new Uint16Array(ENS_MEDL * ny * nx) : new Uint8Array(ENS_MEDL * ny * nx);
       for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) arr[(m * ny + y) * nx + x] = d[(m * NY + y * k) * NX + x * k]; }
     else arr = d.subarray(0, ENS_MEDL * NY * NX);
     await DB.put(nyckelE(e, t), arr); minneSatt(nyckelE(e, t), arr); if (!e.tider.includes(t)) e.tider.push(t); antal++;
@@ -680,7 +686,7 @@ async function probHamta(auto, utanSnabb) {
     const [hy0, hy1] = snapp(o.y0, o.y1, LCC.ny - 1), [hx0, hx1] = snapp(o.x0, o.x1, LCC.nx - 1);
     const oH = { ...o, y0: hy0, y1: hy1, x0: hx0, x1: hx1, ny: (hy1 - hy0) / o.s + 1, nx: (hx1 - hx0) / o.s + 1 }, n = oH.ny * oH.nx;
     // Sverigeoversikten fran GitHub (forhamtad) - forst av allt
-    if (sakn.length && pa.agg !== "summa") {
+    if (sakn.length) {   // 23/11: aven summa-falt (nederbord/snofall finns i oversikten vintertid)
       const sv = await svFas(o, sakn);
       if (sv.antal) { sakn = saknadeTimmar(o, lista); kb += sv.kb; await probVisa(); ritaOmrade();
         if (!sakn.length) { status("Klart: från den förhämtade översikten (GitHub, " + sv.antal + " timmar, " + (sv.kb / 1024).toFixed(1) + " MB, " + ((performance.now() - t0) / 1000).toFixed(0) + " s) – ingen hämtning från met.no."); return; } }
@@ -1475,6 +1481,12 @@ function favVinter(k) {
   // (5 km for hela Sverige blir for stort, ca 400 MB for en halv dag). Perioden = den valda i tidslinjen.
   if (!P.detalj && +$("pUppl").value < 4) { $("pUppl").value = "4"; $("pUppl").dispatchEvent(new Event("change")); }
   komboVal(k); favMarkera();
+  // 23/11: i Favoriter galler samma grans som ovriga favoriter (forhamtat till +36) - langre fram: fliken Sannolikhet
+  { const mx = SVIDX && SVIDX.tider ? Math.max(...SVIDX.tider) : 36; let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
+    if (b > mx) { status((KOMBO[k] ? KOMBO[k].namn : k) + ": Favoriter går till +" + mx + " h – välj en tidigare period (längre fram: fliken Sannolikhet).", "fel"); P.fragar = true; return; } }
+  // 23/11: vinterfalten forhamtas 15/10-31/3 - utanfor sasongen hamtas de fran met.no (och det sags)
+  if (!P.detalj && SVIDX && SVIDX.dtg && KOMBO[k] && !KOMBO[k].delar.every(p => (SVIDX.v || []).includes(p)))
+    $("favDetaljInfo").textContent = "Vinterfälten förhämtas bara 15 okt–31 mars – nu hämtas de från met.no (tar en stund).";
   // 22/11: P.komboTom i stallet for !P.varden, och vanta tills en pagaende hamtning (bytet till 10 km startar en) ar klar
   // - annars gjorde forsta trycket ingenting.
   // 23/11: tydlig status under vantan, och sager till om vantan tar slut (forut stod "behover ... hamtas ..." kvar)
@@ -1490,7 +1502,7 @@ function favVinter(k) {
 function favKnappar() {
   const vb_ = $("favVinter"); vb_.textContent = "";
   for (const [k, n] of FAV_VINTER) { const b = document.createElement("button"); b.className = "sek liten"; b.dataset.k = k; b.textContent = n;
-    setTimeout(() => { if (typeof KOMBO !== "undefined" && KOMBO[k]) b.title = KOMBO[k].text(KOMBO[k].A ? KOMBO[k].A.std : 0, KOMBO[k].B.std) + " – hämtas från met.no när du trycker"; }, 0); b.addEventListener("click", () => favVinter(k)); vb_.appendChild(b); }
+    setTimeout(() => { if (typeof KOMBO !== "undefined" && KOMBO[k]) b.title = KOMBO[k].text(KOMBO[k].A ? KOMBO[k].A.std : 0, KOMBO[k].B.std) + " – förhämtat 15 okt–31 mars (10 km), annars från met.no när du trycker"; }, 0); b.addEventListener("click", () => favVinter(k)); vb_.appendChild(b); }
   for (const [v, id] of [["by", "favBy"], ["sikt", "favSikt"], ["bas", "favBas"]]) {
     const box = $(id); box.textContent = "";
     for (const g of FAV_KNAPPAR[v]) { const b = document.createElement("button"); b.className = "sek liten"; b.dataset.v = v; b.dataset.g = g;
@@ -1514,7 +1526,7 @@ async function favIn() {
   const sk = $("favSkylt");
   if (!idx || !idx.dtg) { sk.textContent = "Den förhämtade översikten finns inte just nu – använd fliken Sannolikhet."; return; }
   const kl = idx.skapad ? new Date(idx.skapad) : null;
-  sk.innerHTML = "<b>Förhämtat – laddas direkt, inget hämtas från met.no.</b> Byvind, sikt och molnbas ur MEPS-ensemblen (30 medlemmar), 5 km, +0 till +" + Math.max(...idx.tider) +
+  sk.innerHTML = "<b>Förhämtat – laddas direkt, inget hämtas från met.no.</b> Byvind, sikt och molnbas ur MEPS-ensemblen (30 medlemmar), 5 km" + ((idx.v || []).includes("sno") ? ", vinterfälten (snöfall, nederbörd, yt-/2 m-temperatur, fukt) 10 km" : "") + ", +0 till +" + Math.max(...idx.tider) +
     " h, för Sverige, Östersjön, Finland och Baltikum. Körning " + idx.dtg + (kl && !isNaN(kl) ? " (klar " + kl.getUTCHours().toString().padStart(2, "0") + ":" + kl.getUTCMinutes().toString().padStart(2, "0") + "Z)" : "") +
     ". Välj en tröskel nedan eller skriv en egen i rutan Tröskel. Klicka på kartan för meteogram i en punkt.";
   $("pStorlek").value = "sv"; $("pUppl").value = String(idx.s); $("pVisa").value = "sannolikhet"; $("pDt").value = "1";

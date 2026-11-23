@@ -206,11 +206,49 @@ async function tafUppdatera(tyst) {
       }
     }
     TAFS.hamtad = Date.now();
+    await tafForraHamta();
     if (st) st.textContent = "Uppdaterat " + p2(new Date().getUTCHours()) + ":" + p2(new Date().getUTCMinutes()) + "Z – nästa om " + TAF_INTERVALL_MIN + " min.";
     tafKollaLarm();
   } catch (e) { if (st) st.textContent = "Kunde inte hämta: " + e.message; }
   finally { TAFS.pagar = false; }
   tafRita();
+}
+
+// ---------- 23/11: FOREGAENDE TAF vid AMD ----------
+// aviationweather ger TAF:en som var utgiven vid en viss tid (time=issue&date=). Vi fragar en minut fore AMD:ns
+// utgivningstid -> den TAF som AMD:n ersatte. En fraga per flygplats och AMD (sparas i TAFS.forra).
+TAFS.forra = {};
+const tafDatum = ms => { const d = new Date(ms); return d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCDate()) + "_" + p2(d.getUTCHours()) + p2(d.getUTCMinutes()); };
+async function tafForraHamta() {
+  for (const icao of TAFS.lista) {
+    const T = TAFS.data[icao]; if (!T || !T.amd || !T.utg || icao.startsWith("EP")) continue;
+    const f = TAFS.forra[icao]; if (f && f.utg === T.utg) continue;
+    TAFS.forra[icao] = { utg: T.utg, raw: null };
+    const js = await tafHamtaJson("taf", [icao], "&time=issue&date=" + tafDatum(T.utg - 60e3));
+    const gl = (js || []).filter(d => d.icaoId === icao && d.rawTAF && Date.parse(d.issueTime || "") < T.utg).sort((a, b) => (b.issueTime || "").localeCompare(a.issueTime || ""))[0];
+    TAFS.forra[icao] = { utg: T.utg, raw: gl ? gl.rawTAF : "" };
+  }
+}
+// Hovringstext (HTML) for en flygplats: TAF med AMD i rott / COR i gult, foregaende TAF nedtonad och markerad, METAR.
+// Ra text fran aviationweather escapas alltid.
+const tafEsc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const tafFarga = s => tafEsc(s).replace(/\bAMD\b/g, '<b style="color:#dc2626">AMD</b>').replace(/\bCOR\b/g, '<b style="color:#a16207">COR</b>');
+function tafHovring(icao) {
+  const [namn] = tafPlats(icao), T0 = tafNu(icao), T = T0 && !T0.ute ? T0 : null, Mo = TAFS.metar[icao], f = TAFS.forra[icao];
+  let h = '<div style="min-width:320px;max-width:520px"><b>' + tafEsc(icao) + "</b> " + tafEsc(namn || "") + "\n";
+  if (T) h += '<span style="font-family:monospace;font-size:12px">' + tafFarga(tafRader(T.raw)) + "</span>";
+  else h += "ingen giltig TAF just nu" + (TAFS.gammal && TAFS.gammal[icao] ? " (senaste har gått ut:\n" + '<span style="font-family:monospace;font-size:12px">' + tafFarga(tafRader(TAFS.gammal[icao])) + "</span>)" : "");
+  if (T && T.amd && f && f.utg === T.utg) {
+    h += '\n\n<span style="color:#6b7280"><b>Äldre TAF – ersatt av AMD ' + p2(new Date(T.utg).getUTCHours()) + p2(new Date(T.utg).getUTCMinutes()) + "Z, gäller inte längre:</b>\n";
+    h += f.raw === null ? "hämtar …" : f.raw ? '<span style="font-family:monospace;font-size:12px;text-decoration:line-through;text-decoration-color:#9ca3af">' + tafFarga(tafRader(f.raw)) + "</span>" : "hittades inte";
+    h += "</span>";
+  }
+  if (Mo) h += '\n\n<span style="font-family:monospace;font-size:12px">' + tafEsc(Mo.raw) + "</span>";
+  return h + "</div>";
+}
+function tafHovringPa(elm, icao) {
+  elm.addEventListener("mousemove", e => visaKTips(tafHovring(icao), e.clientX + 14, e.clientY + 14, true));
+  elm.addEventListener("mouseleave", () => { $("kTips").hidden = true; });
 }
 
 // ---------- Larm ----------
@@ -303,6 +341,7 @@ function tafRitaTabell() {
         c1.innerHTML = "<b>" + icao + "</b> <span class=\"dim\">" + namn + "</span>" + (T && T.amd ? ' <span class="amd">AMD</span>' : "") + (T && T.cor ? ' <span class="cor">COR</span>' : "") +
           (TAFS.larm[icao] ? ' <span class="larmtxt">⚠ ' + TAFS.larm[icao] + "</span>" : "");
         const x = document.createElement("button"); x.className = "tafx"; x.textContent = "×"; x.title = "Ta bort " + icao; x.addEventListener("click", () => tafVaxla(icao)); c1.appendChild(x);
+        tafHovringPa(c1.querySelector("b"), icao);   // 23/11: hovra pa koden = TAF (+ aldre vid AMD) och METAR
       } else c1.innerHTML = '<span class="dim">sidvind' + (banor.length ? "" : " (inga banor)") + "</span>";
       if (rad === "sv" && !T) c1.insertAdjacentHTML("beforeend", T0 && T0.ute ? ' <span class="ute">TAF gick ut ' + p2(new Date(T0.till).getUTCHours()) + p2(new Date(T0.till).getUTCMinutes()) + "Z</span>" : ' <span class="dim">– ingen giltig TAF</span>');
       tr.appendChild(c1);
@@ -382,11 +421,12 @@ function tafRitaKarta() {
     const T0 = tafNu(icao), T = T0 && !T0.ute ? T0 : null, k = tillKarta(lat, lon), Mo = TAFS.metar[icao], x0 = k.x + px(10), y0 = k.y - px(H / 2);
     const gp = el("g", {}); g.appendChild(gp);
     do {   // do/while(false): "continue" nedan hoppar hit ut, sedan placeras gruppen
-    const tt = el("title"); tt.textContent = icao + " " + namn + (T ? "\n" + tafRader(T.raw) : "\ningen giltig TAF just nu" + (TAFS.gammal && TAFS.gammal[icao] ? " (senaste har gått ut:\n" + tafRader(TAFS.gammal[icao]) + ")" : "")) + (Mo ? "\n\n" + Mo.raw : ""); gp.appendChild(tt);
+    // 23/11: egen hovringsruta (AMD rott, COR gult, foregaende TAF vid AMD) i stallet for <title>
+    tafHovringPa(gp, icao);
     // METAR-prick pa flygplatsen: samma granser som TAF:en, svart om aldre an 40 min, vit om ingen METAR
     const km = metarKat(Mo);   // pricken ligger i en egen grupp overst (flyttas aldrig)
     const prick = el("circle", { cx: k.x, cy: k.y, r: px(5.5), fill: km < 0 ? "#fff" : [TAF_FARG.gron, TAF_FARG.gul, TAF_FARG.rod, "#111"][km], stroke: "#111", "stroke-width": px(1.2) });
-    prick.appendChild(tt.cloneNode(true)); gd.appendChild(prick);
+    tafHovringPa(prick, icao); gd.appendChild(prick);
     // 21/11: AMD i rott, COR i gult/brunt pa kartan
     const lab = el("text", { x: x0, y: y0 - px(3), "font-size": px(10), "font-weight": 700, fill: "#111", stroke: "#fff", "stroke-width": px(2.5), "paint-order": "stroke" }, icao);
     if (T && T.amd) lab.appendChild(el("tspan", { fill: "#dc2626" }, " AMD"));

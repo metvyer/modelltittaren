@@ -456,7 +456,11 @@ export default {
       const ids = (url.searchParams.get("ids") || "").toUpperCase();
       if (!/^[A-Z0-9]{4}(,[A-Z0-9]{4}){0,19}$/.test(ids)) return new Response("Fel ids", { status: 400, headers: cors });
       if (!ok) return new Response("Bara från metvyer.github.io", { status: 403, headers: cors });
-      vidare = url.origin + "/taf?ids=" + ids + "&format=json";
+      // 23/11: &date=YYYYMMDD_HHMM -> TAF:en som var utgiven vid den tiden (aviationweather time=issue) = foregaende TAF vid AMD.
+      // Historiskt svar andras inte - samma cachetid racker.
+      const dt = url.searchParams.get("date") || "";
+      if (dt && !/^\d{8}_\d{4}$/.test(dt)) return new Response("Fel date", { status: 400, headers: cors });
+      vidare = url.origin + "/taf?ids=" + ids + "&format=json" + (dt ? "&time=issue&date=" + dt : "");
     } else if (url.pathname === "/metar") {
       const ids = (url.searchParams.get("ids") || "").toUpperCase(), h = +(url.searchParams.get("hours") || 6);
       if (!/^[A-Z0-9]{4}(,[A-Z0-9]{4}){0,19}$/.test(ids) || !(h >= 1 && h <= 24))

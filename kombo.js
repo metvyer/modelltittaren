@@ -1,7 +1,8 @@
 // Modelltittaren - KOMBINERAD SANNOLIKHET (NYTT 21/11)
 // Två (eller tre) fält räknas ihop PER MEDLEM och TIMME: en medlem räknas om villkoren är uppfyllda samtidigt
 // någon gång i perioden. Det blir en riktig sannolikhet för kombinationen (inte två kartor ovanpå varandra).
-//  * Ishalka:        nederbörd ≥ A mm/h och yttemperatur < B °C
+//  * Ishalka:        FLYTANDE nederbörd (nederbörd − snöfall) ≥ A mm/h och yttemperatur < B °C (23/11: förut all nederbörd,
+//                    då gav snöfall vid -10 grader "ishalka"). Fångar både underkylt regn och regn på frusen mark.
 //  * Rimfrost/frost: yttemperatur < B °C och yttemperatur under daggpunkten 2 m (daggpunkt ur temperatur + fukt 2 m)
 //  * Snödrev:         snöfall ≥ A mm/h och byvind ≥ B kt
 // Fukt 2 m, snöfall och nederbörd finns för alla 30 medlemmar (mätprov S 21/11).
@@ -10,9 +11,9 @@
 // skillnaden mellan två ackumulerade värden, så timmen före perioden hämtas också.
 
 const KOMBO = {
-  ishalka: { namn: "Ishalka", delar: ["nb", "t0"], A: { namn: "Nederbörd ≥", enhet: "mm/h", std: 0.1 }, B: { namn: "Yttemp <", enhet: "°C", std: 0 },
-    text: (A, B) => "nederbörd ≥ " + tal(A) + " mm/h och yttemperatur < " + tal(B) + " °C samtidigt",
-    villkor: (h, A, B) => h.nb >= A && h.t0 < B },
+  ishalka: { namn: "Ishalka", delar: ["nb", "sno", "t0"], A: { namn: "Flytande nb ≥", enhet: "mm/h", std: 0.1 }, B: { namn: "Yttemp <", enhet: "°C", std: 0 },
+    text: (A, B) => "flytande nederbörd (nederbörd − snöfall) ≥ " + tal(A) + " mm/h och yttemperatur < " + tal(B) + " °C samtidigt",
+    villkor: (h, A, B) => Math.max(0, h.nb - h.sno) >= A && h.t0 < B },
   // 22/11: A = marginal - ytan ska vara minst A grader under daggpunkten (0 = bara under)
   rimfrost: { namn: "Rimfrost/frost", delar: ["t0", "t2", "rh"], A: { namn: "Marginal under daggpunkt ≥", enhet: "°C", std: 0 }, B: { namn: "Yttemp <", enhet: "°C", std: 0 },
     text: (A, B) => "yttemperatur < " + tal(B) + " °C och minst " + tal(A) + " °C under daggpunkten (2 m)",
