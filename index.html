@@ -1618,7 +1618,7 @@ function rita() {
     if (!M.ytaOK[t]) continue;
     const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
     // 22/11: en nolla far farg efter tecknet - bla om vardet ar under 0, rod om det ar over
-    const nollF = v => Math.round(v) === 0 && v !== 0 ? (v < 0 ? NOLL_BLA : NOLL_ROD) : c("--red");
+    const nollF = v => v < 0 ? NOLL_BLA : Math.round(v) === 0 && v !== 0 ? NOLL_ROD : c("--red");   // 23/11: alla minusgrader bla (forut bara -0)
     if (isFinite(tk)) txt(t, R.t, String(Math.round(tk - 273.15)), nollF(tk - 273.15));
     if (isFinite(td)) txt(t, R.td, String(Math.round(td)), nollF(td));
     if (Y(3) > 0.5 && isFinite(Y(4))) {
