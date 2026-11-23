@@ -120,7 +120,7 @@ function m0KartTid() {
   if (!M0F.t0) return;
   const d = new Date(M0F.t0 + M0F.t * 3600e3); e.textContent = VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCHours()) + "Z (+" + M0F.t + ")";
   const sm = document.createElement("small"), P1 = M0P[M0F.v], P2 = M0F.v2 && M0P[m0Lv()];
-  sm.textContent = (P1 ? P1.namn : "") + (P2 ? " · linjer: " + P2.namn : "") + " · medlem 0" + (M0F.dtg ? " · körning " + String(M0F.dtg).slice(9, 12) : "");
+  sm.textContent = (P1 ? P1.namn : "") + (P2 ? " · linjer: " + P2.namn : "") + " · MEPS MBR0" + (M0F.dtg ? " · körning " + String(M0F.dtg).slice(9, 12) : "");
   e.appendChild(sm);
 }
 function m0TidText(t) { if (!M0F.t0) return "+" + t; const d = new Date(M0F.t0 + t * 3600e3); return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCDate()) + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + "Z (+" + t + ")"; }
