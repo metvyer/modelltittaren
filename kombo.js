@@ -175,7 +175,7 @@ function komboSynka() {
   // 23/11: tala om VARFOR Visa (medlem, max, min, medel) ar last - forut syntes bara en gra ruta
   const lv = document.querySelector('label[for="pVisa"]');
   if (lv) { lv.textContent = K ? "Visa (låst – kombination vald)" : "Visa"; lv.title = K ? "Kombinationen " + K.namn + " är vald under Kombinera. Välj ”– ingen –” där för att kunna välja enskild medlem, max, min eller medel." : ""; }
-  $("pVisa").title = lv ? lv.title : "";
+  const pv = $("pVisa"); if (pv.dataset.titel === undefined) pv.dataset.titel = pv.title || ""; pv.title = K ? lv.title : pv.dataset.titel;
 }
 function komboVal(nyckel, A, B) {   // anvands av vinterknapparna i Favoriter och av Dela
   $("pKombo").value = nyckel || ""; const K = komboAktiv();
