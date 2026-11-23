@@ -1,0 +1,47 @@
+# NYTT 23/11: GRANSKOLL en gang i veckan (mandag 06:17 UTC) + for hand.
+# Laser mellanserverns /statistik (GitHub Pages-trafik, Cloudflare-anrop, D1-storlek) och forhamtningens lagringsstorlek.
+# Over 50 % av nagon grans -> ett arende (issue) "Gränskoll: ..." skapas, sa att agaren far en avisering (e-post/GitHub-appen).
+# Under 50 %: bara en sammanfattning i korningen. Gransvarden: GitHub Pages 1 GB lagring, 100 GB trafik/manad (mjuk);
+# Cloudflare gratis 100 000 anrop/dag, D1 5 GB.
+name: Gränskoll
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+permissions:
+  issues: write
+  contents: read
+jobs:
+  koll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kolla gränserna
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request, datetime, os, subprocess
+          def h(u):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "modelltittaren-granskoll", "Origin": "https://metvyer.github.io"}), timeout=60) as r: return json.loads(r.read())
+              except Exception as e: print("kunde inte hamta", u, e); return {}
+          s = h("https://modelltittaren.metvyer.workers.dev/statistik")
+          ix = h("https://metvyer.github.io/modelltittaren/forhamtat/ens/index.json")
+          nu = datetime.datetime.utcnow(); man = nu.strftime("%Y-%m")
+          gh = sum(r["kb"] for r in s.get("ghTrafik", []) if r["datum"].startswith(man)) / 1048576
+          prognos = gh / max(1, nu.day) * 30
+          dagar = {}
+          for r in s.get("dagar", []): dagar[r["datum"]] = dagar.get(r["datum"], 0) + r["anrop"]
+          maxa = max(dagar.values()) if dagar else 0
+          d1 = (s.get("d1Byte") or 0) / 1073741824
+          lag = (ix.get("lagringMB") or 0) / 1024
+          rader = [("GitHub-trafik denna månad (GB)", gh, 100), ("Prognos hela månaden (GB)", prognos, 100), ("GitHub-lagring förhämtat (GB)", lag, 1),
+                   ("Cloudflare-anrop, mest på en dag (31 d)", maxa, 100000), ("D1-databasen (GB)", d1, 5)]
+          txt = "| | värde | gräns | andel |\n|---|---|---|---|\n" + "\n".join(f"| {n} | {v:.2f} | {g} | {100 * v / g:.0f} % |" for n, v, g in rader)
+          print(txt)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f: f.write("## Gränskoll " + nu.strftime("%Y-%m-%d") + "\n\n" + txt + "\n")
+          over = [n for n, v, g in rader if v / g >= 0.5]
+          if over:
+              subprocess.run(["gh", "issue", "create", "-R", os.environ["GITHUB_REPOSITORY"], "-t", "Gränskoll: " + ", ".join(over) + " över 50 %",
+                              "-b", txt + "\n\nSe statistiksidan: https://metvyer.github.io/modelltittaren/statistik.html"], check=False)
+          PY

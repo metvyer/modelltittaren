@@ -411,6 +411,19 @@ export default {
       return new Response(new Uint8Array(rad.png), { headers: { ...cors, "Content-Type": "image/png", "Cache-Control": "public, max-age=86400, immutable" } });
     }
 
+    // NYTT 23/11: TRAFIK FRAN GITHUB PAGES. Sidan summerar hur manga kB den laddat fran metvyer.github.io (PerformanceObserver,
+    // transferSize - 0 om webblasaren hade filen sparad) och skickar summan med sendBeacon: POST /gh-trafik?kb=N.
+    // Bara en siffra per dag sparas (ingen IP, inget om vad). GitHub Pages har en mjuk grans pa 100 GB/manad.
+    if (url.pathname === "/gh-trafik") {
+      const kb = +(url.searchParams.get("kb") || 0);
+      if (!ok || req.method !== "POST" || !(kb > 0 && kb < 2e6) || !env.DB) return new Response(null, { status: 204, headers: cors });
+      try {
+        await env.DB.prepare("CREATE TABLE IF NOT EXISTS gh_trafik (datum TEXT PRIMARY KEY, kb REAL, rapporter INTEGER)").run();
+        await env.DB.prepare("INSERT INTO gh_trafik (datum, kb, rapporter) VALUES (?, ?, 1) ON CONFLICT(datum) DO UPDATE SET kb = kb + excluded.kb, rapporter = rapporter + 1").bind(idag(), kb).run();
+      } catch (e) {}
+      return new Response(null, { status: 204, headers: cors });
+    }
+
     // Statistik: senaste 31 dagarna per typ (oppet) + senaste hamtningarna fran kallorna.
     // NYTT 21/11 kvall: listan med VAD som hamtats (omraden/punkter = spar av var folk tittar) kraver nyckeln
     // STAT_NYCKEL (hemlighet i Cloudflare), skickad i huvudet X-Mt-Nyckel. Utan nyckel: bara dagssiffror.
@@ -421,6 +434,9 @@ export default {
       if (!ratt) ut.ingenNyckel = true;
       if (env.DB) {
         ut.dagar = (await env.DB.prepare("SELECT * FROM dag WHERE datum >= date('now', '-31 day') ORDER BY datum DESC, typ").all()).results;
+        // 23/11: granser - GitHub Pages-trafik per dag och D1-databasens storlek
+        try { ut.ghTrafik = (await env.DB.prepare("SELECT datum, kb, rapporter FROM gh_trafik WHERE datum >= date('now', '-62 day') ORDER BY datum DESC").all()).results; } catch (e) { ut.ghTrafik = []; }
+        try { const r = await env.DB.prepare("SELECT 1").run(); ut.d1Byte = r.meta && r.meta.size_after; } catch (e) {}
         if (giltig) { ut.detaljer = true; ut.senaste = (await env.DB.prepare("SELECT tid, typ, vad, status, byte, ms FROM senaste ORDER BY id DESC LIMIT 200").all()).results; }
       }
       if (req.headers.get("X-Mt-Nyckel") && !giltig) ut.felnyckel = true;

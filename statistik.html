@@ -32,6 +32,11 @@ tr.under td { color: var(--dim); font-size: 12px; }
 Inga personuppgifter sparas. <a href="./">← Tillbaka till Modelltittaren</a></p>
 <div class="kort" id="kort"></div>
 
+<h2>Gränser (gratiskontona)</h2>
+<p>Hur nära vi är de gränser som gäller. GitHub Pages: 1 GB lagring och en mjuk gräns på 100 GB trafik per månad. Cloudflare (gratis): 100 000 anrop per dag till mellanservern, 5 GB i databasen (D1).
+GitHub-trafiken räknas av sidorna själva (sedan 23/11) – besökare som har mellanservern <i>Av</i> räknas inte, så siffran är något för låg.</p>
+<div class="kort" id="granser"></div>
+
 <h2>Mellanservern per dag (UTC)</h2>
 <p><b>Anrop</b> = alla frågor från sidorna. <b>Från källan</b> = de som inte fanns i cachen och därför hämtades från met.no/aviationweather. <b>Cache</b> = andel som cachen svarade på.</p>
 <div class="tab"><table id="dagar"><tr><td class="v">Hämtar …</td></tr></table></div>
@@ -81,6 +86,16 @@ async function mellan() {
   }
   if (!dagar.size) h += '<tr><td class="v" colspan="6">Inga anrop registrerade än.</td></tr>';
   $("dagar").innerHTML = h;
+  // 23/11: granser
+  { const man = new Date().toISOString().slice(0, 7), gh = d.ghTrafik || [], ghMan = gh.filter(r => r.datum.startsWith(man)).reduce((s, r) => s + r.kb, 0) / 1048576;
+    const dagNr = new Date().getUTCDate(), dagarIMan = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 0)).getUTCDate();
+    const prognos = dagNr > 2 ? ghMan / dagNr * dagarIMan : null, idagA = (dagar.get(new Date().toISOString().slice(0, 10)) || []).reduce((s, r) => s + r.anrop, 0);
+    const maxA = Math.max(0, ...[...dagar.values()].map(rr => rr.reduce((s, r) => s + r.anrop, 0)));
+    let lagr = null; try { const r = await fetch("forhamtat/ens/index.json", { cache: "no-store" }); if (r.ok) lagr = (await r.json()).lagringMB; } catch (e) {}
+    const kort = (t, v, g, enh) => `<div>${t}<b class="${v / g > 0.8 ? "fel" : ""}">${v === null || v === undefined ? "–" : v.toLocaleString("sv-SE", { maximumFractionDigits: v < 10 ? 2 : 0 }) + " " + enh}</b><span class="dim">${v === null || v === undefined ? "" : pct(v, g) + " av " + g.toLocaleString("sv-SE") + " " + enh}</span></div>`;
+    $("granser").innerHTML = kort("GitHub-trafik denna månad", ghMan, 100, "GB") + (prognos !== null ? kort("Prognos hela månaden", prognos, 100, "GB") : "")
+      + kort("GitHub-lagring (förhämtat)", lagr === null ? null : lagr / 1024, 1, "GB") + kort("Cloudflare-anrop i dag", idagA, 100000, "st") + kort("Mest på en dag (31 d)", maxA, 100000, "st")
+      + kort("Databasen (D1)", d.d1Byte ? d.d1Byte / 1073741824 : null, 5, "GB"); }
   $("kort").innerHTML = `<div>Från met.no, 7 dagar<b>${mb(tot.b7)} MB</b></div><div>Från met.no, 31 dagar<b>${mb(tot.b30)} MB</b></div>`
     + `<div>Anrop 7 dagar<b>${tot.a7}</b></div><div>Cachen svarade, 7 dagar<b>${pct(tot.a7 - tot.m7, tot.a7)}</b></div>`;
   // senaste

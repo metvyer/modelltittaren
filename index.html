@@ -708,6 +708,20 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 // bara vidarebefordrar lasning av MEPS-filer (koden: verktyg/mellanserver.js).
 const BAS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
 const MELLAN = "https://modelltittaren.metvyer.workers.dev/mepslatest/";
+// NYTT 23/11: TRAFIKRAKNARE for GitHub Pages (mjuk grans 100 GB/manad). Summerar overforda byte (transferSize, 0 om filen
+// kom ur webblasarens cache) for allt fran metvyer.github.io och skickar summan till mellanservern var 5:e minut och nar sidan
+// stangs. Bara en siffra - inget om vad som tittats pa. Skickas inte med installningen "Av".
+(function ghTrafik() {
+  if (!window.PerformanceObserver || !navigator.sendBeacon) return;
+  let kb = 0; const egen = location.origin;
+  const ta = lista => { for (const e of lista) if (e.name && e.name.startsWith(egen) && e.transferSize > 0) kb += e.transferSize / 1024; };
+  try { ta(performance.getEntriesByType("navigation")); ta(performance.getEntriesByType("resource"));
+    new PerformanceObserver(l => ta(l.getEntries())).observe({ type: "resource", buffered: false }); } catch (e) { return; }
+  const skicka = () => { if (kb < 1 || (typeof VAG_LAGE !== "undefined" && VAG_LAGE === "av")) return;
+    try { if (navigator.sendBeacon("https://modelltittaren.metvyer.workers.dev/gh-trafik?kb=" + Math.round(kb))) kb = 0; } catch (e) {} };
+  setInterval(skicka, 300e3);
+  addEventListener("pagehide", skicka); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") skicka(); });
+})();
 const PROV_FIL = "meps_lagged_6_h_latest_2_5km_latest.nc.ascii?time";   // litet anrop for kontakttest
 const PROV_DIREKT_S = 6, PROV_MELLAN_S = 12;                          // tidsgranser for kontakttestet
 const FIL = dtg => "meps_det_2_5km_" + dtg + ".ncml";

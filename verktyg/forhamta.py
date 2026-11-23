@@ -588,6 +588,7 @@ def varv_ens(ut):
     s_ = SV["s"]
     idx = {"dtg": dtg, "klar": True, "y0": y0, "y1": y1, "x0": x0, "x1": x1, "s": s_, "tider": SV_TIDER, "v": list(params),
            "vs": {v: pa["s"] for v, pa in params.items() if pa.get("s")}, "vinter": vinter,
+           "lagringMB": round(sum(os.path.getsize(os.path.join(a, f)) for a, _, fs in os.walk(ut) for f in fs) / 1048576, 1),
            "skapad": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
     with open(idxfil, "w", encoding="utf-8") as f: json.dump(idx, f, ensure_ascii=False)
     mb = sum(os.path.getsize(os.path.join(dirn, x)) for x in os.listdir(dirn)) / 1e6
