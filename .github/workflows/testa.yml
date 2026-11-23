@@ -145,6 +145,19 @@ jobs:
         if: contains(inputs.delar, 'D2')
         run: python3 verktyg/testa_dds.py
 
+      # 23/11: Forsvarsmaktens oppna riksintressen-geodata -> GeoJSON (artefakt fm_omraden)
+      - name: FM-omraden
+        if: contains(inputs.delar, 'FM')
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qq install -y gdal-bin > /dev/null
+          bash verktyg/fm_omraden.sh
+      - name: FM-omraden artefakt
+        if: contains(inputs.delar, 'FM')
+        uses: actions/upload-artifact@v4
+        with:
+          name: fm_omraden
+          path: fm/ut/
+
       # 23/11: raknas graupel in i snofallet? (Ishalka = nederbord - snofall)
       - name: Prov graupel i snofallet
         if: contains(inputs.delar, 'GR')
