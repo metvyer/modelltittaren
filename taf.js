@@ -247,8 +247,9 @@ function tafHovring(icao) {
   return h + "</div>";
 }
 function tafHovringPa(elm, icao) {
-  elm.addEventListener("mousemove", e => visaKTips(tafHovring(icao), e.clientX + 14, e.clientY + 14, true));
-  elm.addEventListener("mouseleave", () => { $("kTips").hidden = true; });
+  // TAF-raderna ar langa: rutan far vara bredare an vanliga tips (max-width aterstalls nar musen lamnar)
+  elm.addEventListener("mousemove", e => { $("kTips").style.maxWidth = "560px"; visaKTips(tafHovring(icao), e.clientX + 14, e.clientY + 14, true); });
+  elm.addEventListener("mouseleave", () => { $("kTips").hidden = true; $("kTips").style.maxWidth = ""; });
 }
 
 // ---------- Larm ----------

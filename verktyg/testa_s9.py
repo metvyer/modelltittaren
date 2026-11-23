@@ -19,7 +19,7 @@ async def main():
           await tafForraHamta(); const f = TAFS.forra.ESSA; return 'utg ' + new Date(T.utg).toISOString() + ' | forra: ' + (f ? (f.raw || '(tom)').slice(0, 120) : 'ingen'); })()""")
         skriv("forra ESSA: " + r)
         skriv("hovring: " + (await pg.evaluate("tafHovring('ESSA').replace(/<[^>]+>/g, '')"))[:600])
-        await pg.evaluate("visaKTips(tafHovring('ESSA'), 400, 300, true)")
+        await pg.evaluate("$('testskylt').hidden = true; $('kTips').style.maxWidth = '560px'; visaKTips(tafHovring('ESSA'), 300, 200, true)")
         t = await pg.query_selector("#kTips")
         if t: await t.screenshot(path="matprov/taf_hovring.png")
         await pg.evaluate("$('kTips').hidden = true")
