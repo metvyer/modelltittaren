@@ -1482,10 +1482,9 @@ function favVinter(k) {
   status(namn + " – förbereder …");
   probVisa().then(async () => { let i = 0;
     for (; i < 240 && P.upptagen; i++) { if (i % 2 === 0) status(namn + " – väntar på pågående hämtning (" + Math.round(i / 2) + " s) …"); await new Promise(r => setTimeout(r, 500)); }
-    P.komboVantar = false;
-    if ($("pKombo").value !== k) return;
-    if (P.upptagen) { status(namn + " hämtades inte – en annan hämtning pågår fortfarande efter 2 min. Tryck " + namn + " igen när den är klar (eller Stopp).", "fel"); P.fragar = true; return; }
-    await probVisa(); if (P.komboTom) komboHamta(false); else status("Klart: " + namn + " – allt fanns redan sparat."); });
+    if ($("pKombo").value !== k) { P.komboVantar = false; return; }
+    if (P.upptagen) { P.komboVantar = false; status(namn + " hämtades inte – en annan hämtning pågår fortfarande efter 2 min. Tryck " + namn + " igen när den är klar (eller Stopp).", "fel"); P.fragar = true; return; }
+    await probVisa(); P.komboVantar = false; if (P.komboTom) komboHamta(false); else status("Klart: " + namn + " – allt fanns redan sparat."); });
 }
 function favKnappar() {
   const vb_ = $("favVinter"); vb_.textContent = "";
