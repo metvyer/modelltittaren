@@ -112,7 +112,10 @@ async function mellan() {
     $("thKor").innerHTML = h;
     let t = '<tr><th class="v">Timme UTC</th>' + Array.from({ length: 24 }, (_, i) => `<th>${String(i).padStart(2, "0")}</th>`).join("") + "</tr><tr><td class=\"v\">Öppningar</td>" +
       Array.from({ length: 24 }, (_, i) => `<td>${sum(r => +r.timme === i) || ""}</td>`).join("") + "</tr>";
-    $("thTimme").innerHTML = t; }
+    $("thTimme").innerHTML = t;
+    // 23/11: hur manga av oppningarna som var "Bara skew-T"
+    const sk = sum(r => r.vy === "skew"), alla = sum(() => true);
+    if (alla) $("thTimme").insertAdjacentHTML("afterend", '<p class="dim" id="thSkew">Varav <b>Bara skew-T</b>: ' + sk + " av " + alla + " öppningar.</p>"); }
   $("kort").innerHTML = `<div>Från met.no, 7 dagar<b>${mb(tot.b7)} MB</b></div><div>Från met.no, 31 dagar<b>${mb(tot.b30)} MB</b></div>`
     + `<div>Anrop 7 dagar<b>${tot.a7}</b></div><div>Cachen svarade, 7 dagar<b>${pct(tot.a7 - tot.m7, tot.a7)}</b></div>`;
   // senaste

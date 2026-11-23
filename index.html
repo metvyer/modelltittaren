@@ -1120,7 +1120,8 @@ async function thOppning(r, dtg, lokal, franGH) {
     const nyck = dtg + ":" + r.iy + ":" + r.ix; if (TH_SETT.has(nyck)) return; TH_SETT.add(nyck);
     const idx = await forhamtatIndex(), forv = !!(idx && idx.punkter && idx.punkter[r.iy + ":" + r.ix]);
     const k = lokal ? "lokal" : franGH ? "github" : forv ? "live_forvald" : "live_annan";
-    navigator.sendBeacon("https://modelltittaren.metvyer.workers.dev/th-oppning?k=" + k + "&kor=" + String(dtg).slice(9, 11));
+    // 23/11: vy = th (tid-hojd) eller skew (knappen "Bara skew-T")
+    navigator.sendBeacon("https://modelltittaren.metvyer.workers.dev/th-oppning?k=" + k + "&kor=" + String(dtg).slice(9, 11) + "&vy=" + (typeof baraSkew !== "undefined" && baraSkew ? "skew" : "th"));
   } catch (e) {}
 }
 async function forhamtatIndex() {

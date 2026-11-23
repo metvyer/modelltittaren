@@ -404,12 +404,13 @@ export default {
     // NYTT 23/11: RAKNARE FOR TID-HOJD. POST /th-oppning?k=lokal|github|live_forvald|live_annan&kor=00..21
     // En rad per dag, UTC-timme, korning och kalla (antal) - inget om vem eller vilken plats.
     if (url.pathname === "/th-oppning") {
-      const k = url.searchParams.get("k") || "", kor = url.searchParams.get("kor") || "";
+      const k = url.searchParams.get("k") || "", kor = url.searchParams.get("kor") || "", vy = url.searchParams.get("vy") === "skew" ? "skew" : "th";
       if (!ok || req.method !== "POST" || !/^(lokal|github|live_forvald|live_annan)$/.test(k) || !/^\d\d$/.test(kor) || !env.DB) return new Response(null, { status: 204, headers: cors });
       try {
-        await env.DB.prepare("CREATE TABLE IF NOT EXISTS th_oppning (datum TEXT, timme TEXT, kor TEXT, kalla TEXT, n INTEGER, PRIMARY KEY (datum, timme, kor, kalla))").run();
-        await env.DB.prepare("INSERT INTO th_oppning (datum, timme, kor, kalla, n) VALUES (?, ?, ?, ?, 1) ON CONFLICT(datum, timme, kor, kalla) DO UPDATE SET n = n + 1")
-          .bind(idag(), new Date().toISOString().slice(11, 13), kor, k).run();
+        // 23/11: tabellen th_oppningar har aven vy (th / skew = "Bara skew-T") - ersatter th_oppning (forsta timmen)
+        await env.DB.prepare("CREATE TABLE IF NOT EXISTS th_oppningar (datum TEXT, timme TEXT, kor TEXT, kalla TEXT, vy TEXT, n INTEGER, PRIMARY KEY (datum, timme, kor, kalla, vy))").run();
+        await env.DB.prepare("INSERT INTO th_oppningar (datum, timme, kor, kalla, vy, n) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(datum, timme, kor, kalla, vy) DO UPDATE SET n = n + 1")
+          .bind(idag(), new Date().toISOString().slice(11, 13), kor, k, vy).run();
       } catch (e) {}
       return new Response(null, { status: 204, headers: cors });
     }
@@ -451,7 +452,7 @@ export default {
         // 23/11: granser - GitHub Pages-trafik per dag och D1-databasens storlek
         try { ut.ghTrafik = (await env.DB.prepare("SELECT datum, kb, rapporter FROM gh_trafik WHERE datum >= date('now', '-62 day') ORDER BY datum DESC").all()).results; } catch (e) { ut.ghTrafik = []; }
         try { const r = await env.DB.prepare("SELECT 1").run(); ut.d1Byte = r.meta && r.meta.size_after; } catch (e) {}
-        try { ut.thOppning = (await env.DB.prepare("SELECT kor, kalla, timme, SUM(n) n FROM th_oppning WHERE datum >= date('now', '-31 day') GROUP BY kor, kalla, timme").all()).results; } catch (e) { ut.thOppning = []; }
+        try { ut.thOppning = (await env.DB.prepare("SELECT kor, kalla, timme, vy, SUM(n) n FROM th_oppningar WHERE datum >= date('now', '-31 day') GROUP BY kor, kalla, timme, vy").all()).results; } catch (e) { ut.thOppning = []; }
         if (giltig) { ut.detaljer = true; ut.senaste = (await env.DB.prepare("SELECT tid, typ, vad, status, byte, ms FROM senaste ORDER BY id DESC LIMIT 200").all()).results; }
       }
       if (req.headers.get("X-Mt-Nyckel") && !giltig) ut.felnyckel = true;
