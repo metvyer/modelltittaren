@@ -16,7 +16,9 @@ const K_ = v => v - 273.15;
 // (knappar under valet, sparas per parameter mt:m0Iso:<v>), en färg, tjocklek/streck svag -> kraftig som i Sannolikhet.
 // Upp till två egna tröskellinjer (mt:m0Tr:<v>) i magenta. Parametrar med isoSteg (tryck, 500 hPa) har automatiska linjer.
 const m0Lv = () => M0F.v2 === "=" ? M0F.v : M0F.v2;
-const M0_TR_FARG = "#c026d3";
+// 23/11: de tva egna linjerna i var sin farg (magenta, turkos) - samma farg i rutan, pa kartan och i forklaringen
+const M0_TR_FARGER = ["#c026d3", "#0e9aa7"];
+const m0TrFarg = (lv, nv) => { const s = String(lasa("mt:m0Tr:" + lv) || "").split(";").map(x => parseFloat(x.replace(",", "."))); const i = s.indexOf(nv); return M0_TR_FARGER[i === 1 ? 1 : 0]; };
 const m0IsoKand = v => { const pa = M0P[v]; if (!pa || pa.isoSteg) return [];
   const k = pa.isoVal || (pa.klass.length <= 12 ? pa.klass : []); return [...new Set([...(pa.iso || []), ...k])].sort((a, b) => a - b); };
 const m0IsoVal = v => { try { const a = JSON.parse(lasa("mt:m0Iso:" + v)); if (Array.isArray(a)) return a; } catch (e) {} return (M0P[v] && M0P[v].iso) || []; };
@@ -53,8 +55,8 @@ const M0P = {
   blixt:  { g: "Instabilitet och konvektion", namn: "Blixtindex", var: "lightning_index", enh: "", klass: [0.1, 0.5, 1, 2, 5], konv: v => v, iso: [1] },
   pw:     { g: "Nederbörd och moln", namn: "Utfällbart vatten", var: "lwe_thickness_of_atmosphere_mass_content_of_water_vapor", enh: "mm", klass: [5, 10, 15, 20, 25, 30, 40], konv: v => v < 1 ? v * 1000 : v, iso: [10, 20, 30] },
   // Vind
-  vind:   { g: "Vind", namn: "Medelvind 10 m", var: "wind_speed", enh: "kt", klass: [10, 15, 20, 25, 30, 40], konv: v => v * KT, iso: [15, 25, 34] },
-  by:     { g: "Vind", namn: "Byvind", var: "wind_speed_of_gust", enh: "kt", klass: [20, 25, 32, 40, 50, 64], konv: v => v * KT, iso: [25, 32, 45] },
+  vind:   { g: "Vind", namn: "Medelvind 10 m", var: "wind_speed", enh: "kt", klass: [10, 15, 20, 25, 30, 40], konv: v => v * KT, iso: [15, 25, 34], isoVal: [10, 15, 20, 25, 27, 30, 34, 40] },
+  by:     { g: "Vind", namn: "Byvind", var: "wind_speed_of_gust", enh: "kt", klass: [20, 25, 32, 40, 50, 64], konv: v => v * KT, iso: [25, 32, 45], isoVal: [20, 25, 27, 32, 40, 45, 50, 64] },
   v850:   { g: "Vind", namn: "Vind 850 hPa", var: ["x_wind_pl", "y_wind_pl"], niv: "p850", enh: "kt", klass: [10, 20, 30, 40, 50, 60], konv: v => v * KT, iso: [30, 50] },
   v500:   { g: "Vind", namn: "Vind 500 hPa", var: ["x_wind_pl", "y_wind_pl"], niv: "p500", enh: "kt", klass: [20, 40, 60, 80, 100], konv: v => v * KT, iso: [50, 80] },
   v300:   { g: "Vind", namn: "Vind 300 hPa (jetström)", var: ["x_wind_pl", "y_wind_pl"], niv: "p300", enh: "kt", klass: [40, 60, 80, 100, 120, 150], konv: v => v * KT, iso: [80, 120] },
@@ -225,10 +227,10 @@ function m0Rita() {
       g.appendChild(el("path", { d: dd, fill: "none", stroke: c_iso(), "stroke-width": st.bredd + 0.2, "stroke-dasharray": st.streck, "vector-effect": "non-scaling-stroke", "stroke-linecap": st.streck ? "butt" : "round" }));
       isoEtiketter(g, dd, String(nv).replace(".", ","));
     });
-    for (const nv of tr) {   // egna troskellinjer - magenta, tjockare
+    for (const nv of tr) {   // egna troskellinjer - linje 1 magenta, linje 2 turkos (23/11), tjockare
       const dd = isoSegment(f2, oo, nv); if (!dd) continue;
       g.appendChild(el("path", { d: dd, fill: "none", stroke: "#ffffff", "stroke-width": 6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.9 }));
-      g.appendChild(el("path", { d: dd, fill: "none", stroke: M0_TR_FARG, "stroke-width": 3, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
+      g.appendChild(el("path", { d: dd, fill: "none", stroke: m0TrFarg(lv, nv), "stroke-width": 3, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
       isoEtiketter(g, dd, String(nv).replace(".", ","));
     }
   }
@@ -240,10 +242,16 @@ function m0Forklaring() {
   pa.klass.forEach((k, i) => { const sp = document.createElement("span"), ii = document.createElement("i"); ii.style.background = fa[i];
     sp.append(ii, pa.tat && k % pa.tat ? "" : (pa.lagre ? "< " : "≥ ") + k.toLocaleString("sv-SE") + (pa.enh ? " " + pa.enh : "")); if (pa.tat) sp.className = "tat"; f.appendChild(sp); });
   if (M0F.v2) { const lv = m0Lv(), P2 = M0P[lv], sp = document.createElement("span"); sp.textContent = "Linjer: " + P2.namn.toLowerCase() + (P2.enh ? " (" + P2.enh + ")" : ""); f.appendChild(sp);
-    for (const nv of m0TrVal(lv)) { const s2 = document.createElement("span"), sv = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const prov = (farg, bredd, streck, text) => { const s2 = document.createElement("span"), sv = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       sv.setAttribute("width", 26); sv.setAttribute("height", 10); sv.style.verticalAlign = "middle"; sv.style.marginRight = "4px";
-      const l = document.createElementNS("http://www.w3.org/2000/svg", "line"); for (const [k, w] of Object.entries({ x1: 1, x2: 25, y1: 5, y2: 5, stroke: M0_TR_FARG, "stroke-width": 3 })) l.setAttribute(k, w);
-      sv.append(l); s2.append(sv, "egen " + String(nv).replace(".", ",") + (P2.enh ? " " + P2.enh : "")); f.appendChild(s2); } }
+      const l = document.createElementNS("http://www.w3.org/2000/svg", "line"); for (const [k, w] of Object.entries({ x1: 1, x2: 25, y1: 5, y2: 5, stroke: farg, "stroke-width": bredd })) l.setAttribute(k, w);
+      if (streck) l.setAttribute("stroke-dasharray", streck); sv.append(l); s2.append(sv, text); f.appendChild(s2); };
+    // 23/11: de tanda standardlinjerna syns ocksa i forklaringen (samma streck/tjocklek som pa kartan)
+    const tr = m0TrVal(lv);
+    if (!P2.isoSteg) { const niv = m0IsoVal(lv).slice().sort((a, b) => a - b);
+      niv.forEach((nv, i) => { if (tr.includes(nv)) return; const st = ISO_STIL[isoStilIndex(i, niv.length)];
+        prov(c_iso(), st.bredd + 0.2, st.streck, String(nv).replace(".", ",") + (P2.enh ? " " + P2.enh : "")); }); }
+    for (const nv of tr) prov(m0TrFarg(lv, nv), 3, "", "egen " + String(nv).replace(".", ",") + (P2.enh ? " " + P2.enh : "")); }
   m0IsoRad();
 }
 // knapparna for standardlinjerna och rutorna for egna linjer (under "Linjer ovanpa")
@@ -259,7 +267,11 @@ function m0IsoRad() {
     ch.appendChild(b); }
   const tr = m0TrVal(lv); $("m0Tr1").value = tr[0] !== undefined ? String(tr[0]).replace(".", ",") : ""; $("m0Tr2").value = tr[1] !== undefined ? String(tr[1]).replace(".", ",") : "";
   $("m0TrEnh").textContent = pa.enh || "";
+  m0TrRutor();
 }
+// 23/11: rutan for egen linje 1/2 far samma farg som linjen pa kartan (ram + text)
+function m0TrRutor() { ["m0Tr1", "m0Tr2"].forEach((id, i) => { const r = $(id); if (!r) return; r.style.borderColor = M0_TR_FARGER[i];
+  r.style.borderWidth = "2px"; r.style.color = M0_TR_FARGER[i]; r.style.fontWeight = "600"; }); }
 function m0Tips(e) {
   const o = M0F.o, d = M0F.data; if (!o || !d) return false;
   const p = kartPunkt(e), fy = KY - 1 - p.y, y = Math.round((fy - o.y0) / o.s), x = Math.round((p.x - o.x0) / o.s);

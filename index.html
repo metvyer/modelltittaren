@@ -506,7 +506,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <div class="falt"><label for="m0Linjer">Linjer ovanpå</label><select id="m0Linjer"></select></div>
   </div>
   <div class="m0isorad" id="m0IsoRad" hidden><span class="dim">Linjer:</span> <span class="chips" id="m0IsoChips" title="Tänd eller släck varje linje"></span>
-    <label class="m0tr" title="Upp till två egna linjer (magenta), t.ex. 0 °C eller 25 kt">Egna: <input id="m0Tr1" class="koord" inputmode="decimal" placeholder="–"> <input id="m0Tr2" class="koord" inputmode="decimal" placeholder="–"> <span id="m0TrEnh" class="dim"></span></label></div>
+    <label class="m0tr" title="Upp till två egna linjer: den första magenta, den andra turkos (samma färg som rutan), t.ex. 0 °C eller 25 kt">Egna: <input id="m0Tr1" class="koord" inputmode="decimal" placeholder="–"> <input id="m0Tr2" class="koord" inputmode="decimal" placeholder="–"> <span id="m0TrEnh" class="dim"></span></label></div>
   <div class="pkontroller m0tidrad">
     <button class="sek" id="m0Bak" title="En timme bakåt (vänsterpil)">◀</button>
     <div class="m0tidmitt"><div id="m0Tid" class="tidsvald"></div><input type="range" id="m0Reglage" min="0" max="66" value="0" title="Dra för att välja timme"></div>
@@ -2731,7 +2731,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 </script>
 <script src="sannolikhet.js?v=20261122-2245"></script>
 <script src="kombo.js?v=20261122-2310"></script>
-<script src="m0karta.js?v=20261122-2245"></script>
+<script src="m0karta.js?v=20261123-0930"></script>
 <script src="taf.js?v=20261122-0800"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261122-2250"></script>
