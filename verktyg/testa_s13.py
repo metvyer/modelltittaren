@@ -17,6 +17,9 @@ async def main():
         r = await a.evaluate("JSON.stringify($('karta').getBoundingClientRect())"); r = json.loads(r)
         for i in range(12): await a.mouse.move(r["x"] + 200 + i * 15, r["y"] + 250 + i * 8); await a.wait_for_timeout(60)
         await t.wait_for_timeout(800)
+        print("under musen hos agaren:", await a.evaluate(f"(document.elementFromPoint({r['x'] + 300}, {r['y'] + 330}) || {{}}).id || (document.elementFromPoint({r['x'] + 300}, {r['y'] + 330}) || {{}}).tagName"))
+        print("mus (riktig) hos tittaren:", await t.evaluate("($('kMus') ? $('kMus').getAttribute('transform') : 'ingen')"))
+        await a.evaluate(f"$('karta').dispatchEvent(new PointerEvent('pointermove', {{clientX: {r['x'] + 300}, clientY: {r['y'] + 300}, bubbles: true}}))"); await t.wait_for_timeout(800)
         print("mus hos tittaren:", await t.evaluate("($('kMus') ? $('kMus').getAttribute('transform') + ' ' + $('kMus').children.length + ' delar ' + ($('kMus').querySelector('text') ? $('kMus').querySelector('text').textContent : '') : 'ingen')"))
         t0 = time.time(); await a.evaluate("bytLage('sat')")
         for i in range(60):
