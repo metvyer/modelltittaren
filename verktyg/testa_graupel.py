@@ -1,6 +1,6 @@
 # Prov GR (23/11): raknas graupel in i snofallet? Jamfor precipitation_amount_acc med regn + sno (+ graupel) i det-filen
 # och nederbord - snofall i ensemblen. Avgor om "flytande = nederbord - snofall" (Ishalka) ar ratt.
-import re, urllib.request
+import re, urllib.request, urllib.parse
 import urllib.error
 def h(u):
     try:
@@ -15,7 +15,7 @@ dds = h(BAS + det + ".ncml.dds")
 namn = [n for t, n in re.findall(r"^\s*(\w+)\s+(\w+)\[", dds, re.M) if re.search(r"precip|rain|snow|graup|hail|solid|liquid", n, re.I)]
 print("## det", det); print("nederbordsvariabler:", namn)
 def faltet(fil, var, idx):
-    txt = h(BAS + fil + ".ncml.ascii?" + var + idx)
+    txt = h(BAS + fil + ".ncml.ascii?" + urllib.parse.quote(var + idx, safe=":,"))
     v = []
     for rad in txt.split("\n"):
         if rad.startswith("[") or rad.startswith(var + "."):
