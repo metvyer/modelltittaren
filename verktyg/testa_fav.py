@@ -1,37 +1,37 @@
-# Prov S6 (22/11 kvall): vinterknappen (forsta trycket), METAR-status i meteogrammet, isolinjer
+# Prov S6-variant 23/11: Snodrev i Favoriter med olika perioder (rent fonster per period)
 import asyncio, time, os
 from playwright.async_api import async_playwright
 os.makedirs("matprov", exist_ok=True)
 UT = []
 def skriv(s=""): print(s, flush=True); UT.append(str(s))
+PERIODER = [(0, 12), (0, 24), (6, 30), (0, 36), (12, 48), (0, 61)]
+async def en(p, a, b):
+    br = await p.chromium.launch(); pg = await br.new_page(viewport={"width": 1300, "height": 1000}); fel = []
+    pg.on("pageerror", lambda e: fel.append("JS: " + str(e)))
+    await pg.goto("https://metvyer.github.io/modelltittaren/?prov=" + str(int(time.time()))); await pg.wait_for_timeout(3000)
+    await pg.evaluate("bytLage('f')"); await pg.wait_for_timeout(10000)
+    skriv(f"=== period {a}-{b}: fore: fran {await pg.evaluate('$(\"pFran\").value')} till {await pg.evaluate('$(\"pTill\").value')} dt {await pg.evaluate('$(\"pDt\").value')} uppl {await pg.evaluate('$(\"pUppl\").value')}")
+    await pg.evaluate(f"$('pFran').value='{a}'; $('pTill').value='{b}'; $('pFran').dispatchEvent(new Event('change')); $('pTill').dispatchEvent(new Event('change'))")
+    await pg.wait_for_timeout(3000)
+    await pg.evaluate("window._st = []; const so = window.status; window.status = function(t, k) { window._st.push((t||'').slice(0, 100)); return so(t, k); }; window._ph=[]; const ph = probHamta; probHamta = async function(a, b) { window._ph.push('in ' + P.vOverride + ' lista ' + JSON.stringify(P.listaOverride)); const r = await ph(a, b); window._ph.push('ut fragar ' + P.fragar + ': ' + $('pStatus').textContent.slice(0, 100)); return r; }")
+    await pg.evaluate("document.querySelector('#favVinter button[data-k=snofok]').click()")
+    for i in range(12):
+        await pg.wait_for_timeout(10000)
+        s = await pg.evaluate("$('pStatus').textContent.slice(0,130) + ' | upptagen ' + P.upptagen + ' tom ' + P.komboTom + ' fran ' + $('pFran').value + ' till ' + $('pTill').value")
+        if i in (0, 2, 5, 11) or 'Klart' in s: skriv(f"  {(i+1)*10}s: {s}")
+        if 'Klart: Sn' in s: break
+    skriv("  PH " + str(await pg.evaluate('JSON.stringify(window._ph)'))[:1500])
+    skriv("  ST " + str(await pg.evaluate('JSON.stringify([...new Set(window._st)])'))[:1500])
+    skriv("  DIAG " + str(await pg.evaluate("""(async () => { const K = komboAktiv(); if (!K) return 'ingen K'; const bv = berakna();
+      const ut = ['bv ' + JSON.stringify(bv && [bv.v, bv.s, bv.y0, bv.y1, bv.x0, bv.x1])];
+      for (const v of K.delar) ut.push(v + ' ' + JSON.stringify(P.index.filter(e => e.dtg === P.dtg && e.v === v).map(e => [e.s, e.y0, e.y1, e.x0, e.x1, e.tider.length, Math.min(...e.tider), Math.max(...e.tider)])));
+      const kand = P.index.filter(e => e.dtg === P.dtg && e.v === K.delar[0]);
+      for (const e of kand) { const inom = bv && bv.s === e.s && innehaller(e, { ...bv, v: e.v, dtg: e.dtg }); ut.push('inom ' + inom);
+        const r = await komboOmrade(e, K, komboA(), komboB()); ut.push('komboOmrade ' + (r ? 'ok' : 'null')); }
+      return ut.join(' || '); })()""")))
+    skriv("  fel: " + str(fel[:3])); await br.close()
 async def main():
     async with async_playwright() as p:
-        b = await p.chromium.launch(); pg = await b.new_page(viewport={"width": 1300, "height": 1000}); fel = []
-        pg.on("pageerror", lambda e: fel.append("JS: " + str(e)))
-        await pg.goto("https://metvyer.github.io/modelltittaren/?prov=" + str(int(time.time()))); await pg.wait_for_timeout(3000)
-        await pg.evaluate("bytLage('f')"); await pg.wait_for_timeout(10000)
-        await pg.evaluate("favVal('by', 32)"); await pg.wait_for_timeout(5000)
-        await pg.evaluate("window._kh = 0; window._ph = []; window._st = []; const so = window.status; window.status = function(t, k) { window._st.push((t||'').slice(0, 110)); return so(t, k); }; const o = komboHamta; komboHamta = function(a) { window._kh++; window._khUpp = P.upptagen; return o(a); }; const ph = probHamta; probHamta = async function(a, b) { const st0 = Date.now(); window._ph.push('in ' + P.vOverride + ' upp ' + P.upptagen + ' o0 ' + JSON.stringify(berakna() && [berakna().v, berakna().s])); try { const r = await ph(a, b); window._ph.push('ut ' + (Date.now() - st0) + ' ms: ' + $('pStatus').textContent.slice(0, 120)); return r; } catch (e) { window._ph.push('FEL ' + e); throw e; } }")
-        await pg.evaluate("document.querySelector('#favVinter button[data-k=snofok]').click()")
-        for i in range(5):
-            await pg.wait_for_timeout(5000)
-            skriv(f"snodrev {(i+1)*5}s: " + str(await pg.evaluate("$('pStatus').textContent.slice(0,140) + ' | upptagen ' + P.upptagen + ' kh ' + window._kh + ' khUpp ' + window._khUpp + ' tom ' + P.komboTom")))
-        skriv('PH ' + str(await pg.evaluate('JSON.stringify(window._ph)')))
-        skriv('ST ' + str(await pg.evaluate('JSON.stringify(window._st)')))
-        skriv("DIAG " + str(await pg.evaluate("""(async () => { const K = komboAktiv(); if (!K) return 'ingen K';
-          const kand = P.index.filter(e => e.dtg === P.dtg && e.v === K.delar[0]); const ut = ['kand ' + kand.length + ' ' + JSON.stringify(kand.map(e => [e.s, e.y0, e.y1, e.x0, e.x1, e.tider.join(',')]))];
-          ut.push('by ' + JSON.stringify(P.index.filter(e => e.dtg === P.dtg && e.v === 'by').map(e => [e.s, e.y0, e.y1, e.x0, e.x1, e.tider.length])));
-          let a = +$('pFran').value, b = +$('pTill').value; ut.push('period ' + a + '-' + b + ' dt ' + $('pDt').value);
-          for (const e of kand) { const o = { ...e, ny: (e.y1 - e.y0) / e.s + 1, nx: (e.x1 - e.x0) / e.s + 1 };
-            for (let t = Math.min(a, b); t <= Math.max(a, b); t++) for (const p of K.delar) { const d = await timData({ ...o, v: p }, t); if (!d) ut.push('saknas ' + p + ' t' + t); } }
-          return ut.join(' || '); })()""")))
-        await pg.evaluate("favVal('by', 32); if (!visaIso) $('visaIso').click()"); await pg.wait_for_timeout(5000)
-        await pg.evaluate("$('testskylt') && ($('testskylt').hidden = true)")
-        k = await pg.query_selector("#karta")
-        if k: await k.screenshot(path="matprov/iso.png")
-        for namn, la, lo in [("hav", "57.6", "19.6"), ("Uppsala", "59.86", "17.64")]:
-            await pg.evaluate(f"$('lat').value='{la}'; $('lon').value='{lo}'; visaMeteogram()"); await pg.wait_for_timeout(25000)
-            skriv(f"METAR {namn}: " + str(await pg.evaluate("$('pMeteoMetarInfo').textContent")))
-        skriv("fel: " + str(fel[:5])); await b.close()
+        for a, b in PERIODER: await en(p, a, b)
     open("sida.md", "w").write("\n".join(UT) + "\n")
 asyncio.run(main())
