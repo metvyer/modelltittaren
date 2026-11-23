@@ -3,7 +3,7 @@
 // Observationer - galler NU, inte kartans prognostid (tiden star i hovringsrutan).
 // HALKRISK (egen tolkning, enkel och genomskinlig):
 //   rod    = stationen rapporterar is eller sno pa vagen, eller underkylt regn
-//   orange = vagtemp <= 0 och (vagtemp <= daggpunkt [rimfrost] eller nederbord/vatten pa vagen), eller sno/snoblandat och vagtemp <= +1
+//   orange = vagtemp < +0,5 och (vagtemp <= daggpunkt [rimfrost] eller nederbord/vatten pa vagen)
 //   gul    = vagtemp <= +1 och vagtemp - daggpunkt <= 1 (nara rimfrost/frysning)
 //   gron   = ingen av ovanstaende, gra = saknar vagtemp
 // Data ar CC0 (Trafikverket). Namn fran Trafikverket visas alltid escapade.
@@ -22,8 +22,8 @@ function vvHalka(s) {
   if (s.nb === "freezing_rain") return [3, "underkylt regn"];
   if (s.ty == null) return [-1, "saknar vägtemp"];
   const nb = s.nb && s.nb !== "no", dy = s.td != null ? s.ty - s.td : null;
-  if (s.ty <= 0 && ((dy != null && dy <= 0) || nb || s.va)) return [2, dy != null && dy <= 0 ? "vägtemp ≤ daggpunkt (rimfrost)" : "minusgrader + fukt/nederbörd"];
-  if (s.ty <= 1 && (s.nb === "snow" || s.nb === "sleet")) return [2, "snö/snöblandat och vägtemp ≤ +1"];
+  // 23/11 16:31 (Jakob): orange kraver vagtemp < +0,5
+  if (s.ty < 0.5 && ((dy != null && dy <= 0) || nb || s.va)) return [2, dy != null && dy <= 0 ? "vägtemp ≤ daggpunkt (rimfrost)" : "vägtemp < +0,5 och fukt/nederbörd"];
   if (s.ty <= 1 && dy != null && dy <= 1) return [1, "nära frysning/rimfrost"];
   return [0, "ingen tydlig halkrisk"];
 }
@@ -61,14 +61,16 @@ async function vvHamta(tvinga) {
 }
 function vvRita() {
   const g = $("kVvis"); if (!g) return; g.textContent = ""; if (!VV.pa) return;
-  const sk = (typeof vb !== "undefined" ? vb.w : 949) / 949, r = sk * 4.2, visaText = sk < 0.35;
+  // 23/11 16:31: storlek i SKARMPIXLAR (ruta 11 px, siffror 12 px) oavsett zoom; siffror nar man zoomat in lite
+  const svg = $("karta"), bw = svg && svg.getBoundingClientRect().width || 800, vw = typeof vb !== "undefined" ? vb.w : 949;
+  const enh = vw / bw, r = 5.5 * enh, fs = 12 * enh, visaText = vw / 949 < 0.6;
   // ritordning: lagst risk/varde forst sa de viktigaste hamnar overst
   const ord = VV.lista.map((s, i) => [i, VV.par === "halka" ? vvHalka(s)[0] : 0]).sort((a, b) => a[1] - b[1]);
   for (const [i] of ord) { const s = VV.lista[i], p = tillKarta(s.lat, s.lon);
     const c = el("g", { class: "vvis", "data-i": i, transform: "translate(" + p.x.toFixed(1) + "," + p.y.toFixed(1) + ")", style: "cursor:pointer" });
-    c.appendChild(el("rect", { x: -r, y: -r, width: 2 * r, height: 2 * r, rx: r * 0.3, fill: vvFarg(s), stroke: "#111827", "stroke-width": r * 0.22 }));
+    c.appendChild(el("rect", { x: -r, y: -r, width: 2 * r, height: 2 * r, rx: r * 0.3, fill: vvFarg(s), stroke: "#111827", "stroke-width": r * 0.16 }));
     const tx = visaText ? vvText(s) : "";
-    if (tx) c.appendChild(el("text", { x: r * 1.3, y: r * 0.45, "font-size": r * 1.5, fill: "#111827", stroke: "#fff", "stroke-width": r * 0.35, "paint-order": "stroke" }, tx));
+    if (tx) c.appendChild(el("text", { x: r * 1.25, y: fs * 0.36, "font-size": fs, "font-weight": 600, fill: "#111827", stroke: "#fff", "stroke-width": fs * 0.22, "paint-order": "stroke" }, tx));
     g.appendChild(c); }
   const k = $("vvisKnapp"), tid = VV.lista.reduce((m, s) => s.t > m ? s.t : m, "");
   if (k) k.title = "Vägväder från Trafikverkets VViS-stationer: " + VV.lista.length + " stationer" + (tid ? ", senaste mätning " + vvTid(tid) : "") +
