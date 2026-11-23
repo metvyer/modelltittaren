@@ -210,7 +210,7 @@ function expRitaProfil(pt, p, dp, K) {
   S.appendChild(el("text", { x: W - HM + 36, y: H - BP + 13, "font-size": 9, "text-anchor": "middle", fill: c("--dim") }, "w"));
   // summor
   let vg = 0, vs = 0, vl = 0, vu = 0; for (let i = 0; i < EXP_NIV; i++) { const m = dp[i] / EXP_G; vg += (K.gr[i] || 0) * m; vs += (K.sn[i] || 0) * m; vl += (K.lw[i] || 0) * m; if (tc[i] < 0) vu += (K.lw[i] || 0) * m; }
-  $("expProfilTitel").textContent = "Kolumnen i " + (platsNamn(pt.lat, pt.lon) || "") + " – " + expTidText(EXP.t);
+  $("expProfilTitel").textContent = "Kolumnen i " + (platsNamn(pt.lat, pt.lon) || "") + " – " + expTidText(EXP.t) + " · medlem 0";
   $("expProfilSum").innerHTML = serier.map(([, n, f]) => '<span><i style="background:' + f + '"></i>' + n + "</span>").join(" ") + '<span><i style="background:#dc2626;opacity:.6"></i>Temperatur</span><br>' +
     "Integrerat: graupel " + vg.toFixed(3).replace(".", ",") + " kg/m², snö " + vs.toFixed(3).replace(".", ",") + " kg/m², molnvatten " + vl.toFixed(3).replace(".", ",") + " kg/m² (varav underkylt " + vu.toFixed(3).replace(".", ",") + ").";
 }
