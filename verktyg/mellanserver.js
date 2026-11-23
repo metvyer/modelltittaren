@@ -20,7 +20,7 @@
 //    Har någon redan frågat samma sak hämtar Cloudflare svaret ur cachen och Kalla körs inte alls,
 //    så met.no får bara en fråga även om många kollegor tittar på samma flygplats.
 
-import { WorkerEntrypoint } from "cloudflare:workers";
+import { WorkerEntrypoint, DurableObject } from "cloudflare:workers";
 
 const TILLATNA_SIDOR = ["https://metvyer.github.io"];
 const THREDDS = "https://thredds.met.no/thredds/dodsC/mepslatest/";
@@ -306,6 +306,20 @@ export default {
       const id = (url.searchParams.get("id") || "").toLowerCase(), nyckel = url.searchParams.get("nyckel") || "";
       const ren = (t, n) => String(t || "").replace(/[<>\u0000-\u001f]/g, "").trim().slice(0, n);
       const tittare = async i => (await DB.prepare("SELECT namn FROM tittare WHERE id = ? AND sedd > ? ORDER BY sedd DESC LIMIT 50").bind(i, nu - 120000).all()).results.map(r => r.namn || "");
+      // NYTT 23/11 kvall: REALTID via Durable Object (DelaRum, ett rum per delning). GET /dela/ws?id=X[&nyckel=K|&styrnyckel=N]&namn=
+      // med Upgrade: websocket. Agaren (ratt nyckel) eller den som styr (ratt styrnyckel) blir "sandare" och far skicka
+      // {typ:"vy"} och {typ:"mus"}; alla andra bara tar emot. D1 ar fortfarande sanningen (polling = reserv).
+      if (url.pathname === "/dela/ws") {
+        if ((req.headers.get("Upgrade") || "").toLowerCase() !== "websocket") return json({ fel: "bara websocket" }, 426);
+        if (!env.RUM || !NAMN.test(id)) return json({ fel: "saknas" }, 404);
+        const r = await DB.prepare("SELECT nyckel, styr_nyckel FROM delning WHERE id = ?").bind(id).first();
+        if (!r) return json({ fel: "finns inte" }, 404);
+        const sn = url.searchParams.get("styrnyckel") || "";
+        const roll = (nyckel && nyckel === r.nyckel) || (sn && r.styr_nyckel && sn === r.styr_nyckel) ? "s" : "t";
+        const u = "https://rum/ws?roll=" + roll + "&namn=" + encodeURIComponent(ren(url.searchParams.get("namn"), 30));
+        await raknaAnrop(DB, "dela-ws");
+        return env.RUM.get(env.RUM.idFromName(id)).fetch(new Request(u, req));
+      }
       if (req.method === "GET") {
         if (url.pathname === "/dela/aktiva") {
           const r = (await DB.prepare("SELECT d.id, d.vem, d.anteckning, (SELECT COUNT(*) FROM tittare t WHERE t.id = d.id AND t.sedd > ?) AS antal FROM delning d WHERE d.lista = 1 AND d.levande > ? ORDER BY d.levande DESC LIMIT 30").bind(nu - 120000, nu - 120000).all()).results;
@@ -655,3 +669,25 @@ export default {
     return new Response(svar.body, { status: svar.status, headers: hm });
   }
 };
+
+// NYTT 23/11 kvall: ett realtidsrum per delning. WebSocket Hibernation - rummet sover mellan meddelandena (ingen kostnad
+// for tid), varje anslutning bar sin roll i "attachment". Sandare (roll s) skickar vy/mus vidare till alla andra.
+export class DelaRum extends DurableObject {
+  async fetch(req) {
+    const url = new URL(req.url), par = new WebSocketPair(), [klient, server] = Object.values(par);
+    const roll = url.searchParams.get("roll") === "s" ? "s" : "t";
+    this.ctx.acceptWebSocket(server, [roll]);
+    server.serializeAttachment({ roll, namn: (url.searchParams.get("namn") || "").slice(0, 30) });
+    return new Response(null, { status: 101, webSocket: klient });
+  }
+  async webSocketMessage(ws, msg) {
+    const a = ws.deserializeAttachment() || {};
+    if (a.roll !== "s" || typeof msg !== "string" || msg.length > 20000) return;
+    let m; try { m = JSON.parse(msg); } catch (e) { return; }
+    if (m.typ !== "vy" && m.typ !== "mus") return;
+    const ut = JSON.stringify(m.typ === "mus" ? { typ: "mus", x: +m.x, y: +m.y, ut: !!m.ut, namn: a.namn } : { typ: "vy", vy: m.vy, namn: a.namn });
+    for (const w of this.ctx.getWebSockets()) if (w !== ws) { try { w.send(ut); } catch (e) {} }
+  }
+  async webSocketClose(ws, code) { try { ws.close(code === 1005 ? 1000 : code, "hej"); } catch (e) {} }
+  async webSocketError(ws) { try { ws.close(1011, "fel"); } catch (e) {} }
+}

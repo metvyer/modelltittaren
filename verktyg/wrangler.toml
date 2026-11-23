@@ -35,3 +35,12 @@ bucket_name = "modelltittaren-data"
 # SMHI-radarn samlas var 5:e minut (21/11 natt) - se smhiSamla i mellanserver.js
 [triggers]
 crons = ["*/5 * * * *"]
+
+# NYTT 23/11 kvall: realtid i delningen (muspekare + vy direkt) - ett Durable Object-rum per delning, SQLite (gratisplanen)
+[[durable_objects.bindings]]
+name = "RUM"
+class_name = "DelaRum"
+
+[exports.DelaRum]
+type = "durable-object"
+storage = "sqlite"
