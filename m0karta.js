@@ -198,6 +198,7 @@ async function m0Uppdatera() {
   } catch (e) { if (hamtnr === M0F.hamtar) m0Status("Kunde inte hämta (" + e.message + ")."); }
 }
 function m0Rita() {
+  if (typeof VV !== "undefined" && VV.pa && VV.par === "jmf" && typeof vvRita === "function") setTimeout(vvRita, 0);   // 23/11: VViS − modell foljer faltet
   const g = $("kM0"); g.textContent = ""; const o = M0F.o, d = M0F.data; if (lage !== "m0" || !o || !d) return;
   const pa = M0P[M0F.v], K = pa.klass, F = m0Farger(M0F.v).map(c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
   const cv = document.createElement("canvas"); cv.width = o.nx; cv.height = o.ny;
