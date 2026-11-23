@@ -1542,11 +1542,14 @@ function rita() {
     for (let i = 1; i <= 4; i++) {
       const fl = SKALA[s - 1] + (SKALA[s] - SKALA[s - 1]) * i / 4; if (fl > sk.topp + 0.01) continue;
       const y = sk.y(fl * 100);
-      svg.appendChild(el("line", { x1: 0, y1: y, x2: B, y2: y, stroke: c("--grid"), "stroke-width": 0.5, "stroke-dasharray": "3 3" }));
-      ax.appendChild(el("text", { x: 50, y: y + 4, "font-size": 10, "text-anchor": "end" }, String(fl * 100)));
+      // 23/11 (Jakob): dar skalan byter steg (1 000, 3 000, 9 000, 21 000 ft) - fet siffra och hel, lite morkare linje,
+      // sa att det syns att skalan ar linjar mellan dessa och att stegen dar emellan ar olika stora
+      const bryt = i === 4;
+      svg.appendChild(el("line", { x1: 0, y1: y, x2: B, y2: y, stroke: bryt ? c("--dim") : c("--grid"), "stroke-width": bryt ? 0.8 : 0.5, "stroke-dasharray": bryt ? "" : "3 3", opacity: bryt ? 0.55 : 1 }));
+      ax.appendChild(el("text", { x: 50, y: y + 4, "font-size": bryt ? 11 : 10, "font-weight": bryt ? 700 : 400, "text-anchor": "end" }, String(fl * 100)));
     }
   }
-  ax.appendChild(el("text", { x: 50, y: sk.botten + 4, "font-size": 10, "text-anchor": "end" }, "0"));
+  ax.appendChild(el("text", { x: 50, y: sk.botten + 4, "font-size": 11, "font-weight": 700, "text-anchor": "end" }, "0"));
   ax.appendChild(el("text", { x: 50, y: TOPP_RAD - 6, "font-size": 10, "text-anchor": "end", fill: c("--dim") }, "ft"));
 
   const dolj = vindLage ? { style: "display:none" } : {};
