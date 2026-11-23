@@ -1,6 +1,6 @@
 #!/bin/bash
 # 23/11: Forsvarsmaktens OPPNA geodata for riksintressen (forsvarsmakten.se/riksintressen) -> GeoJSON (WGS84)
-# Kors i GitHub (testa.yml delar=FM). Resultatet laddas upp som artefakt "fm_omraden".
+# Kors i GitHub (testa.yml delar=99). Resultatet laddas upp som artefakt "fm_omraden".
 set -e
 mkdir -p fm && cd fm
 curl -sSL -o fm.zip "https://www.forsvarsmakten.se/globalassets/02-om-forsvarsmakten/myndighetsinformation/dokument/riksintressen/riksintressen_och_paverkningsomraden_2026.gdb.zip"
