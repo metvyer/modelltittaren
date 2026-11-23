@@ -151,6 +151,12 @@ jobs:
         run: |
           sudo apt-get -qq update && sudo apt-get -qq install -y gdal-bin > /dev/null
           bash verktyg/fm_omraden.sh
+      - name: FM-omraden till grenen fm-data
+        if: contains(inputs.delar, 'FM')
+        run: |
+          cp fm/ut/omraden_fm.json /tmp/ && cd /tmp && rm -rf fmgren && mkdir fmgren && cd fmgren && git init -q && git checkout -q -b fm-data
+          cp /tmp/omraden_fm.json . && git add -A && git -c user.name="modelltittaren-bot" -c user.email="actions@users.noreply.github.com" commit -q -m "FM-omraden"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" fm-data
       - name: FM-omraden artefakt
         if: contains(inputs.delar, 'FM')
         uses: actions/upload-artifact@v4
