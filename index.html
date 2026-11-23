@@ -144,7 +144,13 @@ body.obs #karta { width: 100%; height: 80vh; aspect-ratio: auto; margin: 0 auto;
 /* 23/11: satellit/radar - rutan kan dras i nedre hogra hornet (bredd OCH hojd), formen sparas (obs.js obsForm) */
 body.obs .kartram { resize: both; overflow: hidden; height: 80vh; max-width: 100%; min-width: 240px; min-height: 200px; }
 body.obs .kartram > #karta { height: 100%; }
-body.obs .kartram::before { content: "⇲"; position: absolute; right: 2px; bottom: 0; font-size: 15px; line-height: 1; color: var(--dim); pointer-events: none; z-index: 4; }
+/* 23/11 (Jakob): tydligare dra-handtag - liten ruta nere till hoger som lyser upp nar musen ar over bilden */
+body.obs .kartram::before { content: "⇲"; position: absolute; right: 1px; bottom: 1px; width: 22px; height: 22px; display: grid; place-items: center; font-size: 16px; line-height: 1;
+  color: var(--dim); background: var(--panel); border: 1px solid var(--line); border-radius: 5px 0 4px 0; opacity: 0.75; pointer-events: none; z-index: 4; transition: all .15s; }
+body.obs .kartram:hover::before { color: #fff; background: var(--acc, #1f6feb); border-color: var(--acc, #1f6feb); opacity: 1; box-shadow: 0 0 0 3px rgba(31,111,235,.25); }
+/* 23/11: egen form -> den vita panelen krymper med bilden (kolumnen far rutans bredd) */
+@media (min-width: 861px) { body.obs.obsForm .arbete { grid-template-columns: auto minmax(300px, 1fr); }
+  body.obs.obsForm .kartram { max-width: calc(100vw - 380px); } }
 body.exp .baraTH, body.exp .baraP, body.exp .ejTaf { display: none !important; }
 body.exp #kProb, body.exp #kM0, body.exp #kSiff, body.exp #kOmr { display: none; } body:not(.exp) #kExp { display: none; }
 .exprub { margin: 0 0 4px; font-size: 15px; }
@@ -2759,7 +2765,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261122-2250"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261123-1130"></script>
+<script src="obs.js?v=20261123-1150"></script>
 <script src="exp.js?v=20261123-0945"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>

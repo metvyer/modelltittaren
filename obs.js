@@ -410,22 +410,29 @@ function kartLegend() {
 
 // ===================================================================
 // 23/11: FORM PA RUTAN (satellit/radar). .kartram far resize: both i CSS nar body har klassen obs. Storleken
-// sparas (mt:obsForm) och satts bara i satellit/radar - i ovriga flikar tas den inline-storleken bort.
+// sparas per flik (mt:obsForm:sat / mt:obsForm:rad) och satts bara i satellit/radar - i ovriga flikar tas den bort.
+// Med egen form far body klassen obsForm: da krymper den vita panelen med bilden (CSS i index.html).
 // Kartans viewBox foljer rutans form av sig sjalv (ResizeObserver pa #karta i index.html).
 // ===================================================================
 (function obsForm() {
   const ram = document.querySelector(".kartram"); if (!ram || !window.ResizeObserver) return;
-  const las = () => { try { const f = JSON.parse(lasa("mt:obsForm") || "null"); return f && f.w > 100 && f.h > 100 ? f : null; } catch (e) { return null; } };
-  const satt = () => { const ob = document.body.classList.contains("obs"), f = las();
-    if (ob && f) { ram.style.width = Math.min(f.w, ram.parentElement.clientWidth) + "px"; ram.style.height = f.h + "px"; }
-    else { ram.style.width = ""; ram.style.height = ""; } };
+  const nyckel = () => "mt:obsForm:" + (lage === "rad" ? "rad" : "sat");
+  const las = () => { try { const f = JSON.parse(lasa(nyckel()) || "null"); return f && f.w > 100 && f.h > 100 ? f : null; } catch (e) { return null; } };
+  let senast = "";
+  const satt = () => { const ob = document.body.classList.contains("obs"), f = ob ? las() : null, k = ob ? nyckel() : "";
+    if (k === senast && (!ob || ram.style.width)) { document.body.classList.toggle("obsForm", ob && !!ram.style.width); return; }   // samma flik - lat dragningen vara
+    senast = k;
+    if (ob && f) { ram.style.width = Math.min(f.w, innerWidth - 380) + "px"; ram.style.height = f.h + "px"; }
+    else { ram.style.width = ""; ram.style.height = ""; }
+    document.body.classList.toggle("obsForm", ob && !!f); };
   let klar = false, tm = 0;
   new ResizeObserver(() => { if (!klar || !document.body.classList.contains("obs") || !ram.style.width && !ram.style.height) return;
-    clearTimeout(tm); tm = setTimeout(() => lagra("mt:obsForm", JSON.stringify({ w: Math.round(ram.offsetWidth), h: Math.round(ram.offsetHeight) })), 300); }).observe(ram);
+    document.body.classList.add("obsForm");
+    clearTimeout(tm); tm = setTimeout(() => lagra(nyckel(), JSON.stringify({ w: Math.round(ram.offsetWidth), h: Math.round(ram.offsetHeight) })), 300); }).observe(ram);
   // nar anvandaren drar i hornet satter webblasaren style.width/height sjalv - da sparas det ovan
   new MutationObserver(() => { klar = false; satt(); setTimeout(() => { klar = true; }, 100); }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
   ram.addEventListener("pointerdown", () => { if (document.body.classList.contains("obs")) klar = true; });
   const b = document.getElementById("obsFormAter");
-  if (b) b.addEventListener("click", () => { lagra("mt:obsForm", ""); ram.style.width = ""; ram.style.height = ""; });
+  if (b) b.addEventListener("click", () => { lagra(nyckel(), ""); ram.style.width = ""; ram.style.height = ""; document.body.classList.remove("obsForm"); });
   satt(); setTimeout(() => { klar = true; }, 100);
 })();
