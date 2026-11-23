@@ -37,6 +37,13 @@ Inga personuppgifter sparas. <a href="./">← Tillbaka till Modelltittaren</a></
 GitHub-trafiken räknas av sidorna själva (sedan 23/11) – besökare som har mellanservern <i>Av</i> räknas inte, så siffran är något för låg.</p>
 <div class="kort" id="granser"></div>
 
+<h2>Tid-höjd: varifrån datat kom (31 dagar)</h2>
+<p>Räknas sedan 23/11: en rad per öppnad plats och körning. <b>GitHub</b> = förhämtat (snabbt, ingen belastning på met.no). <b>Live, förvald</b> = en förhämtad flygplats, men förhämtningen hade inte den körningen (än) – hämtades från met.no.
+<b>Live, annan</b> = annan punkt. <b>Eget minne</b> = webbläsaren hade det redan. Få öppningar för en körning (GitHub + live, förvald) = den körningen kan skippas i förhämtningen.</p>
+<div class="tab"><table id="thKor"><tr><td class="v">Hämtar …</td></tr></table></div>
+<p class="dim">Per timme (UTC) när platserna öppnades:</p>
+<div class="tab"><table id="thTimme"></table></div>
+
 <h2>Mellanservern per dag (UTC)</h2>
 <p><b>Anrop</b> = alla frågor från sidorna. <b>Från källan</b> = de som inte fanns i cachen och därför hämtades från met.no/aviationweather. <b>Cache</b> = andel som cachen svarade på.</p>
 <div class="tab"><table id="dagar"><tr><td class="v">Hämtar …</td></tr></table></div>
@@ -96,6 +103,16 @@ async function mellan() {
     $("granser").innerHTML = kort("GitHub-trafik denna månad", ghMan, 100, "GB") + (prognos !== null ? kort("Prognos hela månaden", prognos, 100, "GB") : "")
       + kort("GitHub-lagring (förhämtat)", lagr === null ? null : lagr / 1024, 1, "GB") + kort("Cloudflare-anrop i dag", idagA, 100000, "st") + kort("Mest på en dag (31 d)", maxA, 100000, "st")
       + kort("Databasen (D1)", d.d1Byte ? d.d1Byte / 1073741824 : null, 5, "GB"); }
+  // 23/11: tid-hojd - per korning och per timme
+  { const KAL = [["github", "GitHub"], ["live_forvald", "Live, förvald"], ["live_annan", "Live, annan"], ["lokal", "Eget minne"]], rr = d.thOppning || [];
+    const sum = (f) => rr.filter(f).reduce((s, r) => s + r.n, 0);
+    let h = '<tr><th class="v">Körning</th>' + KAL.map(k => "<th>" + k[1] + "</th>").join("") + "<th>Förvalda totalt</th></tr>";
+    for (const kor of ["00", "03", "06", "09", "12", "15", "18", "21"]) h += `<tr><td class="v">${kor}Z</td>` + KAL.map(k => `<td>${sum(r => r.kor === kor && r.kalla === k[0])}</td>`).join("") + `<td><b>${sum(r => r.kor === kor && (r.kalla === "github" || r.kalla === "live_forvald"))}</b></td></tr>`;
+    if (!rr.length) h += '<tr><td class="v" colspan="6">Inga öppningar registrerade än (räknaren startade 23/11).</td></tr>';
+    $("thKor").innerHTML = h;
+    let t = '<tr><th class="v">Timme UTC</th>' + Array.from({ length: 24 }, (_, i) => `<th>${String(i).padStart(2, "0")}</th>`).join("") + "</tr><tr><td class=\"v\">Öppningar</td>" +
+      Array.from({ length: 24 }, (_, i) => `<td>${sum(r => +r.timme === i) || ""}</td>`).join("") + "</tr>";
+    $("thTimme").innerHTML = t; }
   $("kort").innerHTML = `<div>Från met.no, 7 dagar<b>${mb(tot.b7)} MB</b></div><div>Från met.no, 31 dagar<b>${mb(tot.b30)} MB</b></div>`
     + `<div>Anrop 7 dagar<b>${tot.a7}</b></div><div>Cachen svarade, 7 dagar<b>${pct(tot.a7 - tot.m7, tot.a7)}</b></div>`;
   // senaste

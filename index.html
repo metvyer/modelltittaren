@@ -1108,6 +1108,21 @@ const nyckel = () => "mt:" + M.dtg + ":" + M.iy + ":" + M.ix + ":";
 // korningen pa sjalva sidan (forhamtat/th/). Det hamtas fran github.io - ingen
 // thredds eller mellanserver behovs - och sparas sedan som om sidan hamtat sjalv.
 let FORH = null;
+// NYTT 23/11: RAKNARE for tid-hojd - en rad per oppnad plats och korning: kom datat fran webblasarens eget minne
+// (lokal), fran GitHub-forhamtningen (github), hamtades live for en forhamtad flygplats (live_forvald = forhamtningen
+// hade inte den korningen an/inte alls) eller for en annan punkt (live_annan). Skickas till mellanservern, som bara
+// sparar antal per dag, timme (UTC), korning och kalla - inget om vem eller vilken plats. Visar vilka korningar
+// som ar vard att forhamta. Skickas inte med installningen "Av".
+const TH_SETT = new Set();
+async function thOppning(r, dtg, lokal, franGH) {
+  try {
+    if (typeof VAG_LAGE !== "undefined" && VAG_LAGE === "av") return;
+    const nyck = dtg + ":" + r.iy + ":" + r.ix; if (TH_SETT.has(nyck)) return; TH_SETT.add(nyck);
+    const idx = await forhamtatIndex(), forv = !!(idx && idx.punkter && idx.punkter[r.iy + ":" + r.ix]);
+    const k = lokal ? "lokal" : franGH ? "github" : forv ? "live_forvald" : "live_annan";
+    navigator.sendBeacon("https://modelltittaren.metvyer.workers.dev/th-oppning?k=" + k + "&kor=" + String(dtg).slice(9, 11));
+  } catch (e) {}
+}
 async function forhamtatIndex() {
   if (FORH && Date.now() - FORH.t < 10 * 60e3) return FORH.idx;
   let idx = null;
@@ -2317,8 +2332,9 @@ async function hamtaAllt() {
     }
     else { dtg = val; nt = await antalTider(dtg); if (!nt) throw new Error("Körningen " + dtg + " finns inte (längre) på servern."); }
     if (!M || M.dtg !== dtg || M.iy !== r.iy || M.ix !== r.ix || M.nt !== nt) { M = nyModell(dtg, nt, r.iy, r.ix); await laddaCache(); }
-    let franGH = false;
+    let franGH = false; const hadeLokalt = !!M.stat;
     if (!M.stat) franGH = await hamtaForhamtat();
+    thOppning(r, dtg, hadeLokalt, franGH);   // 23/11: statistik - varifran tid-hojd-datat kom
     else if (!lasa(nyckel() + "tq")) { const idx = await forhamtatIndex(); if (idx && idx.tq && idx.dtg === M.dtg) await hamtaForhamtat(); }   // T + q har kommit sedan sist
     M.lat = lat; M.lon = lon; M.ny = ny; M.vald = val !== "senaste";
     if (!M.stat) {
