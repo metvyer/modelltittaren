@@ -599,10 +599,10 @@ def varv_ens(ut):
 
 
 # NYTT 23/11 kvall: MARKTRYCK QFF for isobarerna (qff.js). HELA MEPS-omradet i 10 km (var 4:e ruta, 268 x 238) -
-# isobarer och H/L blir fel om bara ett utsnitt finns. +0..+36 ur det-filen (medlem 0), hPa i 16 bitar (0,1 hPa,
+# isobarer och H/L blir fel om bara ett utsnitt finns. +0..+66 ur det-filen (medlem 0), hPa i 16 bitar (0,1 hPa,
 # little-endian, 65535 = saknas). Bara till R2 (qff/<DTG>/p_<t>.bin.gz + qff/index.json) - inte grenen data.
 # Hoppar over om R2 redan har korningen (laser mellanserverns /r2/qff/index.json).
-QFF = {"y0": 0, "y1": 1068, "x0": 0, "x1": 948, "s": 4, "tider": 37}
+QFF = {"y0": 0, "y1": 1068, "x0": 0, "x1": 948, "s": 4, "tider": 67}   # 23/11 kvall: +0..+66 (Jakob), ca 2 MB/korning
 QFF_PA = {"var": "air_pressure_at_sea_level", "konv": lambda v: v / 100.0, "tabell": None, "steg": 0.1, "bitar": 16}
 
 
@@ -614,7 +614,7 @@ def varv_qff(ut):
     try:
         req = urllib.request.Request("https://modelltittaren.metvyer.workers.dev/r2/qff/index.json", headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=30) as r: g = json.load(r)
-        if g.get("dtg") == dtg and g.get("klar"): print(f"QFF: {dtg} finns redan i R2."); return 0
+        if g.get("dtg") == dtg and g.get("klar") and len(g.get("tider", [])) >= min(QFF["tider"], nt): print(f"QFF: {dtg} finns redan i R2."); return 0
     except Exception as e: print(f"QFF: inget index i R2 ({e})", flush=True)
     t0 = time.time(); STAT["anrop"] = 0; STAT["byte"] = 0
     y0, y1, x0, x1, s_ = QFF["y0"], QFF["y1"], QFF["x0"], QFF["x1"], QFF["s"]

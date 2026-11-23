@@ -1,7 +1,7 @@
 // qff.js - NYTT 23/11 kvall: ISOBARER (marktryck QFF, MEPS medlem 0) ovanpa kartan i alla flikar, knappen "〰 Isobarer".
-// Data: forhamtat i GitHub Actions till R2 (forhamta.py qff): HELA MEPS-omradet i 10 km, +0..+36, de 4 senaste korningarna,
+// Data: forhamtat i GitHub Actions till R2 (forhamta.py qff): HELA MEPS-omradet i 10 km, +0..+66, de 4 senaste korningarna,
 // via mellanservern /r2/qff/... Utanfor det (eller om R2 inte svarar) hamtas timmen direkt ur senaste korningen (~250 kB).
-// Tid: Karta MBR0 = kartans tid, Sannolikhet/Favoriter = periodens forsta timme, ovriga flikar = narmaste hela timme nu.
+// Tid: Karta MBR0 = kartans tid, Sannolikhet/Favoriter = vald timme (ingenting vid en period), ovriga flikar = narmaste hela timme nu.
 // Faltet jamnas ut latt (3x3 tva ganger) - 2,5 km-trycket ar brusigt over fjallen. Linjer var 4 (eller 2) hPa,
 // H och L = lokala hogsta/lagsta varden inom ca 300 km (inte vid kanten), med tryckvarde.
 const QFF_R2 = "https://modelltittaren.metvyer.workers.dev/r2/qff/";
@@ -9,7 +9,9 @@ let QF = { pa: lasa("mt:qff") === "ja", steg: lasa("mt:qffSteg") === "2" ? 2 : 4
 function qffTid() {   // giltig tid (ms) for fliken som visas, eller null
   if (typeof lage === "undefined" || lage === "exp") return null;
   if (lage === "m0") return typeof M0F !== "undefined" && M0F.t0 && M0F.t !== null ? M0F.t0 + M0F.t * 3600e3 : null;
-  if (lage === "p") { if (typeof P === "undefined" || !P.dtg) return null; let a = +$("pFran").value, b = +$("pTill").value; if (b < a) a = b;
+  if (lage === "p") { if (typeof P === "undefined" || !P.dtg) return null; const a = +$("pFran").value, b = +$("pTill").value;
+    // 23/11 kvall (Jakob): vald PERIOD (mer an en timme) -> inga isobarer, annars ser det ut som en enda tidpunkt
+    if (a !== b) { QF.info = "Isobarer visas bara när en enda timme är vald (nu är en period vald)."; return null; }
     return isFinite(a) ? dtgDatum(P.dtg).getTime() + a * 3600e3 : null; }
   return Math.round(Date.now() / 3600e3) * 3600e3;
 }
@@ -73,7 +75,7 @@ function qffCentra(f, o) {   // lokala extremvarden inom R rutor (ca 300 km), in
 async function qffRita() {
   const g = $("kQff"); if (!g) return;
   const T = QF.pa ? qffTid() : null;
-  if (!QF.pa || T === null) { g.textContent = ""; QF.nyckel = ""; qffKnapp(); return; }
+  if (!QF.pa || T === null) { g.textContent = ""; QF.nyckel = ""; if (!QF.pa || lage !== "p") QF.info = ""; qffKnapp(); return; }
   const d = await qffFalt(T);
   if (!QF.pa || qffTid() !== T) return;   // tiden/fliken bytt medan vi hamtade
   g.textContent = "";
@@ -94,10 +96,10 @@ async function qffRita() {
     g.appendChild(el("text", { x: X, y: Y + fs * 0.85, class: "qffHLv", "font-size": fs * 0.5, "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central", fill: fa, stroke: "#fff", "stroke-width": fs / 12, "paint-order": "stroke" }, String(Math.round(c.v)))); }
   const tid = new Date(T);
   QF.info = "Isobarer QFF var " + QF.steg + " hPa, " + p2(tid.getUTCHours()) + "Z " + tid.getUTCDate() + "/" + (tid.getUTCMonth() + 1) + " (körning " + d.dtg.slice(6, 8) + "/" + d.dtg.slice(9, 11) + "Z +" + d.t + ", MEPS medlem 0, 10 km" + (d.kalla === "direkt" ? ", hämtad direkt" : "") + ")." +
-    (lage === "m0" ? "" : lage === "p" ? " Periodens första timme." : " Närmaste hela timme nu.");
+    (lage === "m0" ? "" : lage === "p" ? " Vald timme." : " Närmaste hela timme nu.");
   qffKnapp();
 }
-function qffKnapp() { const b = $("qffKnapp"); if (b) b.title = (QF.pa && QF.info ? QF.info + "\n" : "") + "Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan. H/L = högtryck/lågtryck med värde. Förhämtat för hela MEPS-området, +0 till +36 h."; }
+function qffKnapp() { const b = $("qffKnapp"); if (b) b.title = (QF.pa && QF.info ? QF.info + "\n" : "") + "Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan. H/L = högtryck/lågtryck med värde. Förhämtat för hela MEPS-området, +0 till +66 h. Visas inte när en period (flera timmar) är vald."; }
 function qffSnart() { clearTimeout(QF.tim); QF.tim = setTimeout(qffRita, 250); }
 (function qffInit() {
   const b = $("qffKnapp"), st = $("qffSteg"); if (!b) return;
