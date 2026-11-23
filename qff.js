@@ -92,10 +92,11 @@ async function qffRita() {
     g.appendChild(el("path", { d: dd, fill: "none", stroke: "#111827", "stroke-width": tjock ? 2.2 : 1.4, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
     if (tjock) qffEtiketter(g, dd, String(v));   // 23/11 kvall (Jakob): varden bara pa tjocka linjer, halften sa tatt
   }
-  // 23/11 kvall (Jakob): inget H/L - bara trycket i centrum, blatt = hogtryck, rott = lagtryck
-  const fs = (typeof vb !== "undefined" ? vb.w : 949) / 40;
+  // 23/11 21:28 (Jakob): H/L tillbaka, tryckvardet mindre under bokstaven. Blatt = hogtryck, rott = lagtryck.
+  const fs = (typeof vb !== "undefined" ? vb.w : 949) / 30;
   for (const c of d.c) { const X = o.x0 + c.x * o.s, Y = KY - 1 - (o.y0 + c.y * o.s), fa = c.typ === "H" ? "#1d4ed8" : "#b91c1c";
-    g.appendChild(el("text", { x: X, y: Y, class: "qffHL", "font-size": fs, "font-weight": 800, "text-anchor": "middle", "dominant-baseline": "central", fill: fa, stroke: "#fff", "stroke-width": fs / 5, "paint-order": "stroke" }, String(Math.round(c.v)))); }
+    g.appendChild(el("text", { x: X, y: Y, class: "qffHL", "font-size": fs, "font-weight": 800, "text-anchor": "middle", "dominant-baseline": "central", fill: fa, stroke: "#fff", "stroke-width": fs / 7, "paint-order": "stroke" }, c.typ));
+    g.appendChild(el("text", { x: X, y: Y + fs * 0.78, class: "qffHLv", "font-size": fs * 0.4, "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central", fill: fa, stroke: "#fff", "stroke-width": fs / 14, "paint-order": "stroke" }, String(Math.round(c.v)))); }
   const tid = new Date(T);
   QF.info = "Isobarer QFF var " + QF.steg + " hPa, " + p2(tid.getUTCHours()) + "Z " + tid.getUTCDate() + "/" + (tid.getUTCMonth() + 1) + " (körning " + d.dtg.slice(6, 8) + "/" + d.dtg.slice(9, 11) + "Z +" + d.t + ", MEPS medlem 0, 10 km" + (d.kalla === "direkt" ? ", hämtad direkt" : "") + ")." +
     (lage === "m0" ? "" : lage === "p" ? " Vald timme." : " Närmaste hela timme nu.");
@@ -110,7 +111,7 @@ function qffEtiketter(g, d, text) {
     g.appendChild(el("text", { x, y, class: "isoEtikett", "font-size": fs, "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central",
       fill: "#111827", stroke: "#ffffff", "stroke-width": fs / 4, "paint-order": "stroke" }, text)); }
 }
-function qffKnapp() { const b = $("qffKnapp"); if (b) b.title = (QF.pa && QF.info ? QF.info + "\n" : "") + "Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan. Siffror i blått = högtryckscentrum, rött = lågtryckscentrum. Värden på de tjocka linjerna (var 20:e hPa). Förhämtat för hela MEPS-området, +0 till +66 h. Visas inte när en period (flera timmar) är vald."; }
+function qffKnapp() { const b = $("qffKnapp"); if (b) b.title = (QF.pa && QF.info ? QF.info + "\n" : "") + "Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan. H (blå) = högtryck, L (röd) = lågtryck, med tryckvärde. Värden på de tjocka linjerna (var 20:e hPa). Förhämtat för hela MEPS-området, +0 till +66 h. Visas inte när en period (flera timmar) är vald."; }
 function qffSnart() { clearTimeout(QF.tim); QF.tim = setTimeout(qffRita, 250); }
 (function qffInit() {
   const b = $("qffKnapp"), st = $("qffSteg"); if (!b) return;
@@ -121,8 +122,9 @@ function qffSnart() { clearTimeout(QF.tim); QF.tim = setTimeout(qffRita, 250); }
   const mo = new MutationObserver(() => { if (QF.pa) qffSnart(); });
   for (const id of ["kartTid", "kartTidM0"]) { const e = $(id); if (e) mo.observe(e, { childList: true, subtree: true, characterData: true }); }
   mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-  const svg = $("karta"); if (svg) new MutationObserver(() => { if (!QF.pa) return; const fs = vb.w / 40;
-    document.querySelectorAll(".qffHL").forEach(t => { t.setAttribute("font-size", fs); t.setAttribute("stroke-width", fs / 5); }); }).observe(svg, { attributes: true, attributeFilter: ["viewBox"] });
+  const svg = $("karta"); if (svg) new MutationObserver(() => { if (!QF.pa) return; const fs = vb.w / 30;
+    document.querySelectorAll(".qffHL").forEach(t => { t.setAttribute("font-size", fs); t.setAttribute("stroke-width", fs / 7); });
+    document.querySelectorAll(".qffHLv").forEach(t => { const h = t.previousSibling; if (h) t.setAttribute("y", +h.getAttribute("y") + fs * 0.78); t.setAttribute("font-size", fs * 0.4); t.setAttribute("stroke-width", fs / 14); }); }).observe(svg, { attributes: true, attributeFilter: ["viewBox"] });
   setInterval(() => { if (QF.pa && !document.hidden && lage !== "m0" && lage !== "p") qffRita(); }, 10 * 60e3);   // "nu"-flikarna: ny timme
   if (QF.pa) setTimeout(qffRita, 1500);
 })();
