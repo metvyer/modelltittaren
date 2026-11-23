@@ -12,7 +12,9 @@
 //  TAF-tolkningen (tafTolka) ar skriven for att aven kunna anvandas av PP-snitt.
 // ===================================================================
 
-const TAF_STD = ["ESIB", "ESCF", "ESCM", "ESDF", "ESMV", "ESSA", "ESGG", "ESMS", "ESSV", "ESPA", "ESPE"];   // de 11 forhamtade
+// 23/11 (Jakob): 12 forvalda - Karlsborg (ESIA) tillagd efter Satenas. En sparad lista som ar exakt de gamla 11 byts automatiskt.
+const TAF_STD = ["ESIB", "ESIA", "ESCF", "ESCM", "ESDF", "ESMV", "ESSA", "ESGG", "ESMS", "ESSV", "ESPA", "ESPE"];
+const TAF_STD_GAMMAL = ["ESIB", "ESCF", "ESCM", "ESDF", "ESMV", "ESSA", "ESGG", "ESMS", "ESSV", "ESPA", "ESPE"];
 const TAF_FARG = { gron: "#16a34a", gul: "#eab308", rod: "#dc2626", ingen: "#cbd5e1" };
 // 21/11 (Jakob): standard gul 500 ft / 3 km, rod 200 ft / 1 km. Sparade granser som ar exakt de gamla standardvardena
 // (5 km/1500 ft, 1,5 km/500 ft) byts till de nya (se TAFS.gr nedan).
@@ -30,7 +32,7 @@ const TAF_INTERVALL_MIN = 5, TAF_FRAM_H = 30, TAF_BAK_H = 2;   // nyhamtning; ti
 const TAF_AWC = "https://aviationweather.gov/api/data/", TAF_MS = "https://modelltittaren.metvyer.workers.dev/";
 
 let TAFS = {
-  lista: (() => { try { const a = JSON.parse(lasa("mt:tafLista") || "null"); if (Array.isArray(a) && a.length) return a; } catch (e) {} return TAF_STD.slice(); })(),
+  lista: (() => { try { const a = JSON.parse(lasa("mt:tafLista") || "null"); if (Array.isArray(a) && a.length) return a.join() === TAF_STD_GAMMAL.join() ? TAF_STD.slice() : a; } catch (e) {} return TAF_STD.slice(); })(),
   gr: (() => { try { const g = JSON.parse(lasa("mt:tafGrans") || "{}");
     if (Object.keys(TAF_GRANS_GAMMAL).every(k => g[k] === TAF_GRANS_GAMMAL[k])) for (const k in TAF_GRANS_GAMMAL) delete g[k];
     return { ...TAF_GRANS_STD, ...g }; } catch (e) { return { ...TAF_GRANS_STD }; } })(),
