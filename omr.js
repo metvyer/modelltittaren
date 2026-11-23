@@ -18,7 +18,14 @@ const OMR_LAGER = [
   // 22/11: flygledningssektorer (ACC) - ligger i flera hojdskikt ovanpa varandra, anvand hojdfiltret
   { id: "ESOS", k: "ATCCS_ESOS", namn: "Sektorer Stockholm kontroll (LFV)", farg: "#475569", streck: "5 3", etik: false },
   { id: "ESMM", k: "ATCCS_ESMM", namn: "Sektorer Malmö kontroll (LFV)", farg: "#8b5a2b", streck: "5 3", etik: false },
+  // 23/11: Forsvarsmaktens OPPNA geodata (riksintressen 2026, forsvarsmakten.se/riksintressen) - statisk fil omraden_fm.json
+  // (gjord i GitHub: testa.yml delar=99 -> grenen fm-data). Granser for riksintressen, inte aktivering.
+  { id: "FMSJO", k: "FM", f: a => a.t === "SJO", namn: "Sjöövningsområden (Försvarsmakten)", farg: "#0f766e", streck: "7 3", etik: true },
+  { id: "FMLAG", k: "FM", f: a => a.t === "LAG", namn: "Lågflygningsområden (Försvarsmakten)", farg: "#b45309", streck: "2 2", etik: true },
+  { id: "FMMSA", k: "FM", f: a => a.t === "MSA", namn: "MSA-områden runt militära flygplatser (Försvarsmakten)", farg: "#6d28d9", streck: "", etik: false },
+  { id: "FMLAND", k: "FM", f: a => a.t === "LAND", namn: "Riksintressen på land: skjutfält, flygplatser, radar m.m. (Försvarsmakten)", farg: "#4d7c0f", streck: "3 2", etik: false },
 ];
+const OMR_FM_FIL = "omraden_fm.json?v=20261123";
 // 22/11: hojdfilter for LFV-lagren - visa bara omraden som omfattar vald hojd (fot). 0 = alla.
 const OMR_HOJDER = [[0, "alla höjder"], [1000, "1 000 ft"], [3000, "3 000 ft"], [5000, "FL 50"], [10000, "FL 100"], [15000, "FL 150"], [20000, "FL 200"], [25000, "FL 250"], [30000, "FL 300"], [40000, "FL 400"]];
 // LFV:s hojder: "GND", "UNL", "FL 95", "4500" (fot over havet) -> fot
@@ -32,7 +39,7 @@ const omrLager = id => OMR_LAGER.find(l => l.id === id);
 async function omrHamta(k) {
   if (OMR.data[k] || OMR.hamtar[k]) return;
   OMR.hamtar[k] = true; OMR.fel[k] = ""; omrMenyStatus();
-  try { const r = await fetch(OMR_URL + k); if (!r.ok) throw new Error("svar " + r.status); OMR.data[k] = await r.json(); }
+  try { const r = await fetch(k === "FM" ? OMR_FM_FIL : OMR_URL + k); if (!r.ok) throw new Error("svar " + r.status); const js = await r.json(); OMR.data[k] = k === "FM" ? js.omraden : js; }
   catch (e) { OMR.fel[k] = String(e.message || e); }
   OMR.hamtar[k] = false; omrMenyStatus(); OMR.nyckel = ""; omrRita();
 }
@@ -74,12 +81,14 @@ function omrRita() {
   }
   for (const e of etiketter) {
     const t = el("text", { class: "omretik", "data-l": e.L.id, "data-i": e.i, x: e.x, y: e.y, "text-anchor": "middle", "font-size": fs, "stroke-width": fs * 0.22, fill: e.L.farg, "font-weight": 600 },
-      e.L.id === "SJO" || e.L.id === "LAN" ? e.a.n : e.a.n.replace(/^ES\s+/, "")   /* "ES R31" -> "R31", men "ESOS 4:1" orord */);
+      e.L.id === "SJO" || e.L.id === "LAN" || e.L.k === "FM" ? e.a.n : e.a.n.replace(/^ES\s+/, "")   /* "ES R31" -> "R31", men "ESOS 4:1" orord */);
     g.appendChild(t);
   }
 }
 function omrTipsText(L, a) {
   if (L.k === "SMHI") return (L.id === "SJO" ? "Sjöväderområde: " : "Län: ") + a.n + "\nKälla: SMHI";
+  if (L.k === "FM") return a.n + (a.id ? " (" + a.id + ")" : "") + "\n" + L.namn.replace(/ \(Försvarsmakten\)$/, "") + (a.kn ? "\n" + a.kn + (a.ln ? ", " + a.ln : "") : "") +
+    "\n\nKälla: Försvarsmakten, riksintressen 2026 (öppna geodata). Gränser för riksintresset – inte när det övas. Inte för navigering.";
   let t = a.n + "\n" + L.namn.replace(/ \(LFV\)$/, "") + "\nHöjd: " + omrHojd(a.l) + " – " + omrHojd(a.u);
   if (a.c) t += "\n\n" + (a.c.length > 400 ? a.c.slice(0, 390) + " …" : a.c);
   return t + "\n\nKälla: LFV (AIP" + (a.w ? ", gäller från " + String(a.w).slice(0, 10) : "") + "). Gränser, inte aktivering. Inte för navigering.";

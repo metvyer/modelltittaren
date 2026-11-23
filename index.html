@@ -418,7 +418,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <button class="sek liten" id="fri" aria-pressed="false" title="Klick sätter alltid en ny punkt, även på en flygplats eller hämtad punkt (samma som Skift-klick)">Fri punkt</button>
     <button class="sek liten" id="visaFlyg" aria-pressed="true" title="Visa eller dölj de små flygplatsprickarna">Flygplatser</button>
     <button class="sek liten" id="visaVarn" aria-pressed="false" title="SMHI:s vädervarningar på kartan. Fylld yta = gäller vid kartans tid, streckad kant = börjar inom 48 h. Hovra över en yta eller tryck på symbolen för info – hela texten i listan under kartan. Hämtas via mellanservern, var 5:e minut.">⚠ Varningar</button>
-    <span class="omrvalj"><button class="sek liten" id="visaOmr" aria-pressed="false" title="Visa gränser på kartan: militära övningsområden (TRA), R- och D-områden, CTR, TMA, ATZ (LFV) samt sjöväderområden och län (SMHI). Gränser – inte aktivering. Inte för navigering.">Områden ▾</button>
+    <span class="omrvalj"><button class="sek liten" id="visaOmr" aria-pressed="false" title="Visa gränser på kartan: militära övningsområden (TRA), R- och D-områden, CTR, TMA, ATZ (LFV) samt sjöväderområden och län (SMHI), sjöövnings-, lågflygnings- och MSA-områden m.m. (Försvarsmakten, öppna riksintressen). Gränser – inte aktivering. Inte för navigering.">Områden ▾</button>
       <div class="omrmeny" id="omrMeny" hidden></div></span>
     <button class="sek liten baraP" id="m0Linje" aria-pressed="false" title="Medlem 0:s linje för tröskeln (blå) ovanpå sannolikheten – ligger den långt från de röda områdena skiljer sig medlem 0 från ensemblen. Inga extra hämtningar.">m0-linje</button>
     <button class="sek liten" id="siffror" aria-pressed="false" title="Värdena som siffror på kartan: av → på (ovanpå färgerna) → bara siffror. Inzoomat syns varje punkt, längre ut blockens högsta (lägsta för sikt/molnbas) värde.">Siffror: av</button>
@@ -2765,11 +2765,11 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261122-2250"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261123-1150"></script>
+<script src="obs.js?v=20261123-1115"></script>
 <script src="exp.js?v=20261123-0945"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>
-<script src="omr.js?v=20261122-2205"></script>
+<script src="omr.js?v=20261123-1115"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>

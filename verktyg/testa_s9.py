@@ -55,6 +55,10 @@ async def main():
             skriv("  sam: " + await pg.evaluate("$('pSam').textContent.slice(0, 200)"))
             await (await pg.query_selector("#karta")).screenshot(path=f"matprov/vinter_{k}.png")
         skriv("metno-anrop (statistik i sidan): " + await pg.evaluate("JSON.stringify(P.index.filter(e => e.dtg === P.dtg && ['sno','nb','t0','t2','rh'].includes(e.v)).map(e => [e.v, e.s, e.tider.length]))"))
+        # --- Forsvarsmaktens omraden ---
+        await pg.evaluate("bytLage('th'); OMR.pa = ['FMSJO','FMLAG','FMMSA']; omrHamta('FM')"); await pg.wait_for_timeout(4000)
+        skriv("FM: " + await pg.evaluate("(OMR.data.FM || []).length + ' omraden, ritade ' + document.querySelectorAll('#kOmraden .omryta').length + ' etiketter ' + document.querySelectorAll('#kOmraden .omretik').length + ' fel ' + JSON.stringify(OMR.fel)"))
+        await pg.evaluate("$('testskylt').hidden = true"); await (await pg.query_selector("#karta")).screenshot(path="matprov/fm_omraden.png")
         skriv("fel: " + str(fel[:5])); await b.close()
     open("sida.md", "w").write("\n".join(UT) + "\n")
 asyncio.run(main())
