@@ -14,6 +14,10 @@
 // styra", ägaren svarar "Lämna över"/"Nej" (eller har kryssat "Vem som helst får ta över direkt"). Den som styr har blå
 // ruta och sänder; alla andra - även ägaren - följer. Ägaren kan alltid "Ta tillbaka". Ägarnyckeln lämnar aldrig ägarens
 // webbläsare; den som styr får en tillfällig nyckel som slutar gälla när styret lämnas/tas tillbaka eller sidan stängs.
+// NYTT 23/11 kvall: REALTID. Alla i en delning kopplar upp en WebSocket mot mellanservern (/dela/ws, ett Durable
+// Object-rum per delning). Den som styr skickar vyn direkt (högst var 0,3 s) och MUSPEKAREN över kartan (högst
+// ~14 ggr/s); följarna ser en röd ring med namnet. D1-sändningen och frågandet finns kvar som reserv - fungerar
+// inte WebSocket (nät som stoppar det, gratistaket nått) blir det som förut, bara utan pekare.
 
 const DELA_URL = "https://modelltittaren.metvyer.workers.dev/dela";
 const DELA_SKICKA_MS = 1500, DELA_FOLJ_SNABB_MS = 3000, DELA_FOLJ_LUGN_MS = 12000, DELA_AKTIV_MS = 180000, DELA_KOLL_MS = 1000;
@@ -202,7 +206,7 @@ async function delaAgarPuls() {
     if (j.styr && !DELA.agarFoljer) { DELA.agarFoljer = true; DELA.folj = d.id; DELA.foljer = true; DELA.andrad = 0; DELA.vbSenast = ""; DELA.tillampad = ""; DELA.panel = false; delaBygg(); }
     else if (!j.styr && DELA.agarFoljer) { DELA.agarFoljer = false; DELA.folj = null; DELA.foljer = false; DELA.senastSkickat = ""; DELA.skickadTid = 0; DELA.panel = true;
       if (typeof RIT !== "undefined") { RIT.delade = null; ritRita(); } delaBygg(); }
-    if (DELA.agarFoljer && DELA.foljer && j.andrad > DELA.andrad && !DELA.tillampar) { DELA.andrad = j.andrad; DELA.not = (j.vy && j.vy.not) || ""; await vyTillampa(j.vy); }
+    if (DELA.agarFoljer && DELA.foljer && j.andrad > DELA.andrad && !DELA.tillampar) { DELA.andrad = j.andrad; await delaVisaVy(j.vy); }
   } catch (e) {}
   delaUppdatera();
 }
@@ -228,7 +232,7 @@ async function delaHamtaVy(forsta) {
       if (!j.vantar) { DELA.vantar = false; DELA.fel = "Delaren lämnade inte över styret."; delaBygg(); }
     }
     if (DELA.jagStyr) { if (!(j.styr && j.styr.du)) delaStyrSlut("Styret har tagits tillbaka."); else delaUppdatera(); return; }
-    if (DELA.foljer && j.andrad > DELA.andrad) { DELA.andrad = j.andrad; DELA.not = (j.vy && j.vy.not) || ""; await vyTillampa(j.vy); }
+    if (DELA.foljer && j.andrad > DELA.andrad) { DELA.andrad = j.andrad; await delaVisaVy(j.vy); }
   } catch (e) {
     DELA.fel = e.status === 404 ? "Det finns ingen delning som heter «" + DELA.folj + "»." : "Kunde inte hämta den delade vyn (" + e.message + ").";
     if (e.status === 404) DELA.foljer = false;
@@ -253,6 +257,76 @@ async function delaHamtaAktiva() {
   if (!DELA.panel || DELA.folj || document.hidden) return;
   try { DELA.aktiva = await delaFraga("GET", "", null, "/aktiva"); } catch (e) { DELA.aktiva = []; }
   delaUppdatera();
+}
+
+// ---------- Realtid (NYTT 23/11 kvall) ----------
+const DELA_WS = DELA_URL.replace(/^https/, "wss") + "/ws";
+const WS = { ws: null, mal: "", forsok: 0, nasta: 0, vySkickad: "", vyVantar: null, musTid: 0, musTim: 0, senastVy: "" };
+const delaWsUppe = () => !!(WS.ws && WS.ws.readyState === 1);
+// skickar jag (agaren som sander och inte foljer, eller den som fatt styret)?
+const delaJagSander = () => !!(DELA.jagStyr || (DELA.sander && aktivDelning() && !DELA.agarFoljer && !DELA.folj));
+function delaWsMal() {   // vilken delning/roll anslutningen ska ha just nu ("" = ingen)
+  const namn = "&namn=" + encodeURIComponent(DELA.vem || "");
+  if (DELA.jagStyr && DELA.folj) return "?id=" + encodeURIComponent(DELA.folj) + "&styrnyckel=" + DELA.jagStyr + namn;
+  const d = aktivDelning();
+  if (DELA.sander && d) return "?id=" + d.id + "&nyckel=" + d.nyckel + namn;
+  if (DELA.folj) return "?id=" + encodeURIComponent(DELA.folj) + namn;
+  return "";
+}
+function delaWsKoll() {   // varje sekund: koppla upp, byt eller stang
+  const mal = delaWsMal();
+  if (mal === WS.mal && (WS.ws || !mal)) return;
+  if (WS.ws && mal !== WS.mal) { const g = WS.ws; WS.ws = null; try { g.close(1000); } catch (e) {} WS.forsok = 0; WS.nasta = 0; }
+  WS.mal = mal; if (!mal || Date.now() < WS.nasta) { if (!mal) delaMusRita(null); return; }
+  let ws; try { ws = new WebSocket(DELA_WS + mal); } catch (e) { return; }
+  WS.ws = ws; WS.vySkickad = "";
+  ws.onopen = () => { WS.forsok = 0; delaUppdatera(); };
+  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; }
+    if (m.typ === "mus") delaMusRita(m);
+    else if (m.typ === "vy" && m.vy && DELA.foljer && !DELA.jagStyr) { WS.vyVantar = m.vy; delaWsTillampa(); } };
+  ws.onclose = () => { if (WS.ws !== ws) return; WS.ws = null; WS.forsok++; WS.nasta = Date.now() + Math.min(30000, 1000 * 2 ** Math.min(WS.forsok, 5)); WS.mal = ""; delaUppdatera(); };
+  ws.onerror = () => {};
+}
+async function delaWsTillampa() {   // senaste vyn fran rummet; ar vi mitt i en annan vantar den tills den ar klar
+  if (DELA.tillampar || !WS.vyVantar) return;
+  const v = WS.vyVantar; WS.vyVantar = null; await delaVisaVy(v);
+}
+async function delaVisaVy(v) {   // gemensam for rummet och fragandet - samma vy laggs inte pa tva ganger
+  const t = JSON.stringify(v); if (t === WS.senastVy) return; WS.senastVy = t;
+  DELA.not = (v && v.not) || ""; await vyTillampa(v);
+}
+function delaWsVy() {   // var 0,3 s: den som skickar skickar vyn direkt om den andrats; foljare tar en vantande vy
+  if (WS.vyVantar && !DELA.tillampar) delaWsTillampa();
+  if (!delaWsUppe() || !delaJagSander() || DELA.tillampar) return;
+  const t = JSON.stringify(vyFanga()); if (t === WS.vySkickad) return;
+  WS.vySkickad = t; try { WS.ws.send(JSON.stringify({ typ: "vy", vy: JSON.parse(t) })); } catch (e) {}
+}
+// muspekaren: kartans egna koordinater (samma for alla oavsett skarm och zoom)
+function delaMusInit() {
+  const svg = $("karta"); if (!svg) return;
+  const skicka = o => { if (delaWsUppe() && delaJagSander()) try { WS.ws.send(JSON.stringify(o)); } catch (e) {} };
+  svg.addEventListener("pointermove", e => {
+    if (!delaWsUppe() || !delaJagSander()) return;
+    const n = Date.now(); if (n - WS.musTid < 70) { clearTimeout(WS.musTim); WS.musTim = setTimeout(() => svg.dispatchEvent(new PointerEvent("pointermove", { clientX: e.clientX, clientY: e.clientY })), 75); return; }
+    WS.musTid = n; const m = svg.getScreenCTM(); if (!m) return;
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+    skicka({ typ: "mus", x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 });
+  });
+  svg.addEventListener("pointerleave", () => { clearTimeout(WS.musTim); skicka({ typ: "mus", ut: true }); });
+}
+function delaMusRita(m) {   // foljarens sida: rod ring + namn, i skarmpixlar oavsett zoom. Forsvinner efter 15 s utan rorelse.
+  const svg = $("karta"); if (!svg) return;
+  let g = $("kMus");
+  if (!g) { g = el("g", { id: "kMus", style: "pointer-events:none" }); svg.appendChild(g); }
+  clearTimeout(WS.musBort);
+  if (!m || m.ut || !DELA.foljer || !isFinite(m.x) || !isFinite(m.y)) { g.textContent = ""; return; }
+  const bw = svg.getBoundingClientRect().width || 800, e = (typeof vb !== "undefined" ? vb.w : 949) / bw;
+  g.textContent = "";
+  g.setAttribute("transform", "translate(" + m.x + "," + m.y + ")");
+  g.appendChild(el("circle", { r: 11 * e, fill: "rgba(220,38,38,0.15)", stroke: "#dc2626", "stroke-width": 2.5 * e }));
+  g.appendChild(el("circle", { r: 2.5 * e, fill: "#dc2626" }));
+  if (m.namn) g.appendChild(el("text", { x: 14 * e, y: -10 * e, "font-size": 12 * e, "font-weight": 700, fill: "#b91c1c", stroke: "#fff", "stroke-width": 3 * e, "paint-order": "stroke" }, m.namn));
+  WS.musBort = setTimeout(() => { g.textContent = ""; }, 15000);
 }
 
 // ---------- Utseende ----------
@@ -344,10 +418,11 @@ function delaUppdatera() {
     const styrNamn = DELA.styr && !DELA.styr.du ? (DELA.styr.namn || "(namnlös)") : "";
     t("delaRubrik", DELA.jagStyr ? "🎮 Du styr «" + DELA.folj + "»" : DELA.agarFoljer ? "🎮 " + styrNamn + " styr din delning «" + DELA.folj + "»" + (DELA.foljer ? "" : " · ⏸ du följer inte") :
       (DELA.foljer ? "👁 Följer delad vy " : "⏸ Följer inte – du styr själv · ") + "«" + DELA.folj + "»" + (styrNamn ? " – " + styrNamn + " styr" : DELA.delare ? " (" + DELA.delare + ")" : ""));
-    t("delaInfo", (DELA.jagStyr ? "Alla som följer ser det du gör. Ägaren kan ta tillbaka när som helst." : DELA.foljer ? "Ändras inom några sekunder när den som styr ändrar. Zooma och skrolla fritt." : "Du har ändrat något själv. Tryck Följ igen för att gå tillbaka.") + " " + tittText());
+    t("delaInfo", (DELA.jagStyr ? "Alla som följer ser det du gör" + (delaWsUppe() ? " och var din mus är över kartan." : ".") + " Ägaren kan ta tillbaka när som helst." :
+      DELA.foljer ? (delaWsUppe() ? "⚡ Realtid – ändras direkt, röd ring = den som styrs mus." : "Ändras inom några sekunder när den som styr ändrar.") + " Zooma och skrolla fritt." : "Du har ändrat något själv. Tryck Följ igen för att gå tillbaka.") + " " + tittText());
     const n = $("delaNot"); if (n) { n.textContent = DELA.not ? "📝 " + DELA.not : ""; n.hidden = !DELA.not; }
   }
-  t("delaSand", DELA.sander ? "● Sänder" : "");
+  t("delaSand", DELA.sander ? "● Sänder" + (delaWsUppe() ? " ⚡ realtid (tittarna ser din mus över kartan)" : "") : "");
   t("delaTitt", DELA.sander ? tittText() : "");
   t("delaFel", DELA.fel ? " " + DELA.fel : "");
   const a = $("delaAktiva");
@@ -365,11 +440,13 @@ function delaKnappKlick() {
 (function delaInit() {
   delaLasMina();
   $("delaKnapp").addEventListener("click", delaKnappKlick);
-  setInterval(() => { delaKollaEgen(); delaSkicka(); }, DELA_KOLL_MS);
+  setInterval(() => { delaKollaEgen(); delaSkicka(); delaWsKoll(); }, DELA_KOLL_MS);
+  setInterval(delaWsVy, 300);
+  delaMusInit();
   let senastFragat = 0, senastPuls = 0, senastLista = 0;
   setInterval(() => {
     const n = Date.now(), aktiv = DELA.andrad && n - DELA.andrad < DELA_AKTIV_MS;
-    if (DELA.folj && n - senastFragat >= (aktiv ? DELA_FOLJ_SNABB_MS : DELA_FOLJ_LUGN_MS)) { senastFragat = n; delaHamtaVy(false); }
+    if (DELA.folj && n - senastFragat >= (aktiv && !delaWsUppe() ? DELA_FOLJ_SNABB_MS : DELA_FOLJ_LUGN_MS)) { senastFragat = n; delaHamtaVy(false); }
     if (DELA.sander && n - senastPuls >= DELA_AGARE_MS) { senastPuls = n; delaAgarPuls(); }
     if (DELA.panel && n - senastLista >= DELA_LISTA_MS) { senastLista = n; delaHamtaAktiva(); }
   }, 1000);
