@@ -397,7 +397,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <p>Modelltittaren är en testsida och den är under utveckling. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
     <p><b>Använd inte sidan som underlag för operativa beslut eller prognoser.</b> Använd ordinarie verktyg och produkter.</p>
     <p><b>Det du tittar på kan andra se.</b> Med standardvalet går hämtningarna via en gemensam mellanserver, och andra användare kan se vilka områden och punkter som hämtats. En delad vy ser alla som har länken. Vill du lämna färre spår: välj <i>Osynligt</i> eller <i>Av</i> under ”Hämta MEPS via mellanservern” längst ner, och använd inte Dela. Helt spårlöst blir det inte – met.no, Cloudflare och övriga källor ser vad som hämtas – men det blir inte samlat och lätt att se för andra.</p>
-    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo. Vägväder: Trafikverket (VViS), CC0. Webbkameror: Windy.com.</p>
+    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo. Vägväder: Trafikverket (VViS), CC0. KONRAD3D: Deutscher Wetterdienst, CC BY 4.0. Webbkameror: Windy.com.</p>
     <button id="testskyltOk">Jag förstår</button>
   </div>
 </div>
@@ -438,6 +438,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <button class="sek liten baraP" id="visaIso" aria-pressed="false" title="Isolinjer: 30 % och 70 % (sannolikhet), eller 32/45 kt och tröskeln (värdeläge)">Isolinjer</button>
     <button class="sek liten" id="kamKnapp" aria-pressed="false" title="Webbkameror (Windy.com) i kartutsnittet. Hovra = bild, klick = kamerans sida.">📷 Kameror</button>
     <button class="sek liten" id="vvisKnapp" aria-pressed="false" title="Vägväder från Trafikverkets VViS-stationer (vägtemp, luft, daggpunkt, vind, sikt, nederbördstyp, halkrisk). Observationer – gäller nu, inte kartans prognostid.">🛣 Vägväder</button><select id="vvisPar" class="liten" hidden title="Vad stationerna färgas efter. Halkrisk: röd = is/snö rapporterad eller underkylt regn, orange = vägtemp < +0,5 och vägtemp ≤ daggpunkt eller fukt/nederbörd (nu eller inom 3 h), gul = vägtemp ≤ +1 och nära daggpunkten, grön = ingen tydlig risk. VViS − modell: jämför med fältet i Karta MBR0."></select><select id="vvisH" class="liten" hidden title="Hur långt bakåt diagrammet i hovringsrutan visar (stationens mätningar). Modellens yttemp finns bara ca 1 dygn bakåt."><option value="6">6 h</option><option value="24">24 h</option><option value="72">72 h</option></select>
+    <button class="sek liten" id="konradKnapp" aria-pressed="false">⚡ KONRAD3D</button>
     <button class="sek liten" id="qffKnapp" aria-pressed="false" title="Isobarer (marktryck QFF, MEPS medlem 0) ovanpå kartan.">〰 Isobarer</button><select id="qffSteg" class="liten" hidden title="Avstånd mellan isobarerna"><option value="2">2 hPa</option><option value="5">5 hPa</option><option value="10">10 hPa</option></select>
     <button class="sek liten" id="formAter" hidden title="Kartrutans form: dra i nedre högra hörnet (⇲) för att ändra bredd och höjd – sparas per flik. Den här knappen återställer fliken.">⇲ Återställ form</button>
     <button class="sek liten" id="bildKnapp" aria-pressed="false" title="Bildspel: spara vyer i förväg (flik, tid, zoom, ritade linjer, mätning, anteckning) och bläddra fram dem – t.ex. under en sändning. Sparas i webbläsaren och med din sändning.">🖼 Bilder</button>
@@ -454,7 +455,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -2662,7 +2663,8 @@ function kartTips(e) {
   if (!mk && typeof varnTips === "function" && varnTips(e)) return;   /* 22/11: SMHI-varningar (varn.js) */
   if (!mk && typeof omrTips === "function" && omrTips(e)) return;   /* 22/11: omraden (omr.js) */
   if (!mk && typeof kamTips === "function" && kamTips(e)) return;   /* 23/11: webbkameror (kam.js) */
-  if (!mk && typeof vvisTips === "function" && vvisTips(e)) return;   /* 23/11: vagvader VViS (vvis.js) */
+  if (!mk && typeof vvisTips === "function" && vvisTips(e)) return;
+  if (!mk && typeof konradTips === "function" && konradTips(e)) return;   /* 24/11: KONRAD3D (konrad.js) */   /* 23/11: vagvader VViS (vvis.js) */
   if ($("kTips").style.maxWidth === "420px" || $("kTips").style.maxWidth === "520px") $("kTips").style.maxWidth = "";
   if (!mk && lage === "p" && e.pointerType !== "touch") { probTips(e); return; }
   if (!mk && lage === "m0" && e.pointerType !== "touch" && !friPunkt && m0Tips(e)) return;
@@ -2674,7 +2676,8 @@ function kartKlick(e, mal) {
   if (typeof ritKlick === "function" && ritKlick(e, mal)) return;   // 21/11: ritlinjer (rita.js)
   if (mal && mal.closest && mal.closest(".varnsym") && typeof varnKlick === "function") { varnKlick(e, mal); return; }   /* 22/11: tryck pa varningssymbol = info */
   if (mal && mal.closest && mal.closest(".omretik") && typeof omrKlick === "function") { omrKlick(e, mal); return; }
-  if (typeof vvisKlick === "function" && vvisKlick(e, mal)) return;   /* 23/11: vagvader VViS (vvis.js) */
+  if (typeof vvisKlick === "function" && vvisKlick(e, mal)) return;
+  if (typeof konradKlick === "function" && konradKlick(e, mal)) return;   /* 24/11: KONRAD3D */   /* 23/11: vagvader VViS (vvis.js) */
   if (typeof kamKlick === "function" && kamKlick(e, mal)) return;   /* 23/11: webbkamera -> Windy */   /* 22/11: tryck pa omradesnamn = info */
   if (lage === "p" && typeof favDetaljKlick === "function" && favDetaljKlick(e)) return;   /* 23/11: Detalj har (Favoriter) */
   const sel = $("punkt"), fri = friPunkt || e.shiftKey, mk = !fri && mal && mal.closest ? mal.closest(".mk") : null;
@@ -2818,6 +2821,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="vvis.js?v=20261123-1850"></script>
 <script src="qff.js?v=20261123-2140"></script>
 <script src="bildspel.js?v=20261124-0700"></script>
+<script src="konrad.js?v=20261124-1310"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>
