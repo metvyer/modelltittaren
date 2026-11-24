@@ -1804,5 +1804,5 @@ function bytLage(nytt) {
   try { await laddaIndex(); } catch (e) {}
   // 20/11 kvall: nya besokare (inget sparat val) borjar i Favoriter
   const forst = lasa("mt:lageVy");
-  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "m0") bytLage("m0"); else if (forst === "sat" || forst === "rad" || forst === "exp") bytLage(forst); else if (forst === "f" || !forst) bytLage("f");
+  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "m0") bytLage("m0"); else if (forst === "sat" || forst === "rad" || forst === "exp" || forst === "brand") bytLage(forst); else if (forst === "f" || !forst) bytLage("f");
 })();
