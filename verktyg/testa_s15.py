@@ -8,8 +8,9 @@ async def main():
         s.on("pageerror", lambda e: fel.append(str(e)))
         await s.goto(SIDA); await s.wait_for_timeout(4000)
         await s.evaluate("$('testskylt').hidden = true; bytLage('th')"); await s.wait_for_timeout(1000)
+        await s.evaluate("$('hamta').click()")
         for i in range(40):
-            if await s.evaluate("typeof M !== 'undefined' && M.yta && M.yta[1] && M.yta[1].length > 5"): break
+            if await s.evaluate("typeof M !== 'undefined' && M && M.yta && M.yta[1] && M.yta[1].length > 5"): break
             await s.wait_for_timeout(1500)
         print(await s.evaluate("(() => { const o = []; for (const t of [0, 3, 6, 9]) { const tk = M.yta[1][t], rh = M.yta[2][t]; o.push('t' + t + ': T ' + (tk - 273.15).toFixed(1) + ' RH ' + rh + ' Td ' + daggpunkt(tk, rh).toFixed(1)); } return o.join(' | '); })()"))
         print("tabellrader:", await s.evaluate("(() => { const tx = [...document.querySelectorAll('#thTabell text, #tabell text, svg text')].map(t => t.textContent); return RAD_NAMN.td + ' finns: ' + tx.includes('Td °C'); })()"))
