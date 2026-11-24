@@ -530,7 +530,7 @@ export default {
         const ut = { ref: d && d.referenceTime, refH: h && h.referenceTime, lat: la, lon: lo,
           tim: plock(h, [["fwiindex", "fwiindex"], ["fwi", "fwi"], ["grassfire", "grassfire"], ["t", "t2"], ["r", "r"], ["ws", "ws"], ["prec1h", "nb"]]),
           dygn: plock(d, [["fwiindex", "fwiindex"], ["fwi", "fwi"], ["grassfire", "grassfire"], ["forestdry", "forestdry"], ["prec24h", "nb"], ["t", "t2"]]) };
-        svar = new Response(JSON.stringify(ut), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" } });
+        svar = new Response(JSON.stringify(ut), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=" + (h && d ? 1800 : 60) } });   // halvt svar: bara 1 min
         ctx.waitUntil(caches.default.put(ck, svar.clone()));
         await raknaAnrop(env.DB, "brand-punkt");
       }

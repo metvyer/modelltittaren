@@ -84,8 +84,10 @@ async function brPunkt(lat, lon) {
 function brCell(v, tab, txt) { const t = v !== null && v !== undefined && tab[v]; return "<td style='background:" + (t ? t[0] : "transparent") + "' title='" + brEsc(t ? t[1] : "saknas / utanför säsong") + "'>" + (txt !== undefined ? txt : t ? (tab === BR_KLASS ? ["", "1", "2", "3", "4", "5", "5E"][v] : v) : "–") + "</td>"; }
 function brPunktRita() {
   const j = BR.pdata, p = $("brPunkt"); if (!j) return;
-  const T = j.tim, D = j.dygn, r1 = v => v === null || v === undefined ? "–" : (Math.round(v * 10) / 10).toString().replace(".", ",");
-  let h = "<div class='brrub'><b>Brandrisk " + j.lat.toFixed(2) + ", " + j.lon.toFixed(2) + "</b> <span class='dim'>SMHI, timprognos från " + (j.refH || "").slice(0, 16).replace("T", " ") + " UTC</span> <button class='sek liten' id='brStang'>✕</button></div>";
+  // timmar: fran forra hela timmen och framat (SMHI:s fil borjar ofta ett dygn bakat)
+  const fr = Date.now() - 3600e3, ix = j.tim ? j.tim.t.map((t, k) => [t, k]).filter(([t]) => Date.parse(t) >= fr).map(([, k]) => k) : [];
+  const T = j.tim ? Object.fromEntries(Object.entries(j.tim).map(([k, a]) => [k, ix.map(q => a[q])])) : null, D = j.dygn, r1 = v => v === null || v === undefined ? "–" : (Math.round(v * 10) / 10).toString().replace(".", ",");
+  let h = "<div class='brrub'><b>Brandrisk " + j.lat.toFixed(2) + ", " + j.lon.toFixed(2) + "</b> <span class='dim'>SMHI, timprognos från " + (j.refH ? j.refH.slice(0, 16).replace("T", " ") + " UTC" : "– (timdata saknas just nu)") + "</span> <button class='sek liten' id='brStang'>✕</button></div>";
   if (T && T.t.length) {
     h += "<div class='brskroll'><table class='brtab'><tr><th>UTC</th>" + T.t.map(t => "<th>" + (new Date(t).getUTCHours() === 0 ? brDag(t).split(" ")[1] : p2(new Date(t).getUTCHours())) + "</th>").join("") + "</tr>";
     h += "<tr><th title='Skogsbrandsrisk (FWI-klass)'>Skog</th>" + T.fwiindex.map(v => brCell(v, BR_KLASS)).join("") + "</tr>";

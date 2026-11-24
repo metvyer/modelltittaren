@@ -715,7 +715,7 @@ def varv_brand(ut):
     try:
         req = urllib.request.Request("https://modelltittaren.metvyer.workers.dev/r2/brand/index.json", headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=30) as r: g = json.load(r)
-        if g.get("ref") == ref: print(f"Brandrisk: {ref} finns redan."); return 0
+        if g.get("ref") == ref and g.get("v") == 2: print(f"Brandrisk: {ref} finns redan."); return 0
     except Exception as e: print(f"Brandrisk: inget index ({e})", flush=True)
     vt = las(BRAND_BAS + "/geotype/multipoint/validtime.json").get("validTime", [])
     if not vt: print("Brandrisk: inga tider"); return 0
@@ -735,7 +735,8 @@ def varv_brand(ut):
                 inne = (ix >= 0) & (ix < L["nx"]) & (iy >= 0) & (iy < L["ny"]); cell = np.where(inne, (iy // S) * NX + ix // S, -1)
                 print(f"  {len(cell)} SMHI-punkter, {int(inne.sum())} inom MEPS-omradet", flush=True)
             vals = np.asarray(j["timeSeries"][0]["parameters"][0]["values"], dtype=np.float64)
-            ok = (cell >= 0) & (vals >= 0)
+            # utanfor Sverige har SMHI fyllnadsvarden (FWI mycket stort, klass 15) -> saknas
+            ok = (cell >= 0) & (vals >= 0) & (vals < (500 if kort == "fwi" else 7))
             ut8 = np.full(NY * NX, -1.0)
             if kort == "fwi": w = np.clip(np.rint(vals), 0, 250)
             else: w = vals
@@ -744,7 +745,7 @@ def varv_brand(ut):
             with gz.open(os.path.join(rdir, f"{kort}_{i}.bin.gz"), "wb", compresslevel=6) as f: f.write(b.tobytes())
             del j
         dagar.append(v); print(f"  dag {i} ({v}) klar ({time.time() - t0:.0f} s)", flush=True)
-    idx = {"ref": ref, "mapp": refk, "dagar": dagar, "s": S, "ny": NY, "nx": NX, "y0": 0, "x0": 0, "falt": [k for k, _ in BRAND_FALT],
+    idx = {"v": 2, "ref": ref, "mapp": refk, "dagar": dagar, "s": S, "ny": NY, "nx": NX, "y0": 0, "x0": 0, "falt": [k for k, _ in BRAND_FALT],
            "skapad": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
     with open(os.path.join(bdir, "index.json"), "w", encoding="utf-8") as f: json.dump(idx, f)
     mb = sum(os.path.getsize(os.path.join(rdir, x)) for x in os.listdir(rdir)) / 1e6
