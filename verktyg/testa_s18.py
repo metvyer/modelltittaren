@@ -12,7 +12,8 @@ async def main():
         print("info:", await s.evaluate("$('brInfo').textContent.slice(0, 200)"))
         for f in ["fwi", "gras", "torr"]:
             await s.evaluate(f"$('brFalt').value = '{f}'; $('brFalt').dispatchEvent(new Event('change'))"); await s.wait_for_timeout(2500)
-            print(f, await s.evaluate("(async () => { const u = await brFil(BR_FALT[BR.falt].fil, BR.dag); let n = 0, mx = 0; for (const v of u) if (v !== 255) { n++; if (v > mx) mx = v; } return n + ' rutor med varde, max ' + mx; })()"))
+            print(f, await s.evaluate("(async () => { const u = await brFil(BR_FALT[BR.falt].fil, BR.dag); const h = {}; for (const v of u) h[v] = (h[v] || 0) + 1; return JSON.stringify(h).slice(0, 400); })()"))
+        print("punkt-ratt:", await s.evaluate("fetch(BR_PUNKT + '?lat=58.6&lon=16.2').then(r => r.text()).then(t => t.slice(0, 600))"))
         await s.evaluate("brPunkt(58.6, 16.2)"); await s.wait_for_timeout(6000)
         print("punkt:", await s.evaluate("$('brPunkt').innerText.slice(0, 500).replace(/\\n/g, ' | ')"))
         await s.evaluate("$('brFalt').value = 'effis'; $('brFalt').dispatchEvent(new Event('change'))"); await s.wait_for_timeout(10000)
