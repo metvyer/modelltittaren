@@ -205,7 +205,7 @@ function ledRitaProfil() {
     for (const k of [[-1e9, -157, "#f87171"], [-157, -79, "#fcd34d"], [0, 1e9, "#93c5fd"]]) g2.appendChild(el("rect", { x: xG(k[0]), y: G2.yT, width: xG(k[1]) - xG(k[0]), height: G2.yB - G2.yT, fill: k[2], opacity: 0.25 }));
     for (const v of [-300, -157, -79, 0]) { g2.appendChild(el("line", { x1: xG(v), x2: xG(v), y1: G2.yT, y2: G2.yB, stroke: v === 0 || v === -157 ? "#444" : ledFarg("--grid"), "stroke-width": 0.8 }));
       S2.appendChild(el("text", { x: xG(v), y: G2.yB + 14, "font-size": 9.5, "text-anchor": "middle", fill: dim }, String(v).replace("-", "−"))); }
-    S2.appendChild(el("text", { x: (G2.xL + G2.xR) / 2, y: H - 4, "font-size": 10, "text-anchor": "middle", fill: dim }, "dN/dz N/km (−157 = dM/dz 0) · lila M"));
+    S2.appendChild(el("text", { x: (G2.xL + G2.xR) / 2, y: H - 4, "font-size": 10, "text-anchor": "middle", fill: dim }, "dN/dz N/km (−157 = dM/dz 0)"));
     const steg = (f, farg, w, op) => { let d = ""; for (const s of P.sk) { const x = xG(f(s)).toFixed(1); d += (d ? "L" : "M") + x + " " + ledY(G2, s.z0).toFixed(1) + "L" + x + " " + ledY(G2, s.z1).toFixed(1); }
       g2.appendChild(el("path", { d, fill: "none", stroke: farg, "stroke-width": w, opacity: op || 1 })); };
     if (LED.komp === "tq") { steg(s => s.gT, "#dc2626", 1.4); steg(s => s.gQ, "#2563eb", 1.4); }
@@ -214,7 +214,7 @@ function ledRitaProfil() {
     const syn = P.pt.filter(a => a.z >= LED.z0 && a.z <= LED.z1); if (syn.length > 1) { let m0 = 1e9, m1 = -1e9; for (const a of syn) { m0 = Math.min(m0, a.M); m1 = Math.max(m1, a.M); }
       const xM = m => G2.xL + 6 + (m - m0) / (m1 - m0 || 1) * (G2.xR - G2.xL - 12); let d = ""; for (const a of P.pt) d += (d ? "L" : "M") + xM(a.M).toFixed(1) + " " + ledY(G2, a.z).toFixed(1);
       g2.appendChild(el("path", { d, fill: "none", stroke: "#7c3aed", "stroke-width": 1.4, "stroke-dasharray": "5 2" }));
-      S2.appendChild(el("text", { x: G2.xL + 2, y: 14, "font-size": 9.5, fill: "#7c3aed" }, "M " + Math.round(m0) + "–" + Math.round(m1))); }
+      S2.appendChild(el("text", { x: G2.xL + 2, y: 14, "font-size": 9.5, fill: "#7c3aed" }, "Lila streckad = M (vänster " + Math.round(m0) + ", höger " + Math.round(m1) + ")")); }
     for (const s of P.sk) { if (s.z1 < LED.z0 || s.z0 > LED.z1) continue; const y1 = ledY(G2, s.z1), y0 = ledY(G2, s.z0);
       const r = el("rect", { x: G2.xL, y: y1, width: G2.xR - G2.xL, height: Math.max(1, y0 - y1), fill: "transparent" }), ti = el("title"); ti.textContent = ledTipsSkikt(s); r.appendChild(ti); g2.appendChild(r); }
   }
