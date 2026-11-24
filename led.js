@@ -24,7 +24,7 @@ const LED_KLASS = [   // [ovre grans dN/dz (N/km), farg, namn]
 const ledKlass = g => { for (const k of LED_KLASS) if (g < k[0]) return k; return LED_KLASS[LED_KLASS.length - 1]; };
 const LED_PTOPP = 480e2;   // hamta upp till ca 480 hPa (ca 5-6 km)
 let LED = (() => { let o = {}; try { o = JSON.parse(lasa("mt:led") || "{}"); } catch (e) {}
-  return { lat: o.lat || 59.78, lon: o.lon || 21.37, farg: o.farg !== undefined ? o.farg : o.visa !== "bredvid", bredvid: o.bredvid !== undefined ? o.bredvid : o.visa === "bredvid", komp: o.komp || "tot", topp: o.topp || 2000, med2: o.med2 !== false,
+  return { lat: o.lat || 59.78, lon: o.lon || 21.37, farg: o.farg !== undefined ? o.farg : o.visa !== "bredvid", bredvid: o.bredvid !== undefined ? o.bredvid : true,   /* 24/11 kvall: dN/dz bredvid tant som forval */ komp: o.komp || "tot", topp: o.topp || 2000, med2: o.med2 !== false,
     t: null, z0: 0, z1: o.topp || 2000, tA: 0, tB: null, data: null, dtg: "", hamtar: 0 }; })();
 const ledSpara = () => lagra("mt:led", JSON.stringify({ lat: LED.lat, lon: LED.lon, farg: LED.farg, bredvid: LED.bredvid, komp: LED.komp, topp: LED.topp, med2: LED.med2 }));
 const ledStatus = t => { const e = $("ledStatus"); if (e) e.textContent = t || ""; };
