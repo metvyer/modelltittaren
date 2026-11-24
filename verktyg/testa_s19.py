@@ -8,7 +8,7 @@ async def main():
         s.on("pageerror", lambda e: fel.append(str(e)))
         await s.goto(SIDA); await s.wait_for_timeout(4000)
         await s.evaluate("$('testskylt').hidden = true; bytLage('led')")
-        for i in range(30):
+        for i in range(120):
             await s.wait_for_timeout(1000)
             st = await s.evaluate("$('ledStatus').textContent")
             if st.startswith("Klart") or st.startswith("Kunde"): break
@@ -34,7 +34,7 @@ async def main():
         print("ater:", await s.evaluate("JSON.stringify([LED.z0, LED.z1, LED.tA, LED.tB, LED.med2])"))
         # annan punkt: klick pa kartan (Gotland, hav)
         await s.evaluate("ledKartKlick(57.0, 19.5)")
-        for i in range(30):
+        for i in range(120):
             await s.wait_for_timeout(1000)
             st = await s.evaluate("$('ledStatus').textContent")
             if (st.startswith("Klart") or st.startswith("Kunde")) and "57" in await s.evaluate("$('ledPlats').textContent"): break

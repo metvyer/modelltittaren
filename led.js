@@ -38,11 +38,20 @@ async function ledHamta() {
   const r = ruta(LED.lat, LED.lon); if (!r) throw new Error("punkten ligger utanför MEPS");
   const ab = await expAB(), nt = M0F.nt;
   let kTop = 0; for (let k = 0; k < ab.ap.length; k++) if (ab.ap[k] + ab.b[k] * 101325 >= LED_PTOPP) { kTop = Math.max(0, k - 1); break; }
-  const nk = EXP_NIV - kTop, yx = "[" + r.iy + "][" + r.ix + "]", tt = "[0:" + (nt - 1) + "]", kk = "[" + kTop + ":" + (EXP_NIV - 1) + "]";
-  const fraga = ["air_temperature_ml" + tt + kk + yx, "specific_humidity_ml" + tt + kk + yx, "surface_air_pressure" + tt + "[0]" + yx,
-    "air_temperature_2m" + tt + "[0]" + yx, "relative_humidity_2m" + tt + "[0]" + yx].join(",");
-  const res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga)); if (res.st !== 200) throw new Error("svar " + res.st);
-  const d = tolka(res.txt); if (!d.air_temperature_ml || !d.surface_air_pressure) throw new Error("oväntat svar");
+  const nk = EXP_NIV - kTop, yx = "[" + r.iy + "][" + r.ix + "]", kk = "[" + kTop + ":" + (EXP_NIV - 1) + "]";
+  // i bitar om 12 timmar parallellt (thredds ar langsamt pa langa tidsserier av modellnivaer)
+  const BIT = 12, bitar = []; for (let a = 0; a < nt; a += BIT) bitar.push([a, Math.min(nt - 1, a + BIT - 1)]);
+  let klara = 0;
+  const delar = await Promise.all(bitar.map(async ([a, b]) => { const tt = "[" + a + ":" + b + "]";
+    const fraga = ["air_temperature_ml" + tt + kk + yx, "specific_humidity_ml" + tt + kk + yx, "surface_air_pressure" + tt + "[0]" + yx,
+      "air_temperature_2m" + tt + "[0]" + yx, "relative_humidity_2m" + tt + "[0]" + yx].join(",");
+    let res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga)); if (res.st !== 200) res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga));
+    if (res.st !== 200) throw new Error("svar " + res.st);
+    const d = tolka(res.txt); if (!d.air_temperature_ml || !d.surface_air_pressure) throw new Error("oväntat svar");
+    ledStatus("Hämtar temperatur och fukt på modellnivåerna … " + (++klara) + "/" + bitar.length); return d; }));
+  const ihop = n => { const u = []; for (const d of delar) { if (!d[n]) return null; for (const v of d[n]) u.push(v); } return Float64Array.from(u); };
+  const d = { air_temperature_ml: ihop("air_temperature_ml"), specific_humidity_ml: ihop("specific_humidity_ml"), surface_air_pressure: ihop("surface_air_pressure"),
+    air_temperature_2m: ihop("air_temperature_2m"), relative_humidity_2m: ihop("relative_humidity_2m") };
   const ll = franRuta(r.ix, r.iy);
   return { dtg: M0F.dtg, nt, kTop, nk, ab, iy: r.iy, ix: r.ix, glat: ll.lat, glon: ll.lon, T: d.air_temperature_ml, q: d.specific_humidity_ml, ps: d.surface_air_pressure,
     t2: d.air_temperature_2m, rh2: d.relative_humidity_2m, prof: [] };
