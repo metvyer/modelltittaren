@@ -1,47 +1,47 @@
-# Mätprov 21/11: polska TAF (EPWA, EPMM m.fl.) - finns de hos aviationweather, och vad har awiacja.imgw.pl?
+# Matprov 24/11: polska TAF - vilka flygplatser ger IMGW nu (jamfort med 21/11: 32 st inkl. militara),
+# och finns de militara nagon annanstans (aviationweather, ogimet, IMGW-sidan)?
 import re, json, time, urllib.request, urllib.error
-UA = {"User-Agent": "Modelltittaren-matprov (github.com/metvyer/modelltittaren)", "Origin": "https://metvyer.github.io"}
-def f(url):
+FORR = "EPBY EPCE EPDA EPDE EPGD EPIR EPKK EPKS EPKT EPLB EPLK EPLL EPLY EPMB EPMI EPML EPMM EPMO EPNA EPOK EPPO EPPR EPPW EPRA EPRZ EPSC EPSN EPSY EPTM EPWA EPWR EPZG".split()
+H1 = {"User-Agent": "Modelltittaren-matprov (github.com/metvyer/modelltittaren)", "Origin": "https://metvyer.github.io", "Referer": "https://awiacja.imgw.pl/"}
+H2 = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36", "Origin": "https://awiacja.imgw.pl", "Referer": "https://awiacja.imgw.pl/"}
+def f(url, h=H1):
     t0 = time.time()
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=40) as r:
-            return r.status, r.read().decode("utf-8", "replace"), r.headers.get("Access-Control-Allow-Origin", ""), r.headers.get("Content-Type", ""), time.time() - t0
-    except urllib.error.HTTPError as e: return e.code, e.read().decode("utf-8", "replace")[:500], "", "", time.time() - t0
-    except Exception as e: return 0, str(e), "", "", time.time() - t0
+        with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=40) as r:
+            return r.status, r.read(5_000_000).decode("utf-8", "replace"), time.time() - t0
+    except urllib.error.HTTPError as e: return e.code, e.read()[:400].decode("utf-8", "replace"), time.time() - t0
+    except Exception as e: return 0, str(e), time.time() - t0
 ut = []
 def p(s=""): print(s, flush=True); ut.append(s)
-p("## Polska TAF")
-st, t, c, ty, s = f("https://aviationweather.gov/api/data/taf?ids=EPWA,EPMM,EPKK,EPGD,EPPO,EPLB,EPKS,EPDE,EPMI,EPLK&format=json")
-p(f"aviationweather TAF: {st}, {s:.1f} s")
-try:
-    for x in json.loads(t): p(f"- {x.get('icaoId')} finns hos aviationweather")
-except Exception: p(t[:300])
-st, t, c, ty, s = f("https://aviationweather.gov/api/data/metar?ids=EPWA,EPMM&format=json&hours=2")
-p(f"aviationweather METAR EPWA/EPMM: {st} · " + (", ".join(sorted(set(x.get('icaoId') for x in json.loads(t)))) if st == 200 and t.strip().startswith('[') else t[:100]))
-for url in ["https://awiacja.imgw.pl/", "https://awiacja.imgw.pl/metar-taf/", "https://awiacja.imgw.pl/en/metar-taf/"]:
-    st, t, c, ty, s = f(url)
-    p(f"\n### {url}: {st}, {len(t)//1024} kB, {ty}, CORS '{c}', {s:.1f} s")
-    p("TAF i texten: " + str(len(re.findall(r"TAF\s+(?:AMD\s+|COR\s+)?EP[A-Z]{2}", t))) + " · ICAO: " + ", ".join(sorted(set(re.findall(r"\bEP[A-Z]{2}\b", t)))[:60]))
-    js = sorted(set(re.findall(r'(?:src|href)="([^"]+\.(?:js|json)[^"]*)"', t)))
-    p("skript/json: " + ", ".join(js[:30]))
-    api = sorted(set(re.findall(r'["\'](/?(?:api|wp-json|ajax|data)[^"\']{0,120})["\']', t)))
-    p("api-liknande sökvägar: " + ", ".join(api[:30]))
-    m = re.search(r"TAF\s+(?:AMD\s+)?EPWA[^<]{0,300}", t)
-    if m: p("Exempel: " + re.sub(r"\s+", " ", m.group(0)))
-# Angular-sidan: leta API-adresser i skriptfilerna
-st, t, c, ty, s = f("https://awiacja.imgw.pl/")
-alla = set(re.findall(r'src="([^"]+\.js)"', t)) | set(re.findall(r'href="([^"]+\.js)"', t))
-sedda = set()
-while alla - sedda:   # folj import("./chunk-…") i filerna sa att alla delar laddas
-  for js in sorted(alla - sedda):
-    sedda.add(js)
-    st2, tj, c2, ty2, s2 = f("https://awiacja.imgw.pl/" + js.lstrip("./"))
-    alla |= set("chunk-" + x + ".js" for x in re.findall(r'chunk-([A-Z0-9]+)\.js', tj))
-    urls = sorted(set(re.findall(r'["\'`](https?://[^"\'`\s]{6,140})["\'`]', tj))) + sorted(set(re.findall(r'["\'`](/[a-zA-Z0-9_\-]*(?:api|taf|metar|opmet|data|awiacja|json)[^"\'`\s]{0,100})["\'`]', tj, re.I)))
-    urls = [u for u in urls if "w3.org" not in u]
-    if urls: p(f"{js}: " + " | ".join(urls[:40]))
-for js in []:
-    st2, tj, c2, ty2, s2 = 0, "", "", "", 0
-    urls = sorted(set(re.findall(r'["\'`](https?://[^"\'`\s]{6,140})["\'`]', tj))) + sorted(set(re.findall(r'["\'`](/[a-zA-Z0-9_\-]*(?:api|taf|metar|opmet|data|awiacja)[^"\'`\s]{0,100})["\'`]', tj, re.I)))
-    if urls: p(f"{js}: " + " | ".join(urls[:40]))
-open("taf_pl.md", "w", encoding="utf-8").write("\n".join(ut) + "\n")
+A = "https://aviation-api.imgw.pl/data/last?format=json&params="
+for namn, h in [("modelltittaren-huvud", H1), ("webblasar-huvud", H2)]:
+    for typ in ["taf", "metar"]:
+        for cnt in ["1", "5"]:
+            st, t, s = f(A + typ + "&count=" + cnt, h)
+            ic = sorted(set(re.findall(r"\bEP[A-Z]{2}\b", t)))
+            p(f"IMGW {typ} count={cnt} ({namn}): {st}, {s:.1f} s, {len(t)//1024} kB, {len(ic)} flygplatser")
+            if typ == "taf" and cnt == "1":
+                p("  saknas mot 21/11: " + (", ".join(x for x in FORR if x not in ic) or "inga") + " · nya: " + (", ".join(x for x in ic if x not in FORR) or "inga"))
+                try:
+                    j = json.loads(t); x = j if isinstance(j, list) else next(iter(j.values()))
+                    if isinstance(j, dict): p("  nycklar: " + ", ".join(list(j.keys())[:40]))
+                    s1 = json.dumps(j, ensure_ascii=False)
+                    for m in ["EPMM", "EPKS", "EPWA", "EPLK"]:
+                        k = s1.find(m); p(f"  {m}: " + (re.sub(r"\s+", " ", s1[max(0, k - 200):k + 400]) if k >= 0 else "saknas"))
+                    p("  isMILITARY-flaggor: " + str(len(re.findall(r'"isMILITARY"\s*:\s*true', s1))))
+                except Exception as e: p("  ej json: " + t[:300])
+# via mellanservern (Cloudflare)
+st, t, s = f("https://modelltittaren.metvyer.workers.dev/imgw?params=taf")
+p(f"mellanservern /imgw taf: {st}, {len(set(re.findall(r'EP[A-Z]{2}', t)))} flygplatser")
+MIL = "EPCE EPDA EPDE EPIR EPKS EPLK EPLY EPMB EPMI EPMM EPNA EPOK EPPR EPPW EPSN EPTM".split()
+st, t, s = f("https://aviationweather.gov/api/data/taf?ids=" + ",".join(MIL) + "&format=raw")
+p(f"\naviationweather TAF militara: {st} · har: " + ", ".join(sorted(set(re.findall(r"\bEP[A-Z]{2}\b", t)))))
+st, t, s = f("https://aviationweather.gov/api/data/metar?ids=" + ",".join(MIL) + "&format=raw&hours=3")
+p(f"aviationweather METAR militara: {st} · har: " + ", ".join(sorted(set(re.findall(r"\bEP[A-Z]{2}\b", t)))))
+st, t, s = f("https://ogimet.com/display_metars2.php?lang=en&lugar=EPMM+EPKS+EPLK+EPMI&tipo=FT&ord=REV&nil=SI&fmt=txt", H2)
+p(f"ogimet TAF EPMM/EPKS/EPLK/EPMI: {st} · " + re.sub(r"\s+", " ", " ".join(re.findall(r"TAF[^=]{0,160}", t)[:4]))[:900])
+st, t, s = f("https://ogimet.com/cgi-bin/getmetar?icao=EPKS&begin=" + time.strftime("%Y%m%d0000", time.gmtime()), H2)
+p(f"ogimet getmetar EPKS: {st} · {t[:200]}")
+for url in ["https://awiacja.imgw.pl/metar-taf/", "https://awiacja.imgw.pl/en/metar-taf/"]:
+    st, t, s = f(url, H2); p(f"{url}: {st} · ICAO i sidan: " + ", ".join(sorted(set(re.findall(r'\bEP[A-Z]{2}\b', t)))[:50]))
+open("taf_pl.md", "w").write("\n".join(ut))
