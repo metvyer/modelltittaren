@@ -890,6 +890,8 @@ const TESTSKYLT_MIN = 30;
 const testskyltSen = () => +(lasa("mt:testskylt") || 0);
 function visaTestskylt(start) { const t = $("testskylt"); if (!t) return; if (!start && typeof DELA !== "undefined" && (DELA.folj || DELA.sander || DELA.jagStyr)) return;
   if (Date.now() - testskyltSen() < TESTSKYLT_MIN * 60e3) return;
+  if (!lasa("mt:valkommen") && !new URLSearchParams(location.search).has("prov")) return;   // forsta besoket: valkomstrutan visar varningen
+  const vk = $("valkommen"); if (vk && !vk.hidden) return;
   t.hidden = false; lagra("mt:testskylt", String(Date.now())); const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
 document.addEventListener("DOMContentLoaded", () => { const b = $("testskyltOk"); if (b) b.addEventListener("click", () => { $("testskylt").hidden = true; });
   // 24/11 kvall: forsta besoket far valkomstrutan (med testvarningen) i stallet for testskylten
