@@ -309,6 +309,23 @@ export default {
       // NYTT 23/11 kvall: REALTID via Durable Object (DelaRum, ett rum per delning). GET /dela/ws?id=X[&nyckel=K|&styrnyckel=N]&namn=
       // med Upgrade: websocket. Agaren (ratt nyckel) eller den som styr (ratt styrnyckel) blir "sandare" och far skicka
       // {typ:"vy"} och {typ:"mus"}; alla andra bara tar emot. D1 ar fortfarande sanningen (polling = reserv).
+      // NYTT 24/11: BILDSPEL - agarens forberedda vyer sparas med sandningen (foljer med agarlanken till andra datorer).
+      // GET/POST /dela/bilder?id=X&nyckel=K, kropp = JSON-lista (hogst 300 kB). Bara ratt agarnyckel.
+      if (url.pathname === "/dela/bilder") {
+        if (!NAMN.test(id) || !nyckel) return json({ fel: "saknas" }, 400);
+        const r = await DB.prepare("SELECT nyckel FROM delning WHERE id = ?").bind(id).first();
+        if (!r || r.nyckel !== nyckel) return json({ fel: "fel nyckel" }, 403);
+        await DB.prepare("CREATE TABLE IF NOT EXISTS dela_bilder (id TEXT PRIMARY KEY, data TEXT, andrad INTEGER)").run();
+        if (req.method === "POST") {
+          const t = await req.text(); if (t.length > 300000) return json({ fel: "för stort" }, 413);
+          let l; try { l = JSON.parse(t); } catch (e) { return json({ fel: "trasig" }, 400); }
+          if (!Array.isArray(l) || l.length > 60) return json({ fel: "högst 60 bilder" }, 400);
+          await DB.prepare("INSERT INTO dela_bilder (id, data, andrad) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, andrad = excluded.andrad").bind(id, t, nu).run();
+          return json({ ok: true, andrad: nu });
+        }
+        const b = await DB.prepare("SELECT data, andrad FROM dela_bilder WHERE id = ?").bind(id).first();
+        return json({ bilder: b ? JSON.parse(b.data) : [], andrad: b ? b.andrad : 0 });
+      }
       if (url.pathname === "/dela/ws") {
         if ((req.headers.get("Upgrade") || "").toLowerCase() !== "websocket") return json({ fel: "bara websocket" }, 426);
         if (!env.RUM || !NAMN.test(id)) return json({ fel: "saknas" }, 404);
@@ -398,6 +415,7 @@ export default {
       if (k.vy && rad.styr_sess) return json({ fel: "någon annan styr just nu", styrAnnan: true }, 409);
       if (url.searchParams.get("tabort") === "1") {
         await DB.batch([DB.prepare("DELETE FROM delning WHERE id = ?").bind(id), DB.prepare("DELETE FROM tittare WHERE id = ?").bind(id)]);
+        try { await DB.prepare("DELETE FROM dela_bilder WHERE id = ?").bind(id).run(); } catch (e) {}   // 24/11: bildspelet foljer med
         return json({ id, borttagen: true });
       }
       const satt = [], varden = [];

@@ -117,6 +117,10 @@ function medlemText(m, dtg) { return "medlem " + m + (m >= 15 ? " (förra körni
 // Varde i punkten p for vald visning, eller NaN
 function visaVarde(agg, n, p, visa) {
   if (/^m\d+$/.test(visa)) return agg[+visa.slice(1) * n + p];
+  if (visa === "m0rang") {   // NYTT 24/11: medlem 0:s rang bland de andra valda medlemmarna, 0-100 % (lika = halv)
+    const v0 = agg[p]; if (!isFinite(v0)) return NaN; let u = 0, l = 0, c = 0;
+    for (let m = 1; m < ENS_MEDL; m++) { if (!iUrval(m)) continue; const w = agg[m * n + p]; if (!isFinite(w)) continue; c++; if (w < v0) u++; else if (w === v0) l++; }
+    return c ? (u + l / 2) / c * 100 : NaN; }
   let s = 0, c = 0, mx = -Infinity, mn = Infinity;
   for (let m = 0; m < ENS_MEDL; m++) { if (!iUrval(m)) continue; const w = agg[m * n + p]; if (!isFinite(w)) continue; s += w; c++; if (w > mx) mx = w; if (w < mn) mn = w; }
   if (!c) return NaN;
@@ -129,7 +133,10 @@ function vardeKlass(v, w) {
   for (let i = 0; i < K.length; i++) if (lagreVarre ? w < K[i] : w >= K[i]) k = i;
   return k;
 }
-const VISA_NAMN = { sannolikhet: "Sannolikhet", medel: "Medel av medlemmarna", max: "Högsta medlem", min: "Lägsta medlem" };
+const VISA_NAMN = { sannolikhet: "Sannolikhet", medel: "Medel av medlemmarna", max: "Högsta medlem", min: "Lägsta medlem", m0rang: "Medlem 0:s rang i ensemblen" };
+// NYTT 24/11: farger for medlem 0:s rang - blatt = medlem 0 lagre an de flesta, rott = hogre; mitten (40-60 %) ofargad
+const M0RANG = [[0, "#1e3a8a", "< 10 % (lägst)"], [10, "#3b82f6", "10–25 %"], [25, "#bfdbfe", "25–40 %"], [40, null, "40–60 % (mitt i)"], [60, "#fecaca", "60–75 %"], [75, "#f87171", "75–90 %"], [90, "#991b1b", "≥ 90 % (högst)"]];
+const m0rangFarg = w => { let f = null; for (const k of M0RANG) if (w >= k[0]) f = k[1]; return f; };
 const visaNamn = vs => VISA_NAMN[vs] || "Medlem " + vs.slice(1);
 
 // ---------- Databas (IndexedDB) med reserv i minnet ----------
@@ -1017,8 +1024,10 @@ async function probVisa() {
       if (visa === "sannolikhet") { const pr = p * 100; if (pr < rgb[0][0]) continue; f = rgb[0]; for (const k of rgb) if (pr >= k[0]) f = k; }
       else {
         const w = visaVarde(r.agg, n, y * o.nx + x, visa); r.val[y * o.nx + x] = w;
+        if (visa === "m0rang") { if (!isFinite(w)) continue; const fc = m0rangFarg(w); if (!fc) continue; f = [0, parseInt(fc.slice(1, 3), 16), parseInt(fc.slice(3, 5), 16), parseInt(fc.slice(5, 7), 16)]; }
+        else {
         if (isFinite(w) && (vext === null || (pa.villkor === "<" ? w < vext : w > vext))) vext = w;
-        const k = vardeKlass(v, w); if (k < 0) continue; f = vrgb[k];
+        const k = vardeKlass(v, w); if (k < 0) continue; f = vrgb[k]; }
       }
       const i = ((o.ny - 1 - y) * o.nx + x) * 4;   // bildens rad 0 = norra kanten
       px[i] = f[1]; px[i + 1] = f[2]; px[i + 2] = f[3]; px[i + 3] = 255; ritade++;
@@ -1047,7 +1056,7 @@ async function probVisa() {
     isoEtiketter(g, d, "m0");
   }
   // NYTT 20/11 kvall: kalla for siffrorna pa kartan (sannolikhet i %, annars vardet)
-  P.siffKalla = vis.map(r => ({ o: r.o, d: visa === "sannolikhet" ? r.prob : r.val, proc: visa === "sannolikhet", lagre: visa !== "sannolikhet" && pa.villkor === "<", enh: visa === "sannolikhet" ? "%" : pa.enhet }));
+  P.siffKalla = vis.map(r => ({ o: r.o, d: visa === "sannolikhet" ? r.prob : r.val, proc: visa === "sannolikhet", lagre: visa !== "sannolikhet" && visa !== "m0rang" && pa.villkor === "<", enh: visa === "sannolikhet" || visa === "m0rang" ? "%" : pa.enhet }));
   setTimeout(ritaSiffror, 0);
   // isolinjer ovanpa fargerna
   if (visaIso) for (const r of vis) {
@@ -1072,6 +1081,12 @@ async function probVisa() {
   const utanText = utan.length ? " " + (utan.length === 1 ? "Medlem " + utan[0] + " saknar" : "Medlemmarna " + utan.join(", ") + " saknar") + " " + pa.namn.split(",")[0].toLowerCase() + " i datat och räknas inte (" + (ENS_MEDL - utan.length) + " medlemmar)." : "";
   if (/^m\d+$/.test(visa) && utan.includes(+visa.slice(1))) {
     $("pSam").textContent = "Medlem " + visa.slice(1) + " saknar " + pa.namn.split(",")[0].toLowerCase() + " i datat för den här körningen – kartan blir tom. (met.no levererar sikt och molnbas för den nyaste medlemmen 0 först i nästa körning, där den heter medlem 15.)";
+    return;
+  }
+  if (visa === "m0rang") {
+    const aggT = { max: "högsta", min: "lägsta", summa: "summa" }[pa.agg];
+    $("pSam").textContent = "Medlem 0:s rang: " + pa.namn.split(",")[0].toLowerCase() + ", " + aggT + " i perioden " + tidText(a) + " – " + tidText(b) +
+      ". 50 % = mitt i ensemblen, 0 % = lägst av alla, 100 % = högst. Blått: medlem 0 lägre än de flesta, rött: högre; 40–60 % lämnas ofärgat." + utanText;
     return;
   }
   if (visa !== "sannolikhet") {
@@ -1117,6 +1132,11 @@ function ritaIsoForkl(f) {
 function ritaPForklaring() {
   const f = $("pForkl"); f.textContent = ""; ritaIsoForkl(f);
   if (visaM0Linje && visaLage() === "sannolikhet") { const sp = document.createElement("span"); sp.innerHTML = '<svg width="26" height="10" style="vertical-align:middle;margin-right:4px"><line x1="1" x2="25" y1="5" y2="5" stroke="#1d4ed8" stroke-width="2.6"/></svg>medlem 0 vid tröskeln'; f.append(sp); }
+  if (visaLage() === "m0rang") {
+    for (const [, c, t] of M0RANG) { const sp = document.createElement("span"), r = document.createElement("i"); r.className = "pruta";
+      r.style.background = c || "transparent"; if (!c) r.style.border = "1px solid #9ca3af"; sp.append(r, t); f.append(sp); }
+    return;
+  }
   if (visaLage() !== "sannolikhet") {
     const v = $("pParam").value, pa = PPARAM[v], K = VKLASS[v], lv = pa.villkor === "<";
     const ft = w => w.toLocaleString("sv-SE");
@@ -1146,7 +1166,8 @@ function probTips(e) {
     if (!med.length) { visaKTips("Ingen medlem har värde här (t.ex. inget moln)" + plats, e.clientX + 14, e.clientY + 14); return; }
     const rund = v => V.pa.enhet === "m" || V.pa.enhet === "ft" ? Math.round(v / 10) * 10 : v.toFixed(1);
     const aggNamn = { max: "högsta", min: "lägsta", summa: "summa" }[V.pa.agg];
-    const vRad = V.visa !== "sannolikhet" && r.val ? visaNamn(V.visa) + ": " + (isFinite(r.val[i]) ? rund(r.val[i]) + " " + V.pa.enhet : "inget värde") + "\n" : "";
+    const vRad = V.visa === "m0rang" && r.val ? "Medlem 0:s rang: " + (isFinite(r.val[i]) ? Math.round(r.val[i]) + " % (" + (r.val[i] < 40 ? "lägre än de flesta" : r.val[i] > 60 ? "högre än de flesta" : "mitt i") + ")" : "inget värde") + "\n"
+      : V.visa !== "sannolikhet" && r.val ? visaNamn(V.visa) + ": " + (isFinite(r.val[i]) ? rund(r.val[i]) + " " + V.pa.enhet : "inget värde") + "\n" : "";
     // 20/11 kvall: min (bla), median (fet), max (rod) + vilken korning/medlem som ger min och max
     const iMax = med.indexOf(Math.max(...med)), iMin = med.indexOf(Math.min(...med)), urv = medlemmar().length;
     const esc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -1231,6 +1252,11 @@ async function visaMeteogram() {
 const NB_LAGE_NAMN = { ack: "Ackumulerat från start", h1: "Per timme", h3: "Per 3 h (00, 03, 06 … UTC)", h6: "Per 6 h (00, 06, 12, 18 UTC)" };
 let nbLage = NB_LAGE_NAMN[lasa("mt:meteoNb")] ? lasa("mt:meteoNb") : "ack";
 let meteoGeo = null;   // senaste ritningens matt (for att dra startlinjen)
+// NYTT 24/11 (Jakob): vilken medlem ar extrem - siffror vid min/max i varje stapel (knappen) + kurvorna vid hovring
+(function meteoExtKnapp() {
+  const b = $("pMeteoExt"); if (!b) return; b.setAttribute("aria-pressed", String(lasa("mt:meteoExt") === "pa"));
+  b.addEventListener("click", () => { const pa = lasa("mt:meteoExt") !== "pa"; lagra("mt:meteoExt", pa ? "pa" : "av"); b.setAttribute("aria-pressed", String(pa)); if (P.meteo) ritaMeteogram(); });
+})();
 (function metarKnapp() {
   const b = $("pMeteoMetar"); if (!b) return; b.setAttribute("aria-pressed", String(lasa("mt:meteoMetar") !== "av"));
   b.addEventListener("click", () => { const pa = lasa("mt:meteoMetar") === "av"; lagra("mt:meteoMetar", pa ? "pa" : "av"); b.setAttribute("aria-pressed", String(pa)); if (P.meteo) ritaMeteogram(); });
@@ -1308,6 +1334,16 @@ function ritaMeteogram() {
   const lada = "#7aa7e0", visa = visaLage(), vm = /^m\d+$/.test(visa) ? +visa.slice(1) : null;
   const mitt = p => VM + (p.t0 + p.t1 + 1) / 2 * KOL, bredd = p => (p.t1 - p.t0 + 1) * KOL;
   const periodText = p => p.t0 === p.t1 && lage !== "h1" ? tidText(p.t1) : p2(timUTC(p.t0 - 1 < 0 ? 0 : p.t0 - 1)) + "–" + p2(timUTC(p.t1)) + "Z (+" + (p.t0 - 1) + " till +" + p.t1 + ")";
+  const visaExt = lasa("mt:meteoExt") === "pa", extG = el("g", { style: "pointer-events:none" }), hovG = el("g", { style: "pointer-events:none" });
+  let hovSenast = "";
+  const meteoExtLinjer = (mx, mn) => {   // hela kurvan for max- och min-medlemmen i stapeln man hovrar
+    const k = mx + ":" + mn; if (k === hovSenast) return; hovSenast = k; hovG.textContent = "";
+    for (const [m, farg] of [[mx, "#dc2626"], [mn, "#2563eb"]]) { if (m < 0) continue; let dd = "";
+      for (const q of poster) { const w = q.v[m]; if (isFinite(w)) dd += (dd ? "L" : "M") + mitt(q) + " " + y(w); }
+      if (dd) { hovG.appendChild(el("path", { d: dd, fill: "none", stroke: farg, "stroke-width": 1.6, "stroke-dasharray": "3 2", opacity: 0.9 }));
+        const sista = poster.filter(q => isFinite(q.v[m])).pop();
+        if (sista) hovG.appendChild(el("text", { x: mitt(sista) + 4, y: y(sista.v[m]) + 3, "font-size": 9, "font-weight": 700, fill: farg }, "m" + m)); } }
+  };
   for (const p of poster) {
     const s = Array.from(p.v).filter(isFinite).sort((u, w) => u - w); if (!s.length) continue;
     const x = mitt(p), bb = bredd(p), q10 = kvantil(s, 0.1), q25 = kvantil(s, 0.25), q50 = kvantil(s, 0.5), q75 = kvantil(s, 0.75), q90 = kvantil(s, 0.9);
@@ -1323,9 +1359,12 @@ function ritaMeteogram() {
       "\n<span class=\"dim\">max " + medlemText(mMax, M0.dtg) + " · min " + medlemText(mMin, M0.dtg) + "</span>" +
       (visaTrosk ? "\n" + s.filter(w => pa.villkor === "≥" ? w >= trosk : w < trosk).length + " av " + s.length + " " + pa.villkor + " " + trosk + " " + pa.enhet : "") +
       (nb ? "\n" + s.filter(w => w >= 0.1).length + " av " + s.length + " medlemmar ≥ 0,1 mm" : "");
+    if (visaExt && mMax >= 0 && mMin >= 0 && mMax !== mMin) {   // 24/11: medlemsnummer vid extremerna
+      extG.appendChild(el("text", { x, y: y(s[s.length - 1]) - 3, "font-size": 8, "font-weight": 700, "text-anchor": "middle", fill: "#b91c1c" }, String(mMax)));
+      extG.appendChild(el("text", { x, y: y(s[0]) + 9, "font-size": 8, "font-weight": 700, "text-anchor": "middle", fill: "#1d4ed8" }, String(mMin))); }
     const hit = el("rect", { x: VM + p.t0 * KOL, y: TOPP, width: bb, height: H, fill: "transparent" });
-    hit.addEventListener("mousemove", ev => visaKTips(html, ev.clientX + 14, ev.clientY + 14, true));
-    hit.addEventListener("mouseleave", () => { $("kTips").hidden = true; });
+    hit.addEventListener("mousemove", ev => { visaKTips(html, ev.clientX + 14, ev.clientY + 14, true); meteoExtLinjer(mMax, mMin); });
+    hit.addEventListener("mouseleave", () => { $("kTips").hidden = true; meteoExtLinjer(-1, -1); });
     svg.appendChild(hit);
   }
   // linjer: medlem 0 (rod) och ev. vald medlem (svart)
@@ -1333,6 +1372,7 @@ function ritaMeteogram() {
     if (dd) g("path", { d: dd, fill: "none", stroke: farg, "stroke-width": br, "stroke-dasharray": streck || "" }); };
   linje(0, "#d62828", 1.6);
   if (vm !== null && vm !== 0) linje(vm, c("--fg"), 1.4, "4 2");
+  svg.appendChild(extG); svg.appendChild(hovG);
   if (EX.length) extraRita(svg, EX, h => VM + (h + 0.5) * KOL, y, h => { const d = new Date(bas + h * 3600e3); return p2(d.getUTCHours()) + ":" + p2(d.getUTCMinutes()) + "Z"; });
   if (visaTrosk) { g("line", { x1: VM, x2: VM + B, y1: y(trosk), y2: y(trosk), stroke: "#f97316", "stroke-width": 1.4, "stroke-dasharray": "6 3" });
     g("text", { x: VM + B - 2, y: y(trosk) - 3, "font-size": 9.5, "text-anchor": "end", fill: "#c2410c" }, "tröskel " + trosk.toLocaleString("sv-SE") + " " + pa.enhet); }
@@ -1395,7 +1435,8 @@ function ritaMeteogram() {
   const lageText = !nb ? "" : lage === "ack" ? " (ackumulerad från " + tidText(start) + ")" : lage === "h1" ? " (per timme)" : lage === "h3" ? " (per 3 h)" : " (per 6 h)";
   $("pMeteoTitel").textContent = "Meteogram " + pa.namn.split(",")[0].toLowerCase() + lageText + " – " + (typeof platsNamn === "function" && /\(/.test(platsNamn(M0.lat, M0.lon)) ? platsNamn(M0.lat, M0.lon) + ", " : "") + M0.lat.toFixed(2) + "N " + M0.lon.toFixed(2) + "E, körning " + M0.dtg;
   $("pMeteoForkl").textContent = "Bred låda = 25–75 % av medlemmarna, smal låda = 10–90 %, mörkt streck = median, tunt streck = min–max. Röd linje = medlem 0" +
-    (vm !== null && vm !== 0 ? ", svart streckad = medlem " + vm : "") + (visaTrosk ? ", orange = tröskel" : "") + ". Blå skuggning = vald period. Håll musen över en stapel för värden." +
+    (vm !== null && vm !== 0 ? ", svart streckad = medlem " + vm : "") + (visaTrosk ? ", orange = tröskel" : "") + ". Blå skuggning = vald period. Håll musen över en stapel för värden – då ritas även kurvorna för den medlem som är högst (röd streckad) och lägst (blå streckad) där." +
+    (lasa("mt:meteoExt") === "pa" ? " Siffrorna = medlemsnummer för högst (röd) och lägst (blå) i varje stapel; 15–29 = förra körningen." : "") +
     (lage === "ack" ? " Grön linje = start för ackumuleringen: dra i handtaget eller klicka på tidsaxeln, dubbelklicka för +0." : "") +
     (lage === "h3" || lage === "h6" ? " Varje stapel = summan i blocket (fasta UTC-block, ofullständigt första block hoppas över)." : "") +
     (METEO_TAK[M0.v] ? " Skalan slutar vid " + METEO_TAK[M0.v].toLocaleString("sv-SE") + " " + pa.enhet + "." : "") +
@@ -1642,7 +1683,7 @@ function bytLage(nytt) {
   sel.value = lasa("mt:pParam") || "by"; if (!sel.value) sel.value = "by";
   // Visa: sannolikhet / medel / hogsta / lagsta / enskild medlem
   const vs = $("pVisa");
-  for (const k of ["sannolikhet", "medel", "max", "min"]) vs.add(new Option(VISA_NAMN[k], k));
+  for (const k of ["sannolikhet", "medel", "max", "min", "m0rang"]) vs.add(new Option(VISA_NAMN[k], k));
   // NYTT 19/11 kvall: 0-14 ar nya i korningen, 15-29 ar samma som 0-14 i korningen 3 h tidigare
   const og = document.createElement("optgroup"); og.label = "Nya medlemmar (senaste 3 h)";
   for (let m = 0; m < ENS_NYA; m++) og.appendChild(new Option("Medlem " + m + (m === 0 ? " (nyaste)" : ""), "m" + m));
