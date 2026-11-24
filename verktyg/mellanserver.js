@@ -512,6 +512,28 @@ export default {
       return new Response(svar.body, { headers: h });
     }
 
+    // NYTT 24/11: KONRAD3D - DWD:s konvektiva celler (opendata.dwd.de, CC BY 4.0), senaste filen (var 5:e min).
+    // GET /konrad -> XML som den ar (sidan tolkar den), cache 4 min -> DWD far hogst ett par anrop per 5 min.
+    // Tacker bara DWD:s radaromrade (ca 45,7-55,9 N). Svarshuvudet X-Konrad-Fil = filnamnet.
+    if (url.pathname === "/konrad") {
+      const ck = new Request("https://konrad.cache/senaste");
+      let svar = await caches.default.match(ck);
+      if (!svar) {
+        const BASK = "https://opendata.dwd.de/weather/radar/konrad3d/";
+        const lista = await fetch(BASK, { headers: UA }).then(r => r.ok ? r.text() : "").catch(() => "");
+        const filer = [...lista.matchAll(/KONRAD3D_\d{8}T\d{6}\.xml/g)].map(m => m[0]).sort();
+        const fil = filer[filer.length - 1];
+        if (!fil) return new Response("<fel>ingen fil</fel>", { status: 502, headers: { ...cors, "Content-Type": "application/xml" } });
+        const r = await fetch(BASK + fil, { headers: UA });
+        if (!r.ok) return new Response("<fel>" + r.status + "</fel>", { status: 502, headers: { ...cors, "Content-Type": "application/xml" } });
+        svar = new Response(await r.text(), { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=240", "X-Konrad-Fil": fil } });
+        ctx.waitUntil(caches.default.put(ck, svar.clone()));
+        await raknaAnrop(env.DB, "konrad");
+      }
+      const h = new Headers(svar.headers); for (const [k, x] of Object.entries(cors)) h.set(k, x); h.set("Access-Control-Expose-Headers", "X-Konrad-Fil");
+      return new Response(svar.body, { headers: h });
+    }
+
     // NYTT 23/11: VVIS - Trafikverkets vagvaderstationer (API Oppna Data, CC0). Nyckeln TRV_NYCKEL ar en Secret i Cloudflare.
     // GET /vvis -> [{id, n, lat, lon, t (matttid), ty (vagtemp), tl (lufttemp), td (daggpunkt), rh, s (sikt m), v (vind m/s),
     //   vb (max 3 s-vind 30 min), vr (riktning), nb (nederbordstyp), mm (nederbord 30 min), is, sn, va (is/sno/vatten pa vagen), g (friktion),
