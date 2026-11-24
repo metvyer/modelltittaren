@@ -1290,7 +1290,9 @@ function vv(m) {
   if (!isFinite(m)) return ""; if (m < 100) return "00"; if (m <= 5000) return p2(Math.floor(m / 100)); if (m < 6000) return "50";
   if (m <= 30000) return String(50 + Math.floor(m / 1000)); if (m <= 70000) return String(80 + Math.floor((m / 1000 - 30) / 5)); return "89";
 }
-function daggpunkt(tk, rh) { if (!isFinite(tk) || !(rh > 0)) return NaN; if (rh > 1.5) rh /= 100; const tc = tk - 273.15, g = Math.log(Math.min(rh, 1)) + 17.62 * tc / (243.12 + tc); return 243.12 * g / (17.62 - g); }
+// 24/11: eget namn (daggpunktK) - kombo.js har en daggpunkt(°C, %) som skrev over denna, sa Td i tid-hojd-tabellen och
+// skew-T:s 2 m-punkt blev fel (t.ex. 86 i stallet for -2) sedan 21/11. Denna tar Kelvin och andel/procent.
+function daggpunktK(tk, rh) { if (!isFinite(tk) || !(rh > 0)) return NaN; if (rh > 1.5) rh /= 100; const tc = tk - 273.15, g = Math.log(Math.min(rh, 1)) + 17.62 * tc / (243.12 + tc); return 243.12 * g / (17.62 - g); }
 function vader(nb, typ, sikt) {
   if (isFinite(nb) && nb >= 0.1) {
     const n = nb >= 4 ? 3 : nb >= 1 ? 2 : 1;
@@ -1631,7 +1633,7 @@ function rita() {
     // (visar hur diskret modellen ar - basen hamnar pa modellnivaerna)
     if (isFinite(M.cb[t])) { const h = M.cb[t] * FOT / 100; txt(t, R.bas, h < 10 ? enDec(h) : String(Math.floor(h)), c("--bastext")); }
     if (!M.ytaOK[t]) continue;
-    const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
+    const Y = i => M.yta[i][t], tk = Y(1), td = daggpunktK(tk, Y(2));
     // 22/11: en nolla far farg efter tecknet - bla om vardet ar under 0, rod om det ar over
     const nollF = v => v < 0 ? NOLL_BLA : Math.round(v) === 0 && v !== 0 ? NOLL_ROD : c("--red");   // 23/11: alla minusgrader bla (forut bara -0)
     if (isFinite(tk)) txt(t, R.t, String(Math.round(tk - 273.15)), nollF(tk - 273.15));
@@ -2050,7 +2052,7 @@ function ritaSkewT() {
     for (const [tc, p] of pT) k_("circle", { cx: xT(tc, p), cy: yP(p), r: 1.4, fill: c("--fg") });
   } else g("text", { x: (X0 + X1) / 2, y: (Y0 + Y1) / 2, "font-size": 13, "text-anchor": "middle", fill: c("--dim") }, "Temperatur saknas för timmen – hämtar …");
   // 2 m-varden
-  const td2 = daggpunkt(M.yta[1][t], M.yta[2][t]);
+  const td2 = daggpunktK(M.yta[1][t], M.yta[2][t]);
   if (isFinite(t2)) g("circle", { cx: xT(t2, ps / 100), cy: yM, r: 3.2, fill: "#dc2626" });
   if (isFinite(td2)) g("circle", { cx: xT(td2, ps / 100), cy: yM, r: 3.2, fill: "#16a34a" });
   // ---- Lyft/CAPE (knappen Lyft/CAPE, NYTT 19/11 kvall) ----
@@ -2251,7 +2253,7 @@ function tipsText(t, yPix, xPix) {
   }
   rad.push(["", "Marknivå", "avdel"]);
   if (M.ytaOK[t]) {
-    const Y = i => M.yta[i][t], tk = Y(1), td = daggpunkt(tk, Y(2));
+    const Y = i => M.yta[i][t], tk = Y(1), td = daggpunktK(tk, Y(2));
     rad.push(["T / Td", (isFinite(tk) ? (tk - 273.15).toFixed(1) : "–") + " / " + (isFinite(td) ? td.toFixed(1) : "–") + " °C"]);
     if (isFinite(Y(3))) rad.push(["Vind", (isFinite(Y(4)) ? p2(Math.round(Y(4) / 10) % 36 || 36) + "0° " : "") + Math.round(Y(3) * KT) + " kt, byar " + (isFinite(Y(5)) ? Math.round(Y(5) * KT) : "–") + " kt"]);
     if (isFinite(Y(6))) rad.push(["Sikt", Y(6) >= 10000 ? Math.round(Y(6) / 1000) + " km" : Math.round(Y(6) / 100) * 100 + " m"]);
