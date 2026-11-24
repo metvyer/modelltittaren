@@ -3,7 +3,7 @@
 // Ritas: cellernas polygoner (farg efter DWD:s severity 0-4), prognosspar for cellens mittpunkt (DWD:s egen prognos,
 // var 5:e min upp till ca 60 min) med prickar vid +15/+30/+60, och DWD-omradets nordgrans (streckad) - norr om den
 // finns aldrig nagra celler (ca 55,9 N: bara Skane/Bornholm/sodra Ostersjon i Sverige).
-// Galler NU (senaste filen). I radar/satellit visas cellerna bara nar loopen star inom 10 min fran filens tid.
+// Galler NU (senaste filen). 24/11 kvall: bara i Radar-fliken (Europakartan), cellerna bara nar loopen star inom 10 min fran filens tid.
 // Data: Deutscher Wetterdienst, CC BY 4.0.
 const KONRAD_URL = "https://modelltittaren.metvyer.workers.dev/konrad";
 let KD = { pa: lasa("mt:konrad") === "ja", celler: [], tid: 0, fil: "", hamtad: 0, hor: null, fel: "" };
@@ -39,13 +39,13 @@ async function kdHamta(tvinga) {
   } catch (e) { KD.fel = String(e.message || e); }
   kdRita();
 }
-function kdSynligNu() {   // radar/satellit: bara nar loopen star nara filens tid
-  if (typeof lage === "undefined") return true;
-  if ((lage === "rad" || lage === "sat") && typeof OBS !== "undefined" && OBS.ramar && OBS.ramar[OBS.i]) return Math.abs(OBS.ramar[OBS.i].t - KD.tid) <= 10 * 60e3;
-  return lage !== "exp";
+function kdSynligNu() {   // 24/11 kvall (Jakob): bara i Radar-fliken, och bara nar loopen star nara filens tid
+  if (typeof lage === "undefined" || lage !== "rad") return false;
+  if (typeof OBS !== "undefined" && OBS.ramar && OBS.ramar[OBS.i]) return Math.abs(OBS.ramar[OBS.i].t - KD.tid) <= 10 * 60e3;
+  return true;
 }
 function kdRita() {
-  const g = $("kKonrad"); if (!g) return; g.textContent = ""; kdKnapp(); if (!KD.pa) return;
+  const g = $("kKonrad"); if (!g) return; g.textContent = ""; kdKnapp(); if (!KD.pa || typeof lage === "undefined" || lage !== "rad") return;   // 24/11 kvall: bara Radar-fliken
   const svg = $("karta"), bw = svg && svg.getBoundingClientRect().width || 800, enh = (typeof vb !== "undefined" ? vb.w : 949) / bw;
   // DWD-omradets kant (streckad), interpolerad langs kanterna
   if (KD.horn && KD.horn.every(h => h.length === 2 && isFinite(h[0]))) { let d = "";
@@ -73,7 +73,7 @@ function kdTidTxt(t) { const d = new Date(t); return isNaN(d) ? "–" : p2(d.get
 function kdKnapp() {
   const b = $("konradKnapp"); if (!b) return; b.setAttribute("aria-pressed", String(KD.pa));
   b.title = "KONRAD3D – DWD:s automatiskt upptäckta konvektiva celler (åska/skurar) med DWD:s egen prognos för cellens rörelse upp till ca 1 h (+15/+30/+60). " +
-    "Täcker bara DWD:s radarområde: norr om ca 55,9°N (streckad gräns) finns inga celler. Gäller NU; i radar/satellit bara när loopen står nära filens tid. Data: Deutscher Wetterdienst, CC BY 4.0." +
+    "Täcker bara DWD:s radarområde: norr om ca 55,9°N (streckad gräns) finns inga celler. Gäller NU – visas bara när loopen står nära filens tid (±10 min). Data: Deutscher Wetterdienst, CC BY 4.0." +
     (KD.pa ? "\n" + (KD.fel ? "Kunde inte hämta: " + KD.fel : KD.hamtad ? KD.celler.length + " celler, " + kdTidTxt(KD.tid) + (KD.celler.length ? "" : " – inga celler just nu") : "hämtar …") : "");
 }
 const kdFran = mal => { const m = mal && mal.closest && mal.closest(".konrad"); return m ? KD.celler[+m.dataset.i] : null; };
@@ -94,9 +94,9 @@ function konradKlick(e, mal) { const c = kdFran(mal); if (!c) return false; visa
 (function kdInit() {
   const b = $("konradKnapp"); if (!b) return;
   b.addEventListener("click", () => { KD.pa = !KD.pa; lagra("mt:konrad", KD.pa ? "ja" : ""); if (KD.pa) kdHamta(); else kdRita(); });
-  setInterval(() => { if (KD.pa && !document.hidden) kdHamta(true); }, 5 * 60e3);
+  setInterval(() => { if (KD.pa && !document.hidden && lage === "rad") kdHamta(true); }, 5 * 60e3);
   const svg = $("karta"); if (window.MutationObserver && svg) new MutationObserver(() => { clearTimeout(KD.hor); KD.hor = setTimeout(kdRita, 300); }).observe(svg, { attributes: true, attributeFilter: ["viewBox"] });
-  new MutationObserver(() => { if (KD.pa) kdRita(); }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
-  const ot = $("obsTid"); if (ot) new MutationObserver(() => { if (KD.pa && (lage === "rad" || lage === "sat")) kdRita(); }).observe(ot, { childList: true, characterData: true, subtree: true });
+  new MutationObserver(() => { if (!KD.pa) return; if (lage === "rad" && Date.now() - KD.hamtad > 4 * 60e3) kdHamta(true); else kdRita(); }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+  const ot = $("obsTid"); if (ot) new MutationObserver(() => { if (KD.pa && lage === "rad") kdRita(); }).observe(ot, { childList: true, characterData: true, subtree: true });
   kdKnapp(); if (KD.pa) setTimeout(kdHamta, 1500);
 })();

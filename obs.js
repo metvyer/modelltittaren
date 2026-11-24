@@ -321,7 +321,7 @@ function obsTillampa(o) {
 function obsLage(nytt) {
   const var_ = OBS.lage; OBS.lage = nytt === "sat" || nytt === "rad" ? nytt : null;
   if (!OBS.lage) { obsSpela(false); clearInterval(obsAutoTimer); $("kObs").textContent = ""; OBS.gen++; obsPrognosSkylt(null); return; }
-  if (OBS.lage === "sat" && typeof tafLaddaEuropa === "function") tafLaddaEuropa().then(() => satVb(vb.x, vb.y, vb.w));
+  if (typeof tafLaddaEuropa === "function") tafLaddaEuropa().then(() => satVb(vb.x, vb.y, vb.w));
   obsFyllVal();
   if (var_ !== OBS.lage) { OBS.ramar = []; OBS.i = 0; $("kObs").textContent = ""; }
   obsLadda(true); obsAuto();

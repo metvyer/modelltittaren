@@ -77,7 +77,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #karta.drar { cursor: grabbing; }
 #kHav { fill: var(--hav); }
 /* 21/11: Europakartan (bara TAF-fliken) - grovt underlag utanfor MEPS-rutan */
-#kHavEU { fill: var(--hav); } body:not(.taf):not(.sat) #kHavEU, body:not(.taf):not(.sat) #kGeoEU { display: none; }
+#kHavEU { fill: var(--hav); } body:not(.taf):not(.sat):not(.rad) #kHavEU, body:not(.taf):not(.sat):not(.rad) #kGeoEU { display: none; }
 #kGeoEU .land { fill: var(--land); stroke: none; fill-rule: evenodd; } #kGeoEU .sjo { fill: var(--hav); stroke: none; }
 #kGeoEU .grans { fill: none; stroke: var(--grans); } #kGeoEU .grad { fill: none; stroke: var(--gradnat); } #kGeoEU .meps { fill: none; stroke: var(--dim); }
 #karta .land { fill: var(--land); stroke: none; fill-rule: evenodd; }
@@ -86,7 +86,7 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #karta .grad { fill: none; stroke: var(--gradnat); }
 #kProb { opacity: .78; shape-rendering: crispEdges; }
 /* 21/11 kvall: kust och granser overst */
-#kKust, #kKustEU { pointer-events: none; } body:not(.taf):not(.sat) #kKustEU { display: none; } body:not(.taf) #kTaf { display: none; } body:not(.obs) #kObs { display: none; }
+#kKust, #kKustEU { pointer-events: none; } body:not(.taf):not(.sat):not(.rad) #kKustEU { display: none; } body:not(.rad) #konradKnapp { display: none; } body:not(.taf) #kTaf { display: none; } body:not(.obs) #kObs { display: none; }
 #karta .okust { fill: none; stroke: var(--kustO); stroke-width: 1.1; } #karta .osjo { stroke-width: .7; }
 #karta .ograns { fill: none; stroke: var(--gransO); stroke-width: 1.4; stroke-dasharray: 6 3; }
 #karta .mk { cursor: pointer; }
@@ -660,7 +660,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 <div id="vyFall" hidden>
   <h3 class="exprub">Spara väderfall – under uppbyggnad</h3>
   <p>Tanken är att man här ska kunna <b>välja data på ett smidigt sätt</b> – till exempel ett område, en tidsperiod och vilka källor som ska med (MEPS-körningar och ensemble, radar, satellit, METAR/TAF, åska) – och sedan <b>spara undan</b> det som ett väderfall.</p>
-  <p>Ett sparat fall ska gå att öppna igen senare och titta på som om det vore nu, även när datat inte längre finns hos met.no och de andra källorna: för genomgångar, utbildning, uppföljning och jämförelser mellan modell och verklighet.</p>
+  <p>Ett sparat fall ska gå att öppna igen senare och titta på som om det vore nu, även när datat inte längre finns hos met.no och de andra källorna.</p>
   <p class="dim">Inget går att spara här än. Har du önskemål om vad ett väderfall ska innehålla? Tryck på 💡 Idé uppe till höger.</p>
 </div>
 <div id="vyTAF" hidden>
@@ -2605,7 +2605,7 @@ function hamtStatus(dtg, iy, ix) {
 function kartAspekt() { const r = $("karta").getBoundingClientRect(); return r.width > 20 && r.height > 20 ? r.height / r.width : KY / KX; }
 // 21/11: kartans granser - MEPS-rutan, men hela Europa i TAF-fliken (karta_europa.json)
 let KARTA_EU = null;
-const kartGr = () => (lage === "taf" || lage === "sat") && KARTA_EU ? KARTA_EU : { x0: 0, y0: 0, x1: KX, y1: KY };
+const kartGr = () => (lage === "taf" || lage === "sat" || lage === "rad") && KARTA_EU ? KARTA_EU : { x0: 0, y0: 0, x1: KX, y1: KY };
 const kartMaxBredd = () => { const G = kartGr(); return Math.max(G.x1 - G.x0, (G.y1 - G.y0) / kartAspekt()); };
 function satVb(x, y, w) {
   const a = kartAspekt(); w = Math.min(kartMaxBredd(), Math.max(MIN_BREDD, w)); const h = w * a;
@@ -2665,7 +2665,7 @@ function ritaMarkorer() {
     g.appendChild(m);
   });
   // NYTT 21/11: TAF-fliken - aven flygplatserna utanfor MEPS-rutan (flygplatser_europa.json, bara ICAO-falt)
-  if (visaFlyg && (lage === "taf" || lage === "sat") && typeof FLYG_EU !== "undefined" && FLYG_EU.length) {
+  if (visaFlyg && (lage === "taf" || lage === "sat" || lage === "rad") && typeof FLYG_EU !== "undefined" && FLYG_EU.length) {
     const harF = new Set(FLYG.map(f => f[0]));
     FLYG_EU.forEach((f, i) => {
       if (harF.has(f[0]) || egnaICAO.has(f[0]) || (f[4] === 0 && !smaOK)) return;
@@ -2948,7 +2948,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261123-2210"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261124-1930"></script>
+<script src="obs.js?v=20261124-2110"></script>
 <script src="exp.js?v=20261123-0945"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>
@@ -2957,7 +2957,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="vvis.js?v=20261123-1850"></script>
 <script src="qff.js?v=20261123-2140"></script>
 <script src="bildspel.js?v=20261124-0700"></script>
-<script src="konrad.js?v=20261124-1310"></script>
+<script src="konrad.js?v=20261124-2110"></script>
 <script src="brand.js?v=20261124-1450"></script>
 <script src="led.js?v=20261124-2110"></script>
 <script src="fall.js?v=20261124-2050"></script>
