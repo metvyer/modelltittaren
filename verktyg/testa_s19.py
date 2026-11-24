@@ -34,6 +34,8 @@ async def main():
         print("zoom:", await s.evaluate("JSON.stringify([Math.round(LED.z0), Math.round(LED.z1), LED.tA, LED.tB])"))
         await s.evaluate(f"$('ledTH').dispatchEvent(new WheelEvent('wheel', {{ deltaY: -300, clientX: {bb[0]}, clientY: {bb[1]}, bubbles: true, cancelable: true }}))"); await s.wait_for_timeout(400)
         print("syntetisk zoom:", await s.evaluate("JSON.stringify([Math.round(LED.z0), Math.round(LED.z1), LED.tA, LED.tB])"))
+        await s.mouse.move(bb[0] + 30, bb[1] - 40); await s.wait_for_timeout(300)
+        print("hovring:", await s.evaluate("$('kTips').hidden + ' | ' + $('kTips').innerText.replace(/\\n/g, ' | ')"))
         await s.keyboard.down("Shift"); await s.mouse.wheel(0, -400); await s.keyboard.up("Shift"); await s.wait_for_timeout(600)
         print("tidszoom:", await s.evaluate("JSON.stringify([Math.round(LED.z0), Math.round(LED.z1), LED.tA.toFixed(1), LED.tB.toFixed(1)])"))
         await s.evaluate("$('ledBredvid').click(); $('ledTQ').click()"); await s.wait_for_timeout(800)

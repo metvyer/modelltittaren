@@ -304,6 +304,18 @@ function ledZoomKoppla(S) {
     const dz = dy / (G.yB - G.yT) * (start.z1 - start.z0); LED.z0 = start.z0 + dz; LED.z1 = start.z1 + dz;
     if (S._typ === "th") { const dt = dx / (G.xR - G.xL) * (start.tB - start.tA + 1); LED.tA = start.tA - dt; LED.tB = start.tB - dt; }
     ledBegransa(); ledRitaSnart(); });
+  // 24/11: tipsruta vid hovring i tid-hojd (timme, skiktet under musen, klass och bidrag)
+  if (S.id === "ledTH" || S.id === "ledTH2") {
+    S.addEventListener("pointermove", ev => { if (pek.size || ev.pointerType === "touch" || !LED.data || !S._G) return; const G = S._G, p = vbP(ev);
+      if (p.x < G.xL || p.x > G.xR || p.y < G.yT || p.y > G.yB) { $("kTips").hidden = true; return; }
+      const t = Math.round(S._tFranX(p.x)), z = ledZ(G, p.y), pr = LED.data.prof[t]; if (!pr) { $("kTips").hidden = true; return; }
+      const P = ledSkikt(pr, LED.med2), sk = P.sk.find(s => z >= s.z0 && z <= s.z1);
+      let txt = ledTidText(t) + "\n" + Math.round(z) + " m ≈ FL" + String(Math.round(interpFL(P.pt, z, pr.ps))).padStart(3, "0");
+      if (sk) { const a = P.pt.reduce((b, c) => Math.abs(c.z - z) < Math.abs(b.z - z) ? c : b); txt += "\n" + ledTipsSkikt(sk) + "\nT " + ledKomma(a.T - 273.15, 1) + " °C, Td " + ledKomma(a.Td, 1) + " °C (nivån " + Math.round(a.z) + " m)"; }
+      const L = ledLedskikt(P).filter(d => z >= d.bas - 1 && z <= d.topp + 1); for (const d of L) txt += "\n▶ " + d.typ + " " + Math.round(d.bas) + "–" + Math.round(d.topp) + " m, ΔM " + ledKomma(d.dM, 1);
+      visaKTips(txt + "\nKlicka = välj timmen", ev.clientX + 14, ev.clientY + 14); });
+    S.addEventListener("pointerleave", () => { $("kTips").hidden = true; });
+  }
   const slut = ev => { const var1 = pek.size === 1; pek.delete(ev.pointerId);
     if (var1 && !drog && S._typ === "th" && ev.type === "pointerup" && LED.data) { const t = Math.round(S._tFranX(vbP(ev).x)); if (t >= 0 && t < LED.data.nt) { LED.t = t; ledRitaSnart(); } }
     if (!pek.size) start = null; };
