@@ -162,8 +162,8 @@ body.exp #kProb, body.exp #kM0, body.exp #kSiff, body.exp #kOmr { display: none;
 body.led .baraTH, body.led .baraP, body.led .ejTaf { display: none !important; }
 body.led #kProb, body.led #kM0, body.led #kSiff, body.led #kOmr { display: none; }
 .ledruta { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; } .ledruta[hidden] { display: none; }
-.ledruta svg { width: 100%; display: block; user-select: none; cursor: ns-resize; } #ledTH, #ledTH2 { cursor: crosshair; }
-.ledprofiler { display: grid; grid-template-columns: 1fr 0.86fr; gap: 6px; max-width: 900px; } .ledprofiler.en { grid-template-columns: 1fr; max-width: 520px; }
+.ledruta svg, #vyLed svg { width: 100%; display: block; user-select: none; cursor: ns-resize; } #ledTH, #ledTH2 { cursor: crosshair; }
+.ledprofiler { display: grid; grid-template-columns: 1fr 0.86fr; gap: 6px; margin-top: 6px; } .ledprofiler.en { grid-template-columns: 1fr; max-width: 520px; }
 @media (max-width: 760px) { .ledprofiler { grid-template-columns: 1fr; } }
 .ledleg { font-size: 11.5px; display: flex; flex-wrap: wrap; gap: 3px 10px; margin: 4px 0; } .ledleg i { display: inline-block; width: 12px; height: 10px; margin-right: 3px; border: 1px solid rgba(0,0,0,.2); vertical-align: -1px; }
 #ledLista ul { margin: 2px 0 0 18px; padding: 0; } .ledinfo p, .ledinfo li { font-size: 12.5px; }
@@ -619,6 +619,8 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <button class="sek" id="ledFram" title="Timmen efter (högerpil)">▶</button>
   </div>
   <dl class="info"><dt>Punkt</dt><dd id="ledPlats">–</dd><dt>Körning</dt><dd id="ledKorn">–</dd><dt>Status</dt><dd id="ledStatus">–</dd></dl>
+  <div class="ledprofiler"><svg id="ledProfSvg"></svg><div id="ledGradRam" hidden><svg id="ledGradSvg"></svg></div></div>
+  <div id="ledLista" class="psam"></div>
 </div>
 <div id="vyTAF" hidden>
   <div class="tafinst">
@@ -719,9 +721,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 <section id="ledRuta" class="ledruta" hidden>
   <div class="ledleg"><span><i style="background:#93c5fd"></i>Sub (dN/dz &gt; 0)</span><span><i style="background:transparent"></i>Normal (0 till −79)</span><span><i style="background:#fcd34d"></i>Super (−79 till −157)</span><span><i style="background:#f87171"></i>Ledskikt (&lt; −157, dM/dz &lt; 0)</span><span><i style="background:#991b1b"></i>Starkt (&lt; −300)</span><span>━ dM/dz = 0 (topp/bas)</span><span class="dim">Ljusare = skiktet 2 m–lägsta nivån (diagnostiskt)</span></div>
   <svg id="ledTH"></svg><svg id="ledTH2" hidden></svg>
-  <p class="karttips" style="margin:2px 0 8px">Mushjul = zooma höjden (Skift + hjul = tiden), dra = flytta, nyp på mobil, dubbelklick = återställ. Alla diagram följer varandra. Klicka i tid-höjd för att välja timme. Gradienten gäller för hela skiktet mellan två nivåer och ritas som ett band.</p>
-  <div class="ledprofiler"><svg id="ledProfSvg"></svg><div id="ledGradRam" hidden><svg id="ledGradSvg"></svg></div></div>
-  <div id="ledLista" class="psam"></div>
+  <p class="karttips" style="margin:2px 0 8px">Mushjul = zooma höjden (Skift + hjul = tiden), dra = flytta, nyp på mobil, dubbelklick = återställ. Alla diagram följer varandra. Klicka i tid-höjd för att välja timme – profilen bredvid kartan visar den timmen. Gradienten gäller för hela skiktet mellan två nivåer och ritas som ett band.</p>
   <details class="expinfo ledinfo" id="ledInfo">
     <summary>ⓘ Om ledskikt, hur det räknas och vad man ska se upp med</summary>
     <p><b>Refraktivitet.</b> N = 77,6·P/T + 3,73·10⁵·e/T² (P och e i hPa, T i K). Modifierad refraktivitet M = N + 0,157·z (z i meter) tar med jordens krökning. Ett <b>ledskikt</b> (trapping) finns där M minskar med höjden (dM/dz &lt; 0, dvs. dN/dz &lt; −157 N/km): strålen böjs nedåt mer än jorden kröker sig och kan följa skiktet långt bortom normal räckvidd – med lucka (skip zone) ovanför och kraftigt ökad räckvidd för sändare och mål i skiktet.</p>
@@ -2895,7 +2895,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="bildspel.js?v=20261124-0700"></script>
 <script src="konrad.js?v=20261124-1310"></script>
 <script src="brand.js?v=20261124-1450"></script>
-<script src="led.js?v=20261124-2035"></script>
+<script src="led.js?v=20261124-2020"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>
