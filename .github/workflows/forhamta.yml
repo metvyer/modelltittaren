@@ -107,6 +107,30 @@ jobs:
       - name: Städa VViS-modellvärden
         run: rm -rf forhamtat/vvmod
 
+      # NYTT 24/11: SMHI:s brandriskprognos (dygn) som kartor - bara nar SMHI har en ny korning, bara till R2
+      - name: Hämta brandrisk
+        id: brand
+        run: python3 verktyg/forhamta.py forhamtat brand || echo "Brandrisk misslyckades"
+
+      - name: Brandrisk till R2
+        if: steps.brand.outputs.brand == 'ja'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_HEMLIG }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          E=https://64ff6e697fe9bcc9d141dd2798b79eee.r2.cloudflarestorage.com; B=s3://modelltittaren-data
+          M=$(python3 -c "import json;print(json.load(open('forhamtat/brand/index.json'))['mapp'])")
+          aws s3 cp --recursive "forhamtat/brand/$M" "$B/brand/$M" --endpoint-url $E --only-show-errors
+          aws s3 cp forhamtat/brand/index.json "$B/brand/index.json" --endpoint-url $E --content-type application/json --only-show-errors
+          for k in $(aws s3 ls "$B/brand/" --endpoint-url $E | awk '/PRE/{print $2}' | tr -d / | grep -v "^$M$"); do aws s3 rm --recursive "$B/brand/$k" --endpoint-url $E --only-show-errors; done
+          echo "R2: brandrisk $M uppladdad"
+
+      - name: Städa brandrisk
+        run: rm -rf forhamtat/brand
+
       - name: Förhämta ny körning (varv 1, moln och vind)
         id: hamta
         run: python3 verktyg/forhamta.py forhamtat

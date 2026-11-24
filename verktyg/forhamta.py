@@ -691,6 +691,68 @@ def varv_vvmod(ut):
     return 0
 
 
+# NYTT 24/11 (Jakob): BRANDRISK - SMHI:s brandriskprognos (fwif1g, dygn, 12 UTC, ca 7 dagar) som kartor i Modelltittarens
+# rutnat med var 2:a ruta (5 km). SMHI:s multipoint ar 2,5 km men ~30 MB JSON per falt och dag -> vi laddar ned EN gang
+# per ny SMHI-korning och sparar bara 1 byte per ruta (hogsta vardet bland SMHI-punkterna i rutan).
+#   fwi   = FWI-vardet avrundat 0..250 (klassen 1-6 raknas i sidan: <5, 5-11, 11-17, 17-22, 22-28, >=28)
+#   gras  = grassfire 1..6 (1 = snotackt, 2 = sasongen slut, 3-6 = lag..mycket stor), torr = forestdry 1..6
+#   255 = saknas / utanfor sasong / utanfor Sverige. Bara till R2: brand/<ref>/<falt>_<dag>.bin.gz + brand/index.json.
+BRAND_BAS = "https://opendata-download-metfcst.smhi.se/api/category/fwif1g/version/1/daily"
+BRAND_FALT = (("fwi", "fwi"), ("gras", "grassfire"), ("torr", "forestdry"))
+
+
+def varv_brand(ut):
+    import numpy as np, gzip as gz
+    bdir = os.path.join(ut, "brand"); os.makedirs(bdir, exist_ok=True)
+    def las(url, packa=False):
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Encoding": "gzip"})
+        with urllib.request.urlopen(req, timeout=180) as r:
+            t = r.read(); STAT["anrop"] += 1; STAT["byte"] += len(t)
+            return json.loads(gz.decompress(t) if r.headers.get("Content-Encoding") == "gzip" else t)
+    STAT["anrop"] = 0; STAT["byte"] = 0; t0 = time.time()
+    try: ref = las(BRAND_BAS + "/geotype/point/lon/16/lat/62/data.json")["referenceTime"]
+    except Exception as e: print(f"Brandrisk: SMHI svarar inte ({e})"); return 0
+    try:
+        req = urllib.request.Request("https://modelltittaren.metvyer.workers.dev/r2/brand/index.json", headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=30) as r: g = json.load(r)
+        if g.get("ref") == ref: print(f"Brandrisk: {ref} finns redan."); return 0
+    except Exception as e: print(f"Brandrisk: inget index ({e})", flush=True)
+    vt = las(BRAND_BAS + "/geotype/multipoint/validtime.json").get("validTime", [])
+    if not vt: print("Brandrisk: inga tider"); return 0
+    S, NY, NX = 2, (LCC["ny"] + 1) // 2, (LCC["nx"] + 1) // 2
+    cell = None; dagar = []
+    refk = ref.replace("-", "").replace(":", "")[:13] + "Z"
+    rdir = os.path.join(bdir, refk); os.makedirs(rdir, exist_ok=True)
+    for i, v in enumerate(vt):
+        vk = v.replace("-", "").replace(":", "")
+        for kort, prm in BRAND_FALT:
+            try: j = las(f"{BRAND_BAS}/geotype/multipoint/validtime/{vk}/parameter/{prm}/leveltype/hl/level/0/data.json")
+            except Exception as e: print(f"  {prm} {v}: {e}"); continue
+            if cell is None:   # SMHI-punkt -> var 2:a ruta i MEPS-natet (Lambert, samma som ruta())
+                c = np.asarray(j["geometry"]["coordinates"], dtype=np.float64); lon, lat = c[:, 0], c[:, 1]; L = LCC
+                rho = L["RF"] / np.tan(np.pi / 4 + lat * _rad / 2) ** L["n"]; th = L["n"] * (lon - 15) * _rad
+                ix = np.rint((rho * np.sin(th) - L["x0"]) / L["dx"]).astype(np.int64); iy = np.rint((L["rho0"] - rho * np.cos(th) - L["y0"]) / L["dx"]).astype(np.int64)
+                inne = (ix >= 0) & (ix < L["nx"]) & (iy >= 0) & (iy < L["ny"]); cell = np.where(inne, (iy // S) * NX + ix // S, -1)
+                print(f"  {len(cell)} SMHI-punkter, {int(inne.sum())} inom MEPS-omradet", flush=True)
+            vals = np.asarray(j["timeSeries"][0]["parameters"][0]["values"], dtype=np.float64)
+            ok = (cell >= 0) & (vals >= 0)
+            ut8 = np.full(NY * NX, -1.0)
+            if kort == "fwi": w = np.clip(np.rint(vals), 0, 250)
+            else: w = vals
+            np.maximum.at(ut8, cell[ok], w[ok])
+            b = np.where(ut8 < 0, 255, ut8).astype(np.uint8)
+            with gz.open(os.path.join(rdir, f"{kort}_{i}.bin.gz"), "wb", compresslevel=6) as f: f.write(b.tobytes())
+            del j
+        dagar.append(v); print(f"  dag {i} ({v}) klar ({time.time() - t0:.0f} s)", flush=True)
+    idx = {"ref": ref, "mapp": refk, "dagar": dagar, "s": S, "ny": NY, "nx": NX, "y0": 0, "x0": 0, "falt": [k for k, _ in BRAND_FALT],
+           "skapad": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")}
+    with open(os.path.join(bdir, "index.json"), "w", encoding="utf-8") as f: json.dump(idx, f)
+    mb = sum(os.path.getsize(os.path.join(rdir, x)) for x in os.listdir(rdir)) / 1e6
+    print(f"Brandrisk klar: {ref}, {len(dagar)} dagar, {time.time() - t0:.0f} s, {STAT['anrop']} anrop, {STAT['byte'] / 1e6:.0f} MB fran SMHI, {mb:.1f} MB filer")
+    with open(os.environ.get("GITHUB_OUTPUT", os.devnull), "a") as f: f.write("brand=ja\n")
+    return 0
+
+
 def main():
     ut = sys.argv[1] if len(sys.argv) > 1 else "forhamtat"
     if len(sys.argv) > 2 and sys.argv[2] == "tq":   # varv 2 (NYTT 19/11 em)
@@ -701,6 +763,8 @@ def main():
         return varv_qff(ut)
     if len(sys.argv) > 2 and sys.argv[2] == "vvmod":  # NYTT 23/11 kvall - modellvarden 2,5 km for VViS-stationerna (bara R2)
         return varv_vvmod(ut)
+    if len(sys.argv) > 2 and sys.argv[2] == "brand":  # NYTT 24/11 - SMHI:s brandriskprognos som kartor (bara R2)
+        return varv_brand(ut)
     thdir = os.path.join(ut, "th")
     os.makedirs(thdir, exist_ok=True)
     idxfil = os.path.join(thdir, "index.json")

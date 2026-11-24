@@ -512,6 +512,48 @@ export default {
       return new Response(svar.body, { headers: h });
     }
 
+    // NYTT 24/11: BRANDRISK for en punkt - SMHI fwif1g timme (ca 48 h) + dygn (ca 7 d), ihopslaget och bantat, cache 30 min.
+    // GET /brand/punkt?lat=&lon= -> {ref, refH, tim: {t:[], fwiindex:[], fwi:[], grassfire:[], t2:[], r:[], ws:[], nb:[]}, dygn: {t:[], fwiindex:[], fwi:[], grassfire:[], forestdry:[], nb:[]}}
+    if (url.pathname === "/brand/punkt") {
+      const la = Math.round(+url.searchParams.get("lat") * 50) / 50, lo = Math.round(+url.searchParams.get("lon") * 50) / 50;
+      if (!(la > 54 && la < 70 && lo > 9 && lo < 26)) return new Response(JSON.stringify({ fel: "utanför Sverige" }), { status: 400, headers: { ...cors, "Content-Type": "application/json" } });
+      const ck = new Request("https://brand.cache/p/" + la + "/" + lo);
+      let svar = await caches.default.match(ck);
+      if (!svar) {
+        const B = "https://opendata-download-metfcst.smhi.se/api/category/fwif1g/version/1/";
+        const hamta = per => fetch(B + per + "/geotype/point/lon/" + lo + "/lat/" + la + "/data.json", { headers: UA }).then(r => r.ok ? r.json() : null).catch(() => null);
+        const [h, d] = await Promise.all([hamta("hourly"), hamta("daily")]);
+        if (!h && !d) return new Response(JSON.stringify({ fel: "SMHI svarar inte (punkt utanför land?)" }), { status: 502, headers: { ...cors, "Content-Type": "application/json" } });
+        const plock = (j, namn) => { const ut = { t: [] }; for (const n of namn) ut[n[1]] = [];
+          for (const ts of (j && j.timeSeries) || []) { ut.t.push(ts.validTime); for (const [n, k] of namn) { const p = ts.parameters.find(q => q.name === n); ut[k].push(p && p.values[0] !== -1 ? p.values[0] : null); } }
+          return ut; };
+        const ut = { ref: d && d.referenceTime, refH: h && h.referenceTime, lat: la, lon: lo,
+          tim: plock(h, [["fwiindex", "fwiindex"], ["fwi", "fwi"], ["grassfire", "grassfire"], ["t", "t2"], ["r", "r"], ["ws", "ws"], ["prec1h", "nb"]]),
+          dygn: plock(d, [["fwiindex", "fwiindex"], ["fwi", "fwi"], ["grassfire", "grassfire"], ["forestdry", "forestdry"], ["prec24h", "nb"], ["t", "t2"]]) };
+        svar = new Response(JSON.stringify(ut), { headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=1800" } });
+        ctx.waitUntil(caches.default.put(ck, svar.clone()));
+        await raknaAnrop(env.DB, "brand-punkt");
+      }
+      const hd = new Headers(svar.headers); for (const [k, x] of Object.entries(cors)) hd.set(k, x);
+      return new Response(svar.body, { headers: hd });
+    }
+    // NYTT 24/11: EFFIS/GWIS-kartan (ECMWF FWI, hela Europa) - WMS via mellanservern for CORS, cache 6 h.
+    // GET /effis?lager=ecmwf.fwi&tid=YYYY-MM-DD&bbox=s,w,n,e&w=&h=
+    if (url.pathname === "/effis") {
+      const lager = url.searchParams.get("lager") || "ecmwf.fwi", tid = url.searchParams.get("tid") || "", bbox = url.searchParams.get("bbox") || "";
+      if (!/^ecmwf\.(fwi|ffmc|dmc|dc|isi|bui|anomaly|ranking)$/.test(lager) || !/^\d{4}-\d{2}-\d{2}$/.test(tid) || !/^[-\d.]+(,[-\d.]+){3}$/.test(bbox))
+        return new Response("fel parametrar", { status: 400, headers: cors });
+      const w = Math.min(2048, Math.max(64, +url.searchParams.get("w") || 800)), hh = Math.min(2048, Math.max(64, +url.searchParams.get("h") || 800));
+      const u = "https://maps.effis.emergency.copernicus.eu/gwis?service=WMS&version=1.3.0&request=GetMap&crs=EPSG:4326&format=image/png&transparent=true&styles=&layers=" + lager +
+        "&bbox=" + bbox + "&width=" + w + "&height=" + hh + "&time=" + tid;
+      const ck = new Request("https://effis.cache/" + encodeURIComponent(u));
+      let svar = await caches.default.match(ck);
+      if (!svar) { const r = await fetch(u, { headers: UA }); if (!r.ok) return new Response("EFFIS " + r.status, { status: 502, headers: cors });
+        svar = new Response(await r.arrayBuffer(), { headers: { "Content-Type": r.headers.get("Content-Type") || "image/png", "Cache-Control": "public, max-age=21600" } });
+        ctx.waitUntil(caches.default.put(ck, svar.clone())); await raknaAnrop(env.DB, "effis"); }
+      const hd = new Headers(svar.headers); for (const [k, x] of Object.entries(cors)) hd.set(k, x);
+      return new Response(svar.body, { headers: hd });
+    }
     // NYTT 24/11: KONRAD3D - DWD:s konvektiva celler (opendata.dwd.de, CC BY 4.0), senaste filen (var 5:e min).
     // GET /konrad -> XML som den ar (sidan tolkar den), cache 4 min -> DWD far hogst ett par anrop per 5 min.
     // Tacker bara DWD:s radaromrade (ca 45,7-55,9 N). Svarshuvudet X-Konrad-Fil = filnamnet.
@@ -613,7 +655,7 @@ export default {
     // NYTT 23/11: R2 - Sverigeoversikten fran GitHub-forhamtningen. GET /r2/ens/index.json, /r2/ens/<DTG>/index.json,
     // /r2/ens/<DTG>/<v>_<t>.bin.gz. Bara las, bara ens/. Cachas i Cloudflares cache (filerna andras aldrig: korningen
     // ligger i namnet; index.json 60 s). R2 ar aldrig publik - det har ar enda vagen in.
-    const r2m = url.pathname.match(/^\/r2\/((?:ens|qff)\/(?:index\.json|\d{8}T\d{2}Z\/(?:index\.json|[a-z0-9]+_\d{1,2}\.bin\.gz))|vvmod\/senaste\.json)$/);   // 23/11 kvall: + qff/
+    const r2m = url.pathname.match(/^\/r2\/((?:ens|qff|brand)\/(?:index\.json|\d{8}T\d{2}(?:\d{2})?Z\/(?:index\.json|[a-z0-9]+_\d{1,2}\.bin\.gz))|vvmod\/senaste\.json)$/);   // 24/11: + brand/   // 23/11 kvall: + qff/
     if (r2m) {
       if (!env.R2) return new Response("ingen R2", { status: 503, headers: cors });
       const idx = /(index|senaste)\.json$/.test(r2m[1]), ck = new Request("https://r2.cache/" + r2m[1]);
