@@ -9,7 +9,7 @@ async def main():
         b = await p.chromium.launch(); s = await b.new_page(viewport={"width": 1400, "height": 1300}); fel = []
         s.on("pageerror", lambda e: fel.append(str(e)))
         await s.goto(SIDA); await s.wait_for_timeout(4000)
-        await s.evaluate("$('testskylt').hidden = true; bytLage('led')")
+        await s.evaluate("bytLage('led')"); await s.wait_for_timeout(300); await s.evaluate("$('testskylt').hidden = true")
         for i in range(120):
             await s.wait_for_timeout(1000)
             st = await s.evaluate("$('ledStatus').textContent")
@@ -21,6 +21,8 @@ async def main():
             topp: [r(pr.pt[pr.pt.length - 1].z), r(pr.pt[pr.pt.length - 1].p / 100)],
             skikt: P.sk.slice(0, 6).map(s => [r(s.z0), r(s.z1), r(s.g), r(s.gT), r(s.gQ)]), medel1_3km: r(P.sk.filter(s => s.z0 > 1000 && s.z1 < 3000).reduce((a, s) => a + s.g * (s.z1 - s.z0), 0) / 2000) }); })()"""))
         print("ledskikt alla timmar:", await s.evaluate("(() => { const u = []; LED.data.prof.forEach((pr, t) => { if (!pr) return; const L = ledLedskikt(ledSkikt(pr, true)); if (L.length) u.push(t + ':' + L.map(d => d.typ[0] + Math.round(d.bas) + '-' + Math.round(d.topp) + '/' + d.dM.toFixed(1)).join(',')); }); return u.slice(0, 25).join(' ') || 'inga'; })()"))
+        print("syntetiska ledskikt:", await s.evaluate("""(() => { const mk = Ms => { const pt = Ms.map((M, i) => ({ z: i * 100, M })); return { pt, sk: pt.slice(1).map((b, i) => ({ z0: pt[i].z, z1: b.z, dM: (b.M - pt[i].M) / 100 * 1000, diag: false })) }; };
+          return JSON.stringify([ledLedskikt(mk([320, 310, 300, 305, 315])), ledLedskikt(mk([300, 310, 320, 312, 330])), ledLedskikt(mk([300, 290, 320, 310, 330]))].map(L => L.map(d => [d.typ, Math.round(d.bas), d.topp, d.dM]))); })()"""))
         print("diagram:", await s.evaluate("'TH rect ' + $('ledTH').querySelectorAll('rect').length + ', linjer ' + $('ledTH').querySelectorAll('line[stroke=\"#000\"]').length + ', prof paths ' + $('ledProfSvg').querySelectorAll('path').length + ' | ' + $('ledLista').innerText.slice(0, 300).replace(/\\n/g, ' | ')"))
         await s.screenshot(path="matprov/s19a.png", full_page=True)
         # zoom med hjul over tid-hojd

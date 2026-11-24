@@ -115,7 +115,7 @@ function ledAxlar(S, G, pr) {
   for (let z = Math.ceil(LED.z0 / sm) * sm; z <= LED.z1; z += sm) { const y = ledY(G, z);
     S.appendChild(el("line", { x1: G.xL, x2: G.xR, y1: y, y2: y, stroke: grid, "stroke-width": 0.5 }));
     S.appendChild(el("text", { x: G.xL - 4, y: y + 3, "font-size": 10, "text-anchor": "end", fill: dim }, String(Math.round(z)))); }
-  S.appendChild(el("text", { x: 4, y: G.yT - 4, "font-size": 9.5, fill: dim }, "m ö. modellmark"));
+  S.appendChild(el("text", { x: 2, y: G.yT - 10, "font-size": 9.5, fill: dim }, "m ö. mark"));
   if (pr && pr.pt.length > 1) {   // FL: hojden dar FL-vardet nas, interpolerat langs profilen
     const P = pr.pt, fl0 = ledFL(pr.ps), zFL = f => { if (f <= fl0) return 0; for (let i = 0; i + 1 < P.length; i++) if (P[i + 1].FL >= f) { const a = P[i], b = P[i + 1]; return a.z + (b.z - a.z) * (f - a.FL) / (b.FL - a.FL || 1); }
       return NaN; };
@@ -159,7 +159,7 @@ function ledRitaTH(svgId, falt, rubrik) {
     S.appendChild(el("text", { x: xT(t), y: G.yB + 15, "font-size": 10, "text-anchor": "middle", fill: h === 0 ? ledFarg("--fg") : dim, "font-weight": h === 0 ? 700 : 400 }, h === 0 ? VECKODAG[dd.getUTCDay()] + " " + dd.getUTCDate() : p2(h))); }
   // vald timme
   if (LED.t >= tA - 0.5 && LED.t <= tB + 0.5) S.appendChild(el("rect", { x: xT(LED.t) - bw / 2, y: G.yT, width: bw, height: G.yB - G.yT, fill: "none", stroke: "#2563eb", "stroke-width": 1.6 }));
-  S.appendChild(el("text", { x: G.xL + 4, y: 13, "font-size": 11.5, "font-weight": 700, fill: ledFarg("--fg") }, rubrik));
+  S.appendChild(el("text", { x: G.xL + 60, y: 13, "font-size": 11.5, "font-weight": 700, fill: ledFarg("--fg") }, rubrik));
 }
 
 // ---------------- profilen (termodynamik + gradient) ----------------
@@ -195,7 +195,7 @@ function ledRitaProfil() {
   for (const s of P.sk) { if (s.z1 < LED.z0 || s.z0 > LED.z1) continue; const y1 = ledY(G, s.z1), y0 = ledY(G, s.z0);
     const r = el("rect", { x: G.xL, y: y1, width: G.xR - G.xL, height: Math.max(1, y0 - y1), fill: "transparent" }), ti = el("title");
     ti.textContent = ledTipsSkikt(s); r.appendChild(ti); g.appendChild(r); }
-  S.appendChild(el("text", { x: G.xL + 4, y: 14, "font-size": 11.5, "font-weight": 700, fill: ledFarg("--fg") }, ledTidText(LED.t)));
+  S.appendChild(el("text", { x: G.xR, y: 12, "font-size": 11.5, "font-weight": 700, "text-anchor": "end", fill: ledFarg("--fg") }, ledTidText(LED.t)));
   // --- gradient + M bredvid ---
   if (bredvid) {
     const W2 = 380; S2.setAttribute("viewBox", "0 0 " + W2 + " " + H); const G2 = { xL: 14, xR: W2 - 54, yT: 22, yB: H - 32 }; S2._G = G2; S2._typ = "prof";
