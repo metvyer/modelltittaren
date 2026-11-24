@@ -34,7 +34,7 @@ const ledKomma = (v, d) => isFinite(v) ? v.toFixed(d).replace(".", ",").replace(
 function ledTidText(t) { if (!M0F.t0) return "+" + t; const d = new Date(M0F.t0 + t * 3600e3); return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCDate()) + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + "Z (+" + t + ")"; }
 
 // ---------------- hamtning ----------------
-async function ledHamta(nr) {
+async function ledHamta(nr, sig) {
   const r = ruta(LED.lat, LED.lon); if (!r) throw new Error("punkten ligger utanför MEPS");
   const ab = await expAB(), nt = M0F.nt;
   let kTop = 0; for (let k = 0; k < ab.ap.length; k++) if (ab.ap[k] + ab.b[k] * 101325 >= LED_PTOPP) { kTop = Math.max(0, k - 1); break; }
@@ -45,7 +45,7 @@ async function ledHamta(nr) {
   const delar = await Promise.all(bitar.map(async ([a, b]) => { const tt = "[" + a + ":" + b + "]";
     const fraga = ["air_temperature_ml" + tt + kk + yx, "specific_humidity_ml" + tt + kk + yx, "surface_air_pressure" + tt + "[0]" + yx,
       "air_temperature_2m" + tt + "[0]" + yx, "relative_humidity_2m" + tt + "[0]" + yx].join(",");
-    let res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga)); if (res.st !== 200) res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga));
+    let res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga), true, false, 0, sig); if (res.st !== 200) res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga), true, false, 0, sig);
     if (res.st !== 200) throw new Error("svar " + res.st);
     const d = tolka(res.txt); if (!d.air_temperature_ml || !d.surface_air_pressure) throw new Error("oväntat svar");
     klara++; if (nr === LED.hamtar) ledLaddar(klara, bitar.length); return d; }));
@@ -263,11 +263,13 @@ async function ledUppdatera() {
   $("ledKorn").textContent = M0F.dtg + " (MEPS medlem 0, 2,5 km)";
   if (LED.data && LED.data.dtg === M0F.dtg && LED.data.ry === LED.lat && LED.data.rx === LED.lon) { ledRita(); return; }
   const nyckel = M0F.dtg + ":" + LED.lat + ":" + LED.lon; if (LED.pagar === nyckel) return;   // samma hamtning pagar redan
+  if (LED.avbryt) LED.avbryt.abort();   // 24/11: en tidigare punkts hamtning avbryts direkt (sparar thredds och bandbredd)
+  const ac = new AbortController(); LED.avbryt = ac;
   LED.pagar = nyckel; const nr = ++LED.hamtar, t0 = performance.now();
   $("ledPlats").textContent = (platsNamn(LED.lat, LED.lon) || "") + " " + LED.lat.toFixed(2) + ", " + LED.lon.toFixed(2);
   ledLaddar(0, Math.ceil(M0F.nt / 12));
   try {
-    const D = await ledHamta(nr); if (nr !== LED.hamtar) return;
+    const D = await ledHamta(nr, ac.signal); if (nr !== LED.hamtar) return;
     D.ry = LED.lat; D.rx = LED.lon; ledBerakna(D); LED.data = D;
     if (LED.t === null || LED.t >= D.nt) LED.t = Math.max(0, Math.min(D.nt - 1, Math.round((Date.now() - M0F.t0) / 3600e3)));
     LED.tA = 0; LED.tB = D.nt - 1;

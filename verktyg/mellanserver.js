@@ -669,6 +669,33 @@ export default {
       return new Response(svar.body, { status: svar.status, headers: h });
     }
 
+    // NYTT 24/11 kvall: IDELADAN. POST /ide {text, namn?, flik?} fran sidan (bara tillatna sidor) -> sparas i D1 (tabell ideer).
+    // Spam: hogst 2000 tecken, 5 per timme och avsandare (IP lagras bara som kort hash) och 100 per dygn totalt.
+    // GET /ide med X-Mt-Nyckel = STAT_NYCKEL -> de senaste 300 (las pa statistiksidan). Ingen e-post nagonstans.
+    if (url.pathname === "/ide") {
+      const json = (o, st) => new Response(JSON.stringify(o), { status: st || 200, headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+      if (!env.DB) return json({ fel: "ingen databas" }, 500);
+      const DB = env.DB, nu = Date.now();
+      await DB.prepare("CREATE TABLE IF NOT EXISTS ideer (id INTEGER PRIMARY KEY AUTOINCREMENT, tid INTEGER, namn TEXT, text TEXT, flik TEXT, iph TEXT)").run();
+      if (req.method === "POST") {
+        if (!ok) return json({ fel: "fel ursprung" }, 403);
+        let b; try { b = JSON.parse((await req.text()).slice(0, 10000)); } catch (e) { return json({ fel: "trasig" }, 400); }
+        const ren = (t, n) => String(t || "").replace(/[\u0000-\u0008\u000b-\u001f]/g, "").trim().slice(0, n);
+        const text = ren(b.text, 2000), namn = ren(b.namn, 60), flik = ren(b.flik, 20);
+        if (text.length < 3) return json({ fel: "för kort" }, 400);
+        const ip = req.headers.get("CF-Connecting-IP") || "", h = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ip + "|" + (env.STAT_NYCKEL || "mt")));
+        const iph = [...new Uint8Array(h)].slice(0, 8).map(x => x.toString(16).padStart(2, "0")).join("");
+        const egen = await DB.prepare("SELECT COUNT(*) n FROM ideer WHERE iph = ? AND tid > ?").bind(iph, nu - 3600e3).first();
+        const alla = await DB.prepare("SELECT COUNT(*) n FROM ideer WHERE tid > ?").bind(nu - 86400e3).first();
+        if ((egen && egen.n >= 5) || (alla && alla.n >= 100)) return json({ fel: "för många just nu – försök senare" }, 429);
+        await DB.prepare("INSERT INTO ideer (tid, namn, text, flik, iph) VALUES (?, ?, ?, ?, ?)").bind(nu, namn, text, flik, iph).run();
+        return json({ ok: true });
+      }
+      const rn = x => String(x || "").replace(/[^\x21-\x7e]/g, ""), ratt = rn(env.STAT_NYCKEL);
+      if (!ratt || rn(req.headers.get("X-Mt-Nyckel")) !== ratt) return json({ fel: "nyckel krävs" }, 403);
+      return json((await DB.prepare("SELECT id, tid, namn, text, flik FROM ideer ORDER BY id DESC LIMIT 300").all()).results);
+    }
+
     // Statistik: senaste 31 dagarna per typ (oppet) + senaste hamtningarna fran kallorna.
     // NYTT 21/11 kvall: listan med VAD som hamtats (omraden/punkter = spar av var folk tittar) kraver nyckeln
     // STAT_NYCKEL (hemlighet i Cloudflare), skickad i huvudet X-Mt-Nyckel. Utan nyckel: bara dagssiffror.
