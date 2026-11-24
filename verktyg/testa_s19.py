@@ -22,6 +22,7 @@ async def main():
         print("diagram:", await s.evaluate("'TH rect ' + $('ledTH').querySelectorAll('rect').length + ', linjer ' + $('ledTH').querySelectorAll('line[stroke=\"#000\"]').length + ', prof paths ' + $('ledProfSvg').querySelectorAll('path').length + ' | ' + $('ledLista').innerText.slice(0, 300).replace(/\\n/g, ' | ')"))
         await s.screenshot(path="s19a.png", full_page=True)
         # zoom med hjul over tid-hojd
+        await s.evaluate("$('ledTH').scrollIntoView({block: 'center'})"); await s.wait_for_timeout(300)
         bb = await s.evaluate("(() => { const r = $('ledTH').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height * 0.8]; })()")
         await s.mouse.move(bb[0], bb[1]); await s.mouse.wheel(0, -400); await s.wait_for_timeout(600)
         print("zoom:", await s.evaluate("JSON.stringify([Math.round(LED.z0), Math.round(LED.z1), LED.tA, LED.tB])"))

@@ -301,7 +301,7 @@ function ledLage(nytt) {
 }
 function ledKartKlick(lat, lon) { LED.lat = lat; LED.lon = lon; ledSpara(); ledUppdatera(); }
 (function ledInit() {
-  if (!$("ledVisa")) return;
+  if (!$("ledFarg")) return;
   const knapp = (id, nyckel, varde) => { const b = $(id); const satt = () => b.setAttribute("aria-pressed", String(LED[nyckel] === varde));
     b.addEventListener("click", () => { LED[nyckel] = varde; ledSpara(); for (const x of document.querySelectorAll("[data-led='" + nyckel + "']")) x._satt(); ledRita(); }); b.dataset.led = nyckel; b._satt = satt; satt(); };
   knapp("ledFarg", "visa", "farg"); knapp("ledBredvid", "visa", "bredvid"); knapp("ledTot", "komp", "tot"); knapp("ledTQ", "komp", "tq");
