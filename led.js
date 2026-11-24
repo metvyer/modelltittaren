@@ -24,9 +24,9 @@ const LED_KLASS = [   // [ovre grans dN/dz (N/km), farg, namn]
 const ledKlass = g => { for (const k of LED_KLASS) if (g < k[0]) return k; return LED_KLASS[LED_KLASS.length - 1]; };
 const LED_PTOPP = 480e2;   // hamta upp till ca 480 hPa (ca 5-6 km)
 let LED = (() => { let o = {}; try { o = JSON.parse(lasa("mt:led") || "{}"); } catch (e) {}
-  return { lat: o.lat || 59.78, lon: o.lon || 21.37, visa: o.visa || "farg", komp: o.komp || "tot", topp: o.topp || 2000, med2: o.med2 !== false,
+  return { lat: o.lat || 59.78, lon: o.lon || 21.37, farg: o.farg !== undefined ? o.farg : o.visa !== "bredvid", bredvid: o.bredvid !== undefined ? o.bredvid : o.visa === "bredvid", komp: o.komp || "tot", topp: o.topp || 2000, med2: o.med2 !== false,
     t: null, z0: 0, z1: o.topp || 2000, tA: 0, tB: null, data: null, dtg: "", hamtar: 0 }; })();
-const ledSpara = () => lagra("mt:led", JSON.stringify({ lat: LED.lat, lon: LED.lon, visa: LED.visa, komp: LED.komp, topp: LED.topp, med2: LED.med2 }));
+const ledSpara = () => lagra("mt:led", JSON.stringify({ lat: LED.lat, lon: LED.lon, farg: LED.farg, bredvid: LED.bredvid, komp: LED.komp, topp: LED.topp, med2: LED.med2 }));
 const ledStatus = t => { const e = $("ledStatus"); if (e) e.textContent = t || ""; };
 const ledFL = p => (1 - Math.pow(p / 101325, 0.190284)) * 145366.45 / 100;   // Pa -> flygniva (ISA)
 const ledEs = tc => 6.112 * Math.exp(17.62 * tc / (243.12 + tc));             // mattnadstryck over vatten (hPa)
@@ -166,7 +166,7 @@ function ledRitaTH(svgId, falt, rubrik) {
 function ledRitaProfil() {
   const D = LED.data, S = $("ledProfSvg"), S2 = $("ledGradSvg"); if (!D || !S) return;
   const pr = D.prof[LED.t]; S.textContent = ""; S2.textContent = "";
-  const bredvid = LED.visa === "bredvid"; $("ledGradRam").hidden = !bredvid; $("ledGradRam").parentElement.classList.toggle("en", !bredvid);
+  const bredvid = LED.bredvid; $("ledGradRam").hidden = !bredvid; $("ledGradRam").parentElement.classList.toggle("en", !bredvid);
   if (!pr) { S.appendChild(el("text", { x: 20, y: 30 }, "Timmen saknas.")); return; }
   const P = ledSkikt(pr, LED.med2);
   // --- termodynamiskt diagram (T och Td mot hojd) ---
@@ -177,7 +177,7 @@ function ledRitaProfil() {
   const xT = c => G.xL + (c - tmin) / (tmax - tmin) * (G.xR - G.xL);
   ledAxlar(S, G, pr);
   const g = ledKlipp(S, G, "klipLedProf");
-  if (!bredvid) for (const s of P.sk) { const k = ledKlass(s.g); if (!k[1]) continue; const y1 = ledY(G, s.z1), y0 = ledY(G, s.z0);
+  if (LED.farg) for (const s of P.sk) { const k = ledKlass(s.g); if (!k[1]) continue; const y1 = ledY(G, s.z1), y0 = ledY(G, s.z0);
     g.appendChild(el("rect", { x: G.xL, y: y1, width: G.xR - G.xL, height: Math.max(0.5, y0 - y1), fill: k[1], opacity: s.diag ? 0.3 : 0.55 })); }
   for (let i = 0; i + 1 < P.sk.length; i++) { if ((P.sk[i].dM < 0) === (P.sk[i + 1].dM < 0)) continue; const y = ledY(G, P.sk[i].z1);
     g.appendChild(el("line", { x1: G.xL, x2: G.xR, y1: y, y2: y, stroke: "#000", "stroke-width": 2 })); }
@@ -336,7 +336,9 @@ function ledKartKlick(lat, lon) { LED.lat = lat; LED.lon = lon; ledSpara(); ledM
   if (!$("ledFarg")) return;
   const knapp = (id, nyckel, varde) => { const b = $(id); const satt = () => b.setAttribute("aria-pressed", String(LED[nyckel] === varde));
     b.addEventListener("click", () => { LED[nyckel] = varde; ledSpara(); for (const x of document.querySelectorAll("[data-led='" + nyckel + "']")) x._satt(); ledRita(); }); b.dataset.led = nyckel; b._satt = satt; satt(); };
-  knapp("ledFarg", "visa", "farg"); knapp("ledBredvid", "visa", "bredvid"); knapp("ledTot", "komp", "tot"); knapp("ledTQ", "komp", "tq");
+  for (const [id, k] of [["ledFarg", "farg"], ["ledBredvid", "bredvid"]]) { const b = $(id); b.setAttribute("aria-pressed", String(LED[k]));   // 24/11: av/pa var for sig, bada kan vara tanda
+    b.addEventListener("click", () => { LED[k] = !LED[k]; b.setAttribute("aria-pressed", String(LED[k])); ledSpara(); ledRita(); }); }
+   knapp("ledTot", "komp", "tot"); knapp("ledTQ", "komp", "tq");
   const tp = $("ledTopp"); for (const v of [1000, 2000, 3000, 5000]) tp.add(new Option(v === 5000 ? "5000 m (allt hämtat)" : v + " m", v)); tp.value = LED.topp;
   tp.addEventListener("change", () => { LED.topp = +tp.value; ledSpara(); ledNollstall(); });
   const m2 = $("led2m"); m2.checked = LED.med2; m2.addEventListener("change", () => { LED.med2 = m2.checked; ledSpara(); ledRita(); });

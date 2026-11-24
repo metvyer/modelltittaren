@@ -610,7 +610,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 <div id="vyLed" hidden>
   <p class="karttips" style="margin-top:0">Klicka på kartan där du vill titta (lila kors). Temperatur och fukt på modellnivåerna upp till ca 5 km hämtas för alla timmar i senaste körningen (MEPS medlem 0, 2,5 km). Diagrammen visas under kartan.</p>
   <div class="pkontroller">
-    <div class="vaxel" role="group" aria-label="Profilens visning"><button id="ledFarg" title="Klasserna som färg bakom temperatur och daggpunkt">Som färg</button><button id="ledBredvid" title="Gradienten dN/dz och M som kurvor i ett eget diagram bredvid">Bredvid</button></div>
+    <button class="sek liten" id="ledFarg" aria-pressed="true" title="Klasserna som färg bakom temperatur och daggpunkt (av/på)">Som färg</button><button class="sek liten" id="ledBredvid" aria-pressed="false" title="Gradienten dN/dz och M som kurvor i ett eget diagram bredvid (av/på)">dN/dz bredvid</button>
     <div class="vaxel" role="group" aria-label="Total eller uppdelad"><button id="ledTot" title="Hela gradienten dN/dz">Total</button><button id="ledTQ" title="Uppdelad: temperaturens (inkl. tryckets) och fuktens bidrag till dN/dz">Temp + fukt</button></div>
     <div class="falt"><label for="ledTopp">Topp</label><select id="ledTopp"></select></div>
     <label class="falt" title="Ta med T2m och RH2m som lägsta punkt (2 m). De är diagnostiska – interpolerade i modellen mellan marken och lägsta nivån (ca 10 m) – och visas ljusare/streckade."><input type="checkbox" id="led2m"> inkl. 2 m</label>
@@ -2899,7 +2899,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="bildspel.js?v=20261124-0700"></script>
 <script src="konrad.js?v=20261124-1310"></script>
 <script src="brand.js?v=20261124-1450"></script>
-<script src="led.js?v=20261124-2050"></script>
+<script src="led.js?v=20261124-2100"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>

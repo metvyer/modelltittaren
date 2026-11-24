@@ -42,6 +42,7 @@ async def main():
         print("bredvid+tq:", await s.evaluate("'TH2 ' + !$('ledTH2').hidden + ' rect ' + $('ledTH2').querySelectorAll('rect').length + ', grad paths ' + $('ledGradSvg').querySelectorAll('path').length + ', gradram ' + !$('ledGradRam').hidden"))
         await s.screenshot(path="matprov/s19b.png", full_page=True)
         await s.evaluate("$('ledAter').click(); $('led2m').click()"); await s.wait_for_timeout(500)
+        print("bada:", await s.evaluate("LED.farg + ' ' + LED.bredvid + ' | fargrutor i profilen ' + [...$('ledProfSvg').querySelectorAll('rect')].filter(r => r.getAttribute('opacity') === '0.55' || r.getAttribute('opacity') === '0.3').length"))
         print("ater:", await s.evaluate("JSON.stringify([LED.z0, LED.z1, LED.tA, LED.tB, LED.med2])"))
         # annan punkt: klick pa kartan (Gotland, hav)
         await s.evaluate("ledKartKlick(57.0, 19.5)"); await s.wait_for_timeout(1500)
@@ -52,7 +53,7 @@ async def main():
             st = await s.evaluate("$('ledStatus').textContent")
             if (st.startswith("Klart") or st.startswith("Kunde")) and "57" in await s.evaluate("$('ledPlats').textContent"): break
         print("ny punkt:", st, await s.evaluate("$('ledPlats').textContent"))
-        await s.evaluate("$('ledFarg').click(); $('ledTot').click(); $('led2m').click()"); await s.wait_for_timeout(500)
+        await s.evaluate("$('ledTot').click(); $('led2m').click()"); await s.wait_for_timeout(500)
         await s.screenshot(path="matprov/s19c.png", full_page=True)
         print("fel:", fel[:5]); await b.close()
 asyncio.run(main())
