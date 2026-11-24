@@ -417,7 +417,7 @@ function kartLegend() {
 // ===================================================================
 (function obsForm() {
   const ram = document.querySelector(".kartram"); if (!ram || !window.ResizeObserver) return;
-  const FLIKAR = ["th", "p", "m0", "taf", "sat", "rad", "brand"];
+  const FLIKAR = ["th", "p", "m0", "taf", "sat", "rad", "brand", "led"];
   const flik = () => (typeof fav !== "undefined" && fav) ? "f" : lage;
   const formbar = () => FLIKAR.includes(lage) && matchMedia("(min-width: 861px)").matches;
   const nyckel = () => "mt:form:" + flik();

@@ -1670,6 +1670,7 @@ function bytLage(nytt) {
   if (typeof obsLage === "function") setTimeout(() => obsLage(nytt), 0);   // 21/11 kvall
   if (typeof expLage === "function") setTimeout(() => expLage(nytt), 0);   // 22/11: Experiment
   if (typeof brandLage === "function") setTimeout(() => brandLage(nytt), 0);   // 24/11: Brandrisk
+  if (typeof ledLage === "function") setTimeout(() => ledLage(nytt), 0);   // 24/11: Ledskikt
   if (typeof m0Rita === "function") { if (nytt === "m0") setTimeout(m0In, 0); else $("kM0").textContent = ""; }
   if (typeof satVb === "function" && typeof vb !== "undefined" && vb) setTimeout(() => satVb(vb.x, vb.y, vb.w), 0);   // 21/11: kartans granser byts (Europa i TAF)
   lagra("mt:lageVy", fav ? "f" : nytt); $("kTips").hidden = true;
@@ -1804,5 +1805,5 @@ function bytLage(nytt) {
   try { await laddaIndex(); } catch (e) {}
   // 20/11 kvall: nya besokare (inget sparat val) borjar i Favoriter
   const forst = lasa("mt:lageVy");
-  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "m0") bytLage("m0"); else if (forst === "sat" || forst === "rad" || forst === "exp" || forst === "brand") bytLage(forst); else if (forst === "f" || !forst) bytLage("f");
+  if (forst === "p") bytLage("p"); else if (forst === "taf") bytLage("taf"); else if (forst === "m0") bytLage("m0"); else if (forst === "sat" || forst === "rad" || forst === "exp" || forst === "brand" || forst === "led") bytLage(forst); else if (forst === "f" || !forst) bytLage("f");
 })();

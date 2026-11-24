@@ -159,6 +159,14 @@ body.formbar .kartram:hover::before, body.obs .kartram:hover::before { color: #f
 @media (max-width: 860px) { body.formbar .kartram::before { display: none; } }
 body.exp .baraTH, body.exp .baraP, body.exp .ejTaf { display: none !important; }
 body.exp #kProb, body.exp #kM0, body.exp #kSiff, body.exp #kOmr { display: none; } body:not(.exp) #kExp { display: none; }
+body.led .baraTH, body.led .baraP, body.led .ejTaf { display: none !important; }
+body.led #kProb, body.led #kM0, body.led #kSiff, body.led #kOmr { display: none; }
+.ledruta { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; } .ledruta[hidden] { display: none; }
+.ledruta svg { width: 100%; display: block; user-select: none; cursor: ns-resize; } #ledTH, #ledTH2 { cursor: crosshair; }
+.ledprofiler { display: grid; grid-template-columns: 1fr 0.86fr; gap: 6px; max-width: 900px; } .ledprofiler.en { grid-template-columns: 1fr; max-width: 520px; }
+@media (max-width: 760px) { .ledprofiler { grid-template-columns: 1fr; } }
+.ledleg { font-size: 11.5px; display: flex; flex-wrap: wrap; gap: 3px 10px; margin: 4px 0; } .ledleg i { display: inline-block; width: 12px; height: 10px; margin-right: 3px; border: 1px solid rgba(0,0,0,.2); vertical-align: -1px; }
+#ledLista ul { margin: 2px 0 0 18px; padding: 0; } .ledinfo p, .ledinfo li { font-size: 12.5px; }
 .exprub { margin: 0 0 4px; font-size: 15px; }
 .expruta { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .expruta[hidden] { display: none; }
@@ -406,7 +414,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme. SMHI kallar medlem 0 för MEPS MBR000.">Karta MBR0</button><button role="tab" id="flikSat" aria-selected="false" title="Satellitbilder från MTG (EUMETSAT) – välj bildtyp, loop och automatisk uppdatering">Satellit</button><button role="tab" id="flikRad" aria-selected="false" title="Radar från SMHI eller met.no (med prognos 2 h) – loop och automatisk uppdatering">Radar</button><button role="tab" id="flikExp" aria-selected="false" title="Experiment: udda saker att undersöka – först graupel i hela kolumnen (MEPS medlem 0, 2,5 km)">Experiment</button><button role="tab" id="flikBrand" aria-selected="false" title="Brandrisk: SMHI:s brandriskprognos (skog, gräs, bränsleuttorkning) som karta 7 dygn och timme för timme för en punkt, samt EFFIS (ECMWF, hela Europa)">Brandrisk</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Sändning: sänd det du tittar på (mottagarna följer med direkt, även din muspekare) eller ta emot någon annans sändning.">📡 Sändning</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme. SMHI kallar medlem 0 för MEPS MBR000.">Karta MBR0</button><button role="tab" id="flikSat" aria-selected="false" title="Satellitbilder från MTG (EUMETSAT) – välj bildtyp, loop och automatisk uppdatering">Satellit</button><button role="tab" id="flikRad" aria-selected="false" title="Radar från SMHI eller met.no (med prognos 2 h) – loop och automatisk uppdatering">Radar</button><button role="tab" id="flikExp" aria-selected="false" title="Experiment: udda saker att undersöka – först graupel i hela kolumnen (MEPS medlem 0, 2,5 km)">Experiment</button><button role="tab" id="flikBrand" aria-selected="false" title="Brandrisk: SMHI:s brandriskprognos (skog, gräs, bränsleuttorkning) som karta 7 dygn och timme för timme för en punkt, samt EFFIS (ECMWF, hela Europa)">Brandrisk</button><button role="tab" id="flikLed" aria-selected="false" title="Ledskikt: radiovågornas brytning (refraktion) ur MEPS – tid-höjd och profil för en punkt, ledskikt där dM/dz &lt; 0">Ledskikt</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Sändning: sänd det du tittar på (mottagarna följer med direkt, även din muspekare) eller ta emot någon annans sändning.">📡 Sändning</button>
 </div>
 
 <div class="nykorning" id="nyKorning" hidden role="status"></div>
@@ -459,7 +467,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kBrand"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kBrand"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kLed" style="pointer-events:none"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -596,6 +604,22 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <dl class="info"><dt>Körning</dt><dd id="expKorn">–</dd><dt>Status</dt><dd id="expStatus">–</dd></dl>
   <p class="psam" id="expSam"></p>
 </div>
+<div id="vyLed" hidden>
+  <p class="karttips" style="margin-top:0">Klicka på kartan där du vill titta (lila kors). Temperatur och fukt på modellnivåerna upp till ca 5 km hämtas för alla timmar i senaste körningen (MEPS medlem 0, 2,5 km). Diagrammen visas under kartan.</p>
+  <div class="pkontroller">
+    <div class="vaxel" role="group" aria-label="Profilens visning"><button id="ledFarg" title="Klasserna som färg bakom temperatur och daggpunkt">Som färg</button><button id="ledBredvid" title="Gradienten dN/dz och M som kurvor i ett eget diagram bredvid">Bredvid</button></div>
+    <div class="vaxel" role="group" aria-label="Total eller uppdelad"><button id="ledTot" title="Hela gradienten dN/dz">Total</button><button id="ledTQ" title="Uppdelad: temperaturens (inkl. tryckets) och fuktens bidrag till dN/dz">Temp + fukt</button></div>
+    <div class="falt"><label for="ledTopp">Topp</label><select id="ledTopp"></select></div>
+    <label class="falt" title="Ta med T2m och RH2m som lägsta punkt (2 m). De är diagnostiska – interpolerade i modellen mellan marken och lägsta nivån (ca 10 m) – och visas ljusare/streckade."><input type="checkbox" id="led2m"> inkl. 2 m</label>
+    <button class="sek liten" id="ledAter" title="Återställ zoomen (eller dubbelklicka i ett diagram)">⟲ Zoom</button>
+  </div>
+  <div class="pkontroller m0tidrad">
+    <button class="sek" id="ledBak" title="Timmen före (vänsterpil)">◀</button>
+    <div class="m0tidmitt"><div id="ledTid" class="tidsvald"></div><input type="range" id="ledReglage" min="0" max="66" value="0" title="Dra för att välja timme"></div>
+    <button class="sek" id="ledFram" title="Timmen efter (högerpil)">▶</button>
+  </div>
+  <dl class="info"><dt>Punkt</dt><dd id="ledPlats">–</dd><dt>Körning</dt><dd id="ledKorn">–</dd><dt>Status</dt><dd id="ledStatus">–</dd></dl>
+</div>
 <div id="vyTAF" hidden>
   <div class="tafinst">
     <span class="grp"><span class="gul">Gul</span> bas &lt; <input type="number" id="tafGulBas" step="100"> ft eller sikt &lt; <input type="number" id="tafGulSikt" step="0.1" min="0"> km</span>
@@ -691,6 +715,39 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 </section>
 </div>
 <div id="meteoNedre"></div>
+<!-- NYTT 24/11: Ledskikt (led.js) -->
+<section id="ledRuta" class="ledruta" hidden>
+  <div class="ledleg"><span><i style="background:#93c5fd"></i>Sub (dN/dz &gt; 0)</span><span><i style="background:transparent"></i>Normal (0 till −79)</span><span><i style="background:#fcd34d"></i>Super (−79 till −157)</span><span><i style="background:#f87171"></i>Ledskikt (&lt; −157, dM/dz &lt; 0)</span><span><i style="background:#991b1b"></i>Starkt (&lt; −300)</span><span>━ dM/dz = 0 (topp/bas)</span><span class="dim">Ljusare = skiktet 2 m–lägsta nivån (diagnostiskt)</span></div>
+  <svg id="ledTH"></svg><svg id="ledTH2" hidden></svg>
+  <p class="karttips" style="margin:2px 0 8px">Mushjul = zooma höjden (Skift + hjul = tiden), dra = flytta, nyp på mobil, dubbelklick = återställ. Alla diagram följer varandra. Klicka i tid-höjd för att välja timme. Gradienten gäller för hela skiktet mellan två nivåer och ritas som ett band.</p>
+  <div class="ledprofiler"><svg id="ledProfSvg"></svg><div id="ledGradRam" hidden><svg id="ledGradSvg"></svg></div></div>
+  <div id="ledLista" class="psam"></div>
+  <details class="expinfo ledinfo" id="ledInfo">
+    <summary>ⓘ Om ledskikt, hur det räknas och vad man ska se upp med</summary>
+    <p><b>Refraktivitet.</b> N = 77,6·P/T + 3,73·10⁵·e/T² (P och e i hPa, T i K). Modifierad refraktivitet M = N + 0,157·z (z i meter) tar med jordens krökning. Ett <b>ledskikt</b> (trapping) finns där M minskar med höjden (dM/dz &lt; 0, dvs. dN/dz &lt; −157 N/km): strålen böjs nedåt mer än jorden kröker sig och kan följa skiktet långt bortom normal räckvidd – med lucka (skip zone) ovanför och kraftigt ökad räckvidd för sändare och mål i skiktet.</p>
+    <ul>
+      <li><b>Sub</b> (dN/dz &gt; 0): strålen böjs uppåt, kortare räckvidd än normalt.</li>
+      <li><b>Normal</b> (0 till −79 N/km): standardatmosfären ligger kring −40.</li>
+      <li><b>Super</b> (−79 till −157): längre räckvidd, men strålen lämnar till slut jorden.</li>
+      <li><b>Ledskikt</b> (&lt; −157): strålen fångas. Ytledskikt = trappingskiktet börjar vid marken; ytbaserat = ledskiktet når marken men trappingskiktet ligger högre; upplyft = hela ledskiktet ovanför marken.</li>
+    </ul>
+    <p><b>Typiskt orsakat av</b> fukt som avtar snabbt uppåt (torr luft över fuktig) och/eller temperatur som ökar uppåt (inversion): nattlig utstrålning, varm torr landluft över kallare hav, subsidensinversion ovanpå gränsskiktet. Vind blandar om luften och sliter sönder ytnära inversioner, men kan skärpa gränsen i gränsskiktets topp.</p>
+    <p><b>Uppdelningen temp + fukt</b> är de partiella derivatorna av N i skiktets mitt: temperaturens del (inklusive tryckets normala minskning, ca −30 N/km) och fuktens del. Fukten dominerar oftast.</p>
+    <p><b>Hur det räknas här.</b> MEPS medlem 0, 2,5 km, nivåerna 0–5 km. Höjden räknas hypsometriskt uppåt från modellens mark (virtuell temperatur). FL räknas ur trycket med standardatmosfären (ISA, inte QNH). Gradienten gäller för skiktet mellan två nivåer; ledskiktens topp och bas hamnar därför på modellnivåerna – modellen vet inte mer än så. Ledskiktets bas = där M nedanför är lika lågt som i toppen. Styrkan ΔM = M-skillnaden över trappingskiktet.</p>
+    <p><b>Det lägsta skiktet över hav – se upp.</b></p>
+    <ul>
+      <li>Modellens lägsta nivå ligger på ca 10–12 m. Under den finns inga riktiga modellvärden. Över hav finns nästan alltid ett <b>avdunstningsledskikt</b> (luften vid ytan är mättad vid havsytans temperatur och fukten avtar snabbt uppåt), oftast 5–20 m högt. Det fångar framför allt GHz-radar och syns <b>inte</b> här. (Steg 2: egen ytskiktsmodell.)</li>
+      <li>2 m-värdena (T2m, RH2m) är <b>diagnostiska</b>: modellen interpolerar dem mellan marken och lägsta nivån med antaganden om ytskiktet. Gradienten 2 m–lägsta nivån är därför delvis ett resultat av antagandet – den visas ljusare och kan stängas av. Över land klara nätter kan den bli överdriven.</li>
+      <li>Havsytans temperatur hålls konstant genom prognosen – uppvällning och snabba ändringar syns inte.</li>
+      <li>Modellrutor med blandat land och hav (skärgård, kust) ger fel ytnära struktur.</li>
+      <li>Skarpa inversioner och fuktsprång smetas ut av nivåavståndet (tiotals meter nära marken, hundratals meter högre upp) – verkliga ledskikt är ofta tunnare och starkare än modellens.</li>
+    </ul>
+    <p><b>Vad forskningen säger.</b> FMI har testat precis detta med Harmonie-AROME (samma modell som MEPS, 2,5 km och 65 nivåer) vid Utö sommaren 2022: fukten dominerade de negativa M-gradienterna, det mesta observerade ledskiktet låg under ca 15 m och fångades inte av modellen, medan förhållandena kring 30 m liknade observationerna. 90 nivåer gav en mer realistisk vertikal struktur än 65, och modellen var något för kall och torr nära ytan. Vertikal upplösning betydde mer än horisontell.<br>
+    Hämäläinen, K., Rautiainen, L., Tyynelä, J. och Laakso, L. (2026): <a href="https://egusphere.copernicus.org/preprints/2026/egusphere-2026-1629/" target="_blank" rel="noopener">Effects of model resolution on predicting atmospheric ducting conditions with Harmonie-AROME</a>, EGUsphere (preprint under granskning).</p>
+    <p><b>Frekvenser.</b> Ett ledskikt fångar bara våglängder kortare än en gräns som växer med tjockleken (och styrkan). Grovt: tunna ytnära skikt (10–20 m) fångar GHz, skikt på hundratals meter även VHF/UHF. Formlerna varierar mellan källor och gränsen är inte skarp – visas inte här än.</p>
+    <p class="dim">Detta är modellens bild, inte mätningar. Använd som indikation.</p>
+  </details>
+</section>
 <!-- NYTT 22/11: Experiment - graupel i kolumnen (exp.js) -->
 <section id="expRuta" class="expruta" hidden>
   <div class="expkartor">
@@ -2704,6 +2761,7 @@ function kartKlick(e, mal) {
   }
   if (lage === "sat" || lage === "rad") return;   // 21/11 kvall: klick i satellit/radar gor inget (rita gar)
   if (lage === "exp") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof expKartKlick === "function") expKartKlick(ll.lat, ll.lon); return; }
+  if (lage === "led") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof ledKartKlick === "function") ledKartKlick(ll.lat, ll.lon); return; }   // 24/11: Ledskikt
   if (lage === "brand") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof brandKartKlick === "function") brandKartKlick(ll.lat, ll.lon); return; }   // 24/11: Brandrisk   // 22/11: Experiment
   if (mk) {
     const id = mk.dataset.id;
@@ -2819,14 +2877,14 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261124-1400"></script>
+<script src="sannolikhet.js?v=20261124-1930"></script>
 <script src="kombo.js?v=20261123-1412"></script>
 <script src="m0karta.js?v=20261123-1730"></script>
 <script src="taf.js?v=20261123-1145"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261123-2210"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261124-1400"></script>
+<script src="obs.js?v=20261124-1930"></script>
 <script src="exp.js?v=20261123-0945"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>
@@ -2837,6 +2895,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="bildspel.js?v=20261124-0700"></script>
 <script src="konrad.js?v=20261124-1310"></script>
 <script src="brand.js?v=20261124-1450"></script>
+<script src="led.js?v=20261124-1930"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>
