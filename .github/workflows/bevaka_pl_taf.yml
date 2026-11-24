@@ -1,0 +1,36 @@
+# Bevakning (NYTT 24/11): polska militara TAF forsvann ur IMGW:s flyg-API ca 22-24/11 2026 (32 -> 16 flygplatser).
+# Kollar en gang per dygn. Kommer nagon av de militara tillbaka oppnas ett arende (issue) i repot -
+# GitHub meddelar da agaren. Finns redan ett oppet sadant arende gors inget.
+name: Bevaka polska TAF
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  kolla:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Kolla IMGW
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MIL="EPCE EPDA EPDE EPIR EPKS EPLK EPLY EPMB EPMI EPMM EPNA EPOK EPPR EPPW EPSN EPTM"
+          J=$(curl -s --max-time 40 -H "Referer: https://awiacja.imgw.pl/" "https://aviation-api.imgw.pl/data/last?format=json&count=1&params=taf" || true)
+          ALLA=$(echo "$J" | grep -oE '"EP[A-Z]{2}"' | tr -d '"' | sort -u | tr '\n' ' ')
+          HAR=""; for m in $MIL; do echo " $ALLA " | grep -q " $m " && HAR="$HAR $m"; done
+          N=$(echo $ALLA | wc -w)
+          echo "IMGW TAF: $N flygplatser. Militara: ${HAR:-inga}"
+          echo "IMGW TAF: $N flygplatser. Militära: ${HAR:-inga}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$HAR" ]; then
+            OPPEN=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "Polska militära TAF in:title" --json number -q 'length')
+            if [ "$OPPEN" = "0" ]; then
+              gh issue create -R "$GITHUB_REPOSITORY" --title "Polska militära TAF är tillbaka hos IMGW" \
+                --body "IMGW:s flyg-API ger nu TAF för:$HAR (totalt $N polska flygplatser). De saknades sedan ca 22–24/11 2026. Modelltittaren visar dem automatiskt igen. Stäng ärendet när du sett det."
+            fi
+          fi
