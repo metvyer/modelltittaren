@@ -398,6 +398,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 .meteohandtag { cursor: ew-resize; touch-action: none; }
 #pMeteoSvg { user-select: none; -webkit-user-select: none; }
 #pMeteoForkl { font-size: 11.5px; margin-top: 4px; }
+.metartext { margin-top: -4px; color: var(--fg); }
 .taf { margin: 6px 2px 8px; padding: 6px 10px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: #c000c0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; }
 .taf[hidden] { display: none; }
 .forlopptext { font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -714,6 +715,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <span class="lagetips" id="lageTips"></span>
 </div>
 <pre class="taf" id="tafText" hidden></pre>
+<pre class="taf metartext" id="metarText" hidden></pre>
 <div class="diagram">
   <svg class="axel" id="axel" width="56" height="10"></svg>
   <div class="skroll" id="skroll"><svg id="svg" width="10" height="10"></svg></div>
@@ -1556,18 +1558,26 @@ async function automatiskKoll() {
 setInterval(() => { if (Date.now() - senastKoll >= KOLL_MIN * 60e3) automatiskKoll(); }, 60e3);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - senastKoll >= KOLL_MIN * 60e3) automatiskKoll(); });
 
+// 24/11 kvall (Jakob): senaste METAR-koden i klartext under TAF:en (nar METAR/TAF ar tand)
+function visaMetarKod(icao, obs) {
+  const e = $("metarText"); if (!e) return;
+  if (!visaMetar || !icao || !obs || !obs.length) { e.hidden = true; e.textContent = icao && visaMetar && obs ? "METAR " + icao + ": ingen observation" : ""; if (e.textContent) e.hidden = false; return; }
+  const o = obs[obs.length - 1], min = Math.round((Date.now() - o.t) / 60e3);
+  e.hidden = false; e.textContent = o.raw.replace(/^(METAR|SPECI)\s+/, "") + "   (" + (min < 90 ? min + " min" : Math.round(min / 60) + " h") + " sedan)";
+  e.title = "Senaste METAR/SPECI från " + icao + " (aviationweather.gov)";
+}
 async function laddaMetar() {
   if (!M || !M.t0) return;
-  if (!visaMetar) { $("metarInfo").textContent = ""; laddaTaf(null); return; }
+  if (!visaMetar) { $("metarInfo").textContent = ""; laddaTaf(null); visaMetarKod(null); return; }
   const lat = parseFloat($("lat").value.replace(",", ".")), lon = parseFloat($("lon").value.replace(",", "."));
   const icao = narmasteICAO(lat, lon), m = M, info = $("metarInfo"); M.metarIcao = icao;
   laddaTaf(icao);   // parallellt
-  if (!icao) { M.metar = null; info.textContent = "METAR: ingen flygplats inom " + METAR_AVST + " km"; return; }
+  if (!icao) { M.metar = null; visaMetarKod(null); info.textContent = "METAR: ingen flygplats inom " + METAR_AVST + " km"; return; }
   info.textContent = "METAR " + icao + ": hämtar …";
   const timmar = Math.max(1, Math.min(24, Math.ceil((Date.now() - M.t0) / 3600e3) + 1));
   const obs = await hamtaMetar(icao, timmar);
   if (M !== m) return;
-  M.metar = obs;
+  M.metar = obs; visaMetarKod(icao, obs);
   info.textContent = obs === null ? "METAR " + icao + ": gick inte att hämta" : obs.length ? "METAR " + icao + ": " + obs.length + " obs (magenta streck)" : "METAR " + icao + ": inga observationer";
   rita();
 }
@@ -2892,7 +2902,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("lMetar").addEventListener("click", e => {
     visaMetar = !visaMetar; lagra("mt:visaMetar", visaMetar ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaMetar));
     $("fMetar").hidden = !visaMetar;
-    if (M && M.stat) { rita(); laddaMetar(); } else $("metarInfo").textContent = "";
+    if (M && M.stat) { rita(); laddaMetar(); } else { $("metarInfo").textContent = ""; visaMetarKod(null); }
   });
   $("lIso").addEventListener("click", e => { visaIsoT = !visaIsoT; lagra("mt:visaIsoT", visaIsoT ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaIsoT)); if (M && M.stat) rita(); });
   $("lNiv").addEventListener("click", e => { visaNiv = !visaNiv; lagra("mt:visaNiv", visaNiv ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaNiv)); if (M && M.stat) rita(); });
