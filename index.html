@@ -405,7 +405,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 <body>
 <div class="testrad" role="note">TESTSIDA – under utveckling, inte för operativt bruk</div>
 <h1>Modelltittaren <small id="underrubrik">Tid-höjd · AROME 2,5 km (MEPS medlem 0)</small></h1>
-<!-- NYTT 19/11 kvall: testskylt som visas vid start och vid varje flikbyte -->
+<!-- Testskylt: vid start och vid flikbyte, hogst var 30:e minut (24/11) -->
 <div id="testskylt" class="testskylt" hidden role="dialog" aria-modal="true" aria-labelledby="testskyltRubrik">
   <div class="testruta">
     <h2 id="testskyltRubrik">Testsida – inte för operativt bruk</h2>
@@ -853,13 +853,13 @@ const dtgText = d => d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + p2(d.getUTCD
 const dtgDatum = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8), +s.slice(9, 11)));
 const VECKODAG = ["Sön", "Mån", "Tis", "Ons", "Tor", "Fre", "Lör"];
 let avbryt = null, stoppad = false, vindLage = false;
-// Testskylten: visas vid start, vid varje flikbyte (bytLage i sannolikhet.js anropar visaTestskylt)
-// och (NYTT 20/11) automatiskt var 20:e minut raknat fran senaste gangen den visades
-const TESTSKYLT_MIN = 20; let testskyltSen = 0;
-// 21/11: nar man foljer eller delar visas den bara vid start (inte vid varje flikbyte eller var 20:e min) - flikarna
-// byts ju av den som styr. Den roda raden "TESTSIDA" overst syns alltid.
-function visaTestskylt(start) { const t = $("testskylt"); if (!t) return; if (!start && typeof DELA !== "undefined" && (DELA.folj || DELA.sander || DELA.jagStyr)) return; t.hidden = false; testskyltSen = Date.now(); const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
-setInterval(() => { const t = $("testskylt"); if (t && t.hidden && Date.now() - testskyltSen >= TESTSKYLT_MIN * 60e3) visaTestskylt(); }, 30e3);
+// Testskylten (24/11 kvall, Jakob): visas nar man kommer till sidan och sedan vid flikbyte - men hogst var 30:e minut
+// (tiden sparas i webblasaren, sa omladdning inom 30 min visar den inte igen). Ingen timer langre.
+const TESTSKYLT_MIN = 30;
+const testskyltSen = () => +(lasa("mt:testskylt") || 0);
+function visaTestskylt(start) { const t = $("testskylt"); if (!t) return; if (!start && typeof DELA !== "undefined" && (DELA.folj || DELA.sander || DELA.jagStyr)) return;
+  if (Date.now() - testskyltSen() < TESTSKYLT_MIN * 60e3) return;
+  t.hidden = false; lagra("mt:testskylt", String(Date.now())); const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
 document.addEventListener("DOMContentLoaded", () => { const b = $("testskyltOk"); if (b) b.addEventListener("click", () => { $("testskylt").hidden = true; }); visaTestskylt(true); });
 let visaNiv = lasa("mt:visaNiv") === "ja";
 let visaHovring = lasa("mt:visaHovring") !== "nej";   // NYTT 19/11 kvall: hovringsrutan i tid-hojd (diagram + tabell) av/pa
