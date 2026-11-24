@@ -159,7 +159,8 @@ body.formbar .kartram:hover::before, body.obs .kartram:hover::before { color: #f
 @media (max-width: 860px) { body.formbar .kartram::before { display: none; } }
 body.exp .baraTH, body.exp .baraP, body.exp .ejTaf { display: none !important; }
 body.exp #kProb, body.exp #kM0, body.exp #kSiff, body.exp #kOmr { display: none; } body:not(.exp) #kExp { display: none; }
-body.led .baraTH, body.led .baraP, body.led .ejTaf { display: none !important; }
+body.led .baraTH, body.led .baraP, body.led .ejTaf, body.fall .baraTH, body.fall .baraP, body.fall .ejTaf { display: none !important; }
+body.fall #kProb, body.fall #kM0, body.fall #kSiff, body.fall #kOmr { display: none; }
 body.led #kProb, body.led #kM0, body.led #kSiff, body.led #kOmr { display: none; }
 .ledruta { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; } .ledruta[hidden] { display: none; }
 .ledruta svg, #vyLed svg { width: 100%; display: block; user-select: none; cursor: ns-resize; } #ledTH, #ledTH2 { cursor: crosshair; }
@@ -448,7 +449,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme. SMHI kallar medlem 0 för MEPS MBR000.">Karta MBR0</button><button role="tab" id="flikSat" aria-selected="false" title="Satellitbilder från MTG (EUMETSAT) – välj bildtyp, loop och automatisk uppdatering">Satellit</button><button role="tab" id="flikRad" aria-selected="false" title="Radar från SMHI eller met.no (med prognos 2 h) – loop och automatisk uppdatering">Radar</button><button role="tab" id="flikExp" aria-selected="false" title="Experiment: udda saker att undersöka – först graupel i hela kolumnen (MEPS medlem 0, 2,5 km)">Experiment</button><button role="tab" id="flikBrand" aria-selected="false" title="Brandrisk: SMHI:s brandriskprognos (skog, gräs, bränsleuttorkning) som karta 7 dygn och timme för timme för en punkt, samt EFFIS (ECMWF, hela Europa)">Brandrisk</button><button role="tab" id="flikLed" aria-selected="false" title="Ledskikt: radiovågornas brytning (refraktion) ur MEPS – tid-höjd och profil för en punkt, ledskikt där dM/dz &lt; 0">Ledskikt</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Sändning: sänd det du tittar på (mottagarna följer med direkt, även din muspekare) eller ta emot någon annans sändning.">📡 Sändning</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme. SMHI kallar medlem 0 för MEPS MBR000.">Karta MBR0</button><button role="tab" id="flikSat" aria-selected="false" title="Satellitbilder från MTG (EUMETSAT) – välj bildtyp, loop och automatisk uppdatering">Satellit</button><button role="tab" id="flikRad" aria-selected="false" title="Radar från SMHI eller met.no (med prognos 2 h) – loop och automatisk uppdatering">Radar</button><button role="tab" id="flikExp" aria-selected="false" title="Experiment: udda saker att undersöka – först graupel i hela kolumnen (MEPS medlem 0, 2,5 km)">Experiment</button><button role="tab" id="flikBrand" aria-selected="false" title="Brandrisk: SMHI:s brandriskprognos (skog, gräs, bränsleuttorkning) som karta 7 dygn och timme för timme för en punkt, samt EFFIS (ECMWF, hela Europa)">Brandrisk</button><button role="tab" id="flikLed" aria-selected="false" title="Ledskikt: radiovågornas brytning (refraktion) ur MEPS – tid-höjd och profil för en punkt, ledskikt där dM/dz &lt; 0">Ledskikt</button><button role="tab" id="flikFall" aria-selected="false" title="Spara väderfall: välj data smidigt och spara undan ett intressant fall (under uppbyggnad)">Spara väderfall</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Sändning: sänd det du tittar på (mottagarna följer med direkt, även din muspekare) eller ta emot någon annans sändning.">📡 Sändning</button>
 </div>
 
 <div class="nykorning" id="nyKorning" hidden role="status"></div>
@@ -655,6 +656,12 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <dl class="info"><dt>Punkt</dt><dd id="ledPlats">–</dd><dt>Körning</dt><dd id="ledKorn">–</dd><dt>Status</dt><dd id="ledStatus">–</dd></dl>
   <div class="ledprofiler"><svg id="ledProfSvg"></svg><div id="ledGradRam" hidden><svg id="ledGradSvg"></svg></div></div>
   <div id="ledLista" class="psam"></div>
+</div>
+<div id="vyFall" hidden>
+  <h3 class="exprub">Spara väderfall – under uppbyggnad</h3>
+  <p>Tanken är att man här ska kunna <b>välja data på ett smidigt sätt</b> – till exempel ett område, en tidsperiod och vilka källor som ska med (MEPS-körningar och ensemble, radar, satellit, METAR/TAF, åska) – och sedan <b>spara undan</b> det som ett väderfall.</p>
+  <p>Ett sparat fall ska gå att öppna igen senare och titta på som om det vore nu, även när datat inte längre finns hos met.no och de andra källorna: för genomgångar, utbildning, uppföljning och jämförelser mellan modell och verklighet.</p>
+  <p class="dim">Inget går att spara här än. Har du önskemål om vad ett väderfall ska innehålla? Tryck på 💡 Idé uppe till höger.</p>
 </div>
 <div id="vyTAF" hidden>
   <div class="tafinst">
@@ -2817,6 +2824,7 @@ function kartKlick(e, mal) {
   }
   if (lage === "sat" || lage === "rad") return;   // 21/11 kvall: klick i satellit/radar gor inget (rita gar)
   if (lage === "exp") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof expKartKlick === "function") expKartKlick(ll.lat, ll.lon); return; }
+  if (lage === "fall") return;   // 24/11: Spara vaderfall (inget att klicka pa an)
   if (lage === "led") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof ledKartKlick === "function") ledKartKlick(ll.lat, ll.lon); return; }   // 24/11: Ledskikt
   if (lage === "brand") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof brandKartKlick === "function") brandKartKlick(ll.lat, ll.lon); return; }   // 24/11: Brandrisk   // 22/11: Experiment
   if (mk) {
@@ -2933,7 +2941,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261124-1930"></script>
+<script src="sannolikhet.js?v=20261124-2050"></script>
 <script src="kombo.js?v=20261123-1412"></script>
 <script src="m0karta.js?v=20261123-1730"></script>
 <script src="taf.js?v=20261123-1145"></script>
@@ -2952,6 +2960,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="konrad.js?v=20261124-1310"></script>
 <script src="brand.js?v=20261124-1450"></script>
 <script src="led.js?v=20261124-2110"></script>
+<script src="fall.js?v=20261124-2050"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>

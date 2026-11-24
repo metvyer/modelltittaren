@@ -33,5 +33,8 @@ async def main():
             await s.wait_for_timeout(1000); st = await s.evaluate("$('ledStatus').innerText")
             if st.startswith("Klart") or st.startswith("Kunde"): break
         print("ledskikt:", st, "|", await s.evaluate("$('ledPlats').textContent + ' | data ' + (LED.data && LED.data.ry) + ',' + (LED.data && LED.data.rx)"))
+        await s.evaluate("bytLage('fall')"); await s.wait_for_timeout(800); await s.evaluate("$('testskylt').hidden = true")
+        print("vaderfall:", await s.evaluate("lage + ' | ' + $('underrubrik').textContent + ' | ' + $('vyFall').innerText.slice(0, 120).replace(/\\n/g, ' ')"))
+        await s.screenshot(path="matprov/s20c.png")
         print("fel:", fel[:5]); await b.close()
 asyncio.run(main())
