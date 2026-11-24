@@ -166,6 +166,9 @@ body.led #kProb, body.led #kM0, body.led #kSiff, body.led #kOmr { display: none;
 .ledprofiler { display: grid; grid-template-columns: 1fr 0.86fr; gap: 6px; margin-top: 6px; } .ledprofiler.en { grid-template-columns: 1fr; max-width: 520px; }
 @media (max-width: 760px) { .ledprofiler { grid-template-columns: 1fr; } }
 .ledleg { font-size: 11.5px; display: flex; flex-wrap: wrap; gap: 3px 10px; margin: 4px 0; } .ledleg i { display: inline-block; width: 12px; height: 10px; margin-right: 3px; border: 1px solid rgba(0,0,0,.2); vertical-align: -1px; }
+body.ledLaddar #ledRuta svg, body.ledLaddar #vyLed svg, body.ledLaddar #ledLista { opacity: 0.12; pointer-events: none; transition: opacity .2s; }
+.ledsnurr { display: inline-block; width: 11px; height: 11px; border: 2px solid #7c3aed; border-right-color: transparent; border-radius: 50%; animation: ledsnurr .8s linear infinite; vertical-align: -1px; margin-right: 4px; } @keyframes ledsnurr { to { transform: rotate(360deg); } }
+.ledstapel { display: inline-block; width: 90px; height: 7px; border: 1px solid var(--line); border-radius: 4px; vertical-align: 0; overflow: hidden; } .ledstapel i { display: block; height: 100%; background: #7c3aed; }
 #ledLista ul { margin: 2px 0 0 18px; padding: 0; } .ledinfo p, .ledinfo li { font-size: 12.5px; }
 .exprub { margin: 0 0 4px; font-size: 15px; }
 .expruta { margin-top: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
@@ -467,7 +470,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kBrand"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kLed" style="pointer-events:none"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kBrand"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><g id="kLed" style="pointer-events:none"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -2565,6 +2568,7 @@ function kartPunkt(ev) {
   return { x: vb.x + (ev.clientX - r.left) / r.width * vb.w, y: vb.y + (ev.clientY - r.top) / r.height * vb.h };
 }
 function ritaMarkorer() {
+  if (typeof ledMarkor === "function") ledMarkor();   // 24/11: Ledskikt-punkten (fast skarmstorlek)
   const svg = $("karta"), g = $("kMark"); if (!svg) return; g.textContent = "";
   const s = vb.w / Math.max(1, svg.clientWidth);     // rutor per skarmpixel -> markorer far fast storlek
   const dtg = M ? M.dtg : lasa("mt:senast"), STAT = ["ej hämtad", "påbörjad", "hämtad"];
@@ -2895,7 +2899,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="bildspel.js?v=20261124-0700"></script>
 <script src="konrad.js?v=20261124-1310"></script>
 <script src="brand.js?v=20261124-1450"></script>
-<script src="led.js?v=20261124-2020"></script>
+<script src="led.js?v=20261124-2040"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>

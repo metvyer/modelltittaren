@@ -34,7 +34,7 @@ const ledKomma = (v, d) => isFinite(v) ? v.toFixed(d).replace(".", ",").replace(
 function ledTidText(t) { if (!M0F.t0) return "+" + t; const d = new Date(M0F.t0 + t * 3600e3); return VECKODAG[d.getUTCDay()] + " " + p2(d.getUTCDate()) + "/" + (d.getUTCMonth() + 1) + " " + p2(d.getUTCHours()) + "Z (+" + t + ")"; }
 
 // ---------------- hamtning ----------------
-async function ledHamta() {
+async function ledHamta(nr) {
   const r = ruta(LED.lat, LED.lon); if (!r) throw new Error("punkten ligger utanför MEPS");
   const ab = await expAB(), nt = M0F.nt;
   let kTop = 0; for (let k = 0; k < ab.ap.length; k++) if (ab.ap[k] + ab.b[k] * 101325 >= LED_PTOPP) { kTop = Math.max(0, k - 1); break; }
@@ -48,7 +48,7 @@ async function ledHamta() {
     let res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga)); if (res.st !== 200) res = await hamta(BAS + FIL(M0F.dtg) + ".ascii?" + enc(fraga));
     if (res.st !== 200) throw new Error("svar " + res.st);
     const d = tolka(res.txt); if (!d.air_temperature_ml || !d.surface_air_pressure) throw new Error("oväntat svar");
-    ledStatus("Hämtar temperatur och fukt på modellnivåerna … " + (++klara) + "/" + bitar.length); return d; }));
+    klara++; if (nr === LED.hamtar) ledLaddar(klara, bitar.length); return d; }));
   const ihop = n => { const u = []; for (const d of delar) { if (!d[n]) return null; for (const v of d[n]) u.push(v); } return Float64Array.from(u); };
   const d = { air_temperature_ml: ihop("air_temperature_ml"), specific_humidity_ml: ihop("specific_humidity_ml"), surface_air_pressure: ihop("surface_air_pressure"),
     air_temperature_2m: ihop("air_temperature_2m"), relative_humidity_2m: ihop("relative_humidity_2m") };
@@ -229,6 +229,16 @@ function ledTipsSkikt(s) {
   return Math.round(s.z0) + "–" + Math.round(s.z1) + " m" + (s.diag ? " (2 m, diagnostiskt)" : "") + "\n" + k[2] + "\ndN/dz " + ledKomma(s.g, 0) + " N/km (temperatur+tryck " + ledKomma(s.gT, 0) + ", fukt " + ledKomma(s.gQ, 0) + ")\ndM/dz " + ledKomma(s.dM, 0) + " M/km";
 }
 
+// lila sikte pa kartan: fast storlek i skarmpixlar, vit kant (syns over de grona forhamtade punkterna)
+function ledMarkor() {
+  const g = $("kLed"), svg = $("karta"); if (!g) return; g.textContent = ""; if (lage !== "led") return;
+  const r = ruta(LED.lat, LED.lon); if (!r) return;
+  const s = vb.w / Math.max(1, svg.clientWidth), x = r.ix, y = KY - 1 - r.iy, R = 11 * s, L = 20 * s;
+  const d = "M" + (x - L) + " " + y + "H" + (x - R * 0.45) + "M" + (x + R * 0.45) + " " + y + "H" + (x + L) + "M" + x + " " + (y - L) + "V" + (y - R * 0.45) + "M" + x + " " + (y + R * 0.45) + "V" + (y + L);
+  for (const [f, w] of [["#fff", 6], ["#7c3aed", 3]]) { g.appendChild(el("circle", { cx: x, cy: y, r: R, fill: "none", stroke: f, "stroke-width": w, "vector-effect": "non-scaling-stroke" }));
+    g.appendChild(el("path", { d, stroke: f, "stroke-width": w, "vector-effect": "non-scaling-stroke" })); }
+  g.appendChild(el("circle", { cx: x, cy: y, r: 2 * s, fill: "#7c3aed", stroke: "#fff", "stroke-width": 1, "vector-effect": "non-scaling-stroke" }));
+}
 // ---------------- allt ----------------
 function ledRita() {
   if (lage !== "led" || !LED.data) return;
@@ -237,25 +247,35 @@ function ledRita() {
   else { $("ledTH2").hidden = true; ledRitaTH("ledTH", "g", "dN/dz – svart linje: dM/dz = 0 (ledskiktets topp/bas)"); }
   ledRitaProfil();
   $("ledTid").textContent = ledTidText(LED.t); $("ledReglage").max = D.nt - 1; $("ledReglage").value = LED.t;
-  const g = $("kLed"); if (g) { g.textContent = ""; const y = KY - 1 - D.iy; g.appendChild(el("path", { d: "M" + (D.ix - 6) + " " + y + "h12M" + D.ix + " " + (y - 6) + "v12", stroke: "#7c3aed", "stroke-width": 3, "vector-effect": "non-scaling-stroke" })); }
+  ledMarkor();
 }
 let ledRaf = 0; const ledRitaSnart = () => { if (!ledRaf) ledRaf = requestAnimationFrame(() => { ledRaf = 0; ledRita(); }); };
+// laddningslage: snurra + stapel i status, gamla diagram slacks
+function ledLaddar(klara, av) {
+  document.body.classList.toggle("ledLaddar", klara !== null);
+  const e = $("ledStatus"); if (!e) return; if (klara === null) return;
+  e.innerHTML = "<span class='ledsnurr'></span> Hämtar " + (av ? klara + " av " + av + " delar (12 timmar var, alla nivåer upp till ca 5 km)" : "…") +
+    (av ? " <span class='ledstapel'><i style='width:" + Math.round(klara / av * 100) + "%'></i></span>" : "");
+}
 async function ledUppdatera() {
   if (lage !== "led") return;
   if (!await m0Korning()) { ledStatus("Hittade ingen körning."); return; }
-  const nr = ++LED.hamtar, t0 = performance.now();
   $("ledKorn").textContent = M0F.dtg + " (MEPS medlem 0, 2,5 km)";
   if (LED.data && LED.data.dtg === M0F.dtg && LED.data.ry === LED.lat && LED.data.rx === LED.lon) { ledRita(); return; }
-  ledStatus("Hämtar temperatur och fukt på modellnivåerna …");
+  const nyckel = M0F.dtg + ":" + LED.lat + ":" + LED.lon; if (LED.pagar === nyckel) return;   // samma hamtning pagar redan
+  LED.pagar = nyckel; const nr = ++LED.hamtar, t0 = performance.now();
+  $("ledPlats").textContent = (platsNamn(LED.lat, LED.lon) || "") + " " + LED.lat.toFixed(2) + ", " + LED.lon.toFixed(2);
+  ledLaddar(0, Math.ceil(M0F.nt / 12));
   try {
-    const D = await ledHamta(); if (nr !== LED.hamtar) return;
+    const D = await ledHamta(nr); if (nr !== LED.hamtar) return;
     D.ry = LED.lat; D.rx = LED.lon; ledBerakna(D); LED.data = D;
     if (LED.t === null || LED.t >= D.nt) LED.t = Math.max(0, Math.min(D.nt - 1, Math.round((Date.now() - M0F.t0) / 3600e3)));
     LED.tA = 0; LED.tB = D.nt - 1;
     $("ledPlats").textContent = (platsNamn(D.glat, D.glon) || "") + " " + D.glat.toFixed(2) + ", " + D.glon.toFixed(2);
-    ledStatus("Klart på " + ((performance.now() - t0) / 1000).toFixed(1) + " s (" + D.nt + " timmar, nivå " + D.kTop + "–64).");
+    ledLaddar(null); ledStatus("Klart på " + ((performance.now() - t0) / 1000).toFixed(1) + " s (" + D.nt + " timmar, nivå " + D.kTop + "–64).");
     ledRita();
-  } catch (e) { if (nr === LED.hamtar) ledStatus("Kunde inte hämta (" + e.message + ")."); }
+  } catch (e) { if (nr === LED.hamtar) { ledLaddar(null); ledStatus("Kunde inte hämta (" + e.message + ")."); } }
+  finally { if (nr === LED.hamtar) LED.pagar = ""; }
 }
 
 // ---------------- zoom (synkad) ----------------
@@ -297,9 +317,9 @@ function ledLage(nytt) {
   const pa = nytt === "led"; $("vyLed").hidden = !pa; $("ledRuta").hidden = !pa; $("flikLed").setAttribute("aria-selected", String(pa)); document.body.classList.toggle("led", pa);
   if (!pa) { const g = $("kLed"); if (g) g.textContent = ""; return; }
   $("underrubrik").textContent = "Ledskikt · refraktion ur MEPS medlem 0 (2,5 km, 65 nivåer)";
-  ledUppdatera();
+  ledMarkor(); ledUppdatera();
 }
-function ledKartKlick(lat, lon) { LED.lat = lat; LED.lon = lon; ledSpara(); ledUppdatera(); }
+function ledKartKlick(lat, lon) { LED.lat = lat; LED.lon = lon; ledSpara(); ledMarkor(); ledUppdatera(); }
 (function ledInit() {
   if (!$("ledFarg")) return;
   const knapp = (id, nyckel, varde) => { const b = $(id); const satt = () => b.setAttribute("aria-pressed", String(LED[nyckel] === varde));

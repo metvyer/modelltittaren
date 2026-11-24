@@ -14,6 +14,7 @@ async def main():
             await s.wait_for_timeout(1000)
             st = await s.evaluate("$('ledStatus').textContent")
             if st.startswith("Klart") or st.startswith("Kunde"): break
+        print("under hamtning:", await s.evaluate("document.body.classList.contains('ledLaddar')"))
         print("status:", st, "|", await s.evaluate("$('underrubrik').textContent + ' | ' + $('ledPlats').textContent + ' | ' + $('ledKorn').textContent"))
         print("rakning:", await s.evaluate("""(() => { const D = LED.data, pr = D.prof[LED.t], P = ledSkikt(pr, true);
           const r = a => Math.round(a * 10) / 10;
@@ -41,7 +42,9 @@ async def main():
         await s.evaluate("$('ledAter').click(); $('led2m').click()"); await s.wait_for_timeout(500)
         print("ater:", await s.evaluate("JSON.stringify([LED.z0, LED.z1, LED.tA, LED.tB, LED.med2])"))
         # annan punkt: klick pa kartan (Gotland, hav)
-        await s.evaluate("ledKartKlick(57.0, 19.5)")
+        await s.evaluate("ledKartKlick(57.0, 19.5)"); await s.wait_for_timeout(1500)
+        await s.screenshot(path="matprov/s19d.png")
+        print("laddar:", await s.evaluate("document.body.classList.contains('ledLaddar') + ' | ' + $('ledStatus').innerText"))
         for i in range(120):
             await s.wait_for_timeout(1000)
             st = await s.evaluate("$('ledStatus').textContent")
