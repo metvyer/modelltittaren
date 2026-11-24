@@ -53,7 +53,8 @@ async function brRita() {
   const s = i.s; g.appendChild(el("image", { href: skarpaRutor(cv), x: i.x0 - s / 2, y: KY - 1 - (i.y0 + (i.ny - 1) * s) - s / 2, width: i.nx * s, height: i.ny * s,
     preserveAspectRatio: "none", style: "image-rendering:pixelated;image-rendering:crisp-edges", opacity: 0.85 }));
   $("brInfo").textContent = (n ? "" : "Inga värden – utanför brandsäsongen eller snötäckt. ") + "SMHI:s brandriskprognos (samma som SMHI:s och MCF:s kartor), dygnsvärde " + brDag(i.dagar[BR.dag]) +
-    " 12 UTC, körning " + (i.ref || "").slice(0, 16).replace("T", " ") + " UTC. Visas i 5 km (SMHI räknar i 2,5 km). Klicka på kartan för punktens prognos timme för timme.";
+    " 12 UTC, körning " + (i.ref || "").slice(0, 16).replace("T", " ") + " UTC. Visas i 5 km (SMHI räknar i 2,5 km). Klicka på kartan för punktens prognos timme för timme." +
+    (BR.falt === "skog" ? " Obs: klassen räknas här ur FWI-värdet – utanför brandsäsongen publicerar SMHI ingen klass alls (då är allt grönt här)." : "");
 }
 async function brEffis(g) {   // ECMWF FWI fran EFFIS/GWIS som bild, omprojicerad till var karta (obsVrid i obs.js)
   const svg = $("karta"), r = svg.getBoundingClientRect(), vy = { x: vb.x, y: vb.y, w: vb.w, h: vb.h, W: Math.max(200, Math.round(r.width)), H: Math.max(200, Math.round(r.height)) };
