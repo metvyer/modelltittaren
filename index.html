@@ -212,6 +212,10 @@ body.kombo .ejKombo { display: none; }
 .delarad.pausad { background: #ffedd5; border-color: #ea580c; color: #7c2d12; }
 @media (prefers-color-scheme: dark) { .delarad.foljer { background: #0f3d22; color: #bbf7d0; } .delarad.pausad { background: #4a2408; color: #fed7aa; } }
 .delarad[hidden] { display: none; }
+.brpunkt { margin-top: 8px; } .brrub { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.brskroll { overflow-x: auto; max-width: 100%; }
+.brtab { border-collapse: collapse; font-size: 11px; margin: 4px 0; } .brtab th, .brtab td { border: 1px solid #e5e7eb; padding: 1px 3px; text-align: center; white-space: nowrap; }
+.brtab th:first-child { text-align: left; position: sticky; left: 0; background: var(--bg, #fff); } .brdygn td { min-width: 52px; }
 .bsrad .bschips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 /* 23/11 kvall: nagon ber att fa sanda - fast gul rad overst hos agaren, oavsett om sandningsraden ar oppen */
 .delarad.delafragafast { position: sticky; top: 0; z-index: 51; font-weight: 600; box-shadow: 0 2px 6px rgba(0,0,0,.2); background: #fef3c7; border-color: #d97706; color: #78350f; }
@@ -397,12 +401,12 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <p>Modelltittaren är en testsida och den är under utveckling. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
     <p><b>Använd inte sidan som underlag för operativa beslut eller prognoser.</b> Använd ordinarie verktyg och produkter.</p>
     <p><b>Det du tittar på kan andra se.</b> Med standardvalet går hämtningarna via en gemensam mellanserver, och andra användare kan se vilka områden och punkter som hämtats. En delad vy ser alla som har länken. Vill du lämna färre spår: välj <i>Osynligt</i> eller <i>Av</i> under ”Hämta MEPS via mellanservern” längst ner, och använd inte Dela. Helt spårlöst blir det inte – met.no, Cloudflare och övriga källor ser vad som hämtas – men det blir inte samlat och lätt att se för andra.</p>
-    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo. Vägväder: Trafikverket (VViS), CC0. KONRAD3D: Deutscher Wetterdienst, CC BY 4.0. Webbkameror: Windy.com.</p>
+    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo. Vägväder: Trafikverket (VViS), CC0. KONRAD3D: Deutscher Wetterdienst, CC BY 4.0. Brandrisk: SMHI (öppna data) och EFFIS/Copernicus. Webbkameror: Windy.com.</p>
     <button id="testskyltOk">Jag förstår</button>
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
-  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme. SMHI kallar medlem 0 för MEPS MBR000.">Karta MBR0</button><button role="tab" id="flikSat" aria-selected="false" title="Satellitbilder från MTG (EUMETSAT) – välj bildtyp, loop och automatisk uppdatering">Satellit</button><button role="tab" id="flikRad" aria-selected="false" title="Radar från SMHI eller met.no (med prognos 2 h) – loop och automatisk uppdatering">Radar</button><button role="tab" id="flikExp" aria-selected="false" title="Experiment: udda saker att undersöka – först graupel i hela kolumnen (MEPS medlem 0, 2,5 km)">Experiment</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Sändning: sänd det du tittar på (mottagarna följer med direkt, även din muspekare) eller ta emot någon annans sändning.">📡 Sändning</button>
+  <button role="tab" id="flikF" aria-selected="false" title="Snabbåtkomst: förhämtad byvind, sikt och molnbas – laddas direkt">★ Favoriter</button><button role="tab" id="flikTH" aria-selected="true">Tid-höjd</button><button role="tab" id="flikP" aria-selected="false">Sannolikhet (ensemble)</button><button role="tab" id="flikM0" aria-selected="false" title="Kartfält ur medlem 0 (det-körningen): ett fält i färg och ett annat som linjer ovanpå, timme för timme. SMHI kallar medlem 0 för MEPS MBR000.">Karta MBR0</button><button role="tab" id="flikSat" aria-selected="false" title="Satellitbilder från MTG (EUMETSAT) – välj bildtyp, loop och automatisk uppdatering">Satellit</button><button role="tab" id="flikRad" aria-selected="false" title="Radar från SMHI eller met.no (med prognos 2 h) – loop och automatisk uppdatering">Radar</button><button role="tab" id="flikExp" aria-selected="false" title="Experiment: udda saker att undersöka – först graupel i hela kolumnen (MEPS medlem 0, 2,5 km)">Experiment</button><button role="tab" id="flikBrand" aria-selected="false" title="Brandrisk: SMHI:s brandriskprognos (skog, gräs, bränsleuttorkning) som karta 7 dygn och timme för timme för en punkt, samt EFFIS (ECMWF, hela Europa)">Brandrisk</button><button role="tab" id="flikTAF" aria-selected="false" title="TAF-bevakning: tidslinjal per flygplats (grön/gul/röd), METAR, larm">TAF</button><button id="delaKnapp" class="delaknapp" aria-pressed="false" title="Sändning: sänd det du tittar på (mottagarna följer med direkt, även din muspekare) eller ta emot någon annans sändning.">📡 Sändning</button>
 </div>
 
 <div class="nykorning" id="nyKorning" hidden role="status"></div>
@@ -455,7 +459,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
     <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kBrand"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -568,6 +572,15 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <div class="m0forkl" id="obsForkl"></div>
   <dl class="info"><dt>Status</dt><dd id="obsStatus">–</dd></dl>
   <p class="karttips">Bilderna hämtas direkt av din webbläsare från EUMETSAT, SMHI och met.no – bara det som syns, i skärmens upplösning – och läggs om till kartans projektion. Zoomar eller flyttar du hämtas de om. Satellit: ny bild var 10:e minut, ca 15–20 min fördröjning. Radar: var 5:e minut. Pilar = stega, mellanslag = spela.</p>
+</div>
+<div id="vyBrand" hidden>
+  <div class="pkontroller">
+    <div class="falt"><label for="brFalt">Karta</label><select id="brFalt"></select></div>
+    <div class="falt"><label for="brDag">Dygn</label><select id="brDag"></select><select id="brEffisDag" hidden></select></div>
+  </div>
+  <div class="pforkl" id="brForkl"></div>
+  <p class="karttips" id="brInfo"></p>
+  <div id="brPunkt" class="brpunkt" hidden></div>
 </div>
 <div id="vyExp" hidden>
   <h3 class="exprub">Graupel i kolumnen – bara medlem 0 (MEPS, ingen ensemble)</h3>
@@ -2690,7 +2703,8 @@ function kartKlick(e, mal) {
     return;
   }
   if (lage === "sat" || lage === "rad") return;   // 21/11 kvall: klick i satellit/radar gor inget (rita gar)
-  if (lage === "exp") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof expKartKlick === "function") expKartKlick(ll.lat, ll.lon); return; }   // 22/11: Experiment
+  if (lage === "exp") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof expKartKlick === "function") expKartKlick(ll.lat, ll.lon); return; }
+  if (lage === "brand") { const p = kartPunkt(e), ll = franRuta(p.x, KY - 1 - p.y); if (typeof brandKartKlick === "function") brandKartKlick(ll.lat, ll.lon); return; }   // 24/11: Brandrisk   // 22/11: Experiment
   if (mk) {
     const id = mk.dataset.id;
     if (id[0] === "p") { sel.value = id.slice(1); sattPunkt(); }
@@ -2805,14 +2819,14 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261124-0700"></script>
+<script src="sannolikhet.js?v=20261124-1400"></script>
 <script src="kombo.js?v=20261123-1412"></script>
 <script src="m0karta.js?v=20261123-1730"></script>
 <script src="taf.js?v=20261123-1145"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261123-2210"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261123-1830"></script>
+<script src="obs.js?v=20261124-1400"></script>
 <script src="exp.js?v=20261123-0945"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>
@@ -2822,6 +2836,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="qff.js?v=20261123-2140"></script>
 <script src="bildspel.js?v=20261124-0700"></script>
 <script src="konrad.js?v=20261124-1310"></script>
+<script src="brand.js?v=20261124-1400"></script>
 <script src="mat.js?v=20261122-2140"></script>
 </body>
 </html>

@@ -1669,6 +1669,7 @@ function bytLage(nytt) {
   if (nytt === "taf" && typeof tafIn === "function") setTimeout(tafIn, 0);
   if (typeof obsLage === "function") setTimeout(() => obsLage(nytt), 0);   // 21/11 kvall
   if (typeof expLage === "function") setTimeout(() => expLage(nytt), 0);   // 22/11: Experiment
+  if (typeof brandLage === "function") setTimeout(() => brandLage(nytt), 0);   // 24/11: Brandrisk
   if (typeof m0Rita === "function") { if (nytt === "m0") setTimeout(m0In, 0); else $("kM0").textContent = ""; }
   if (typeof satVb === "function" && typeof vb !== "undefined" && vb) setTimeout(() => satVb(vb.x, vb.y, vb.w), 0);   // 21/11: kartans granser byts (Europa i TAF)
   lagra("mt:lageVy", fav ? "f" : nytt); $("kTips").hidden = true;
