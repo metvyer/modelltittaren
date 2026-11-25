@@ -1541,6 +1541,7 @@ function favVinter(k) {
   // 22/11: Favoriter galler hela Sverige - kombinationerna hamtas fran met.no (3 falt x 30 medlemmar), sa i 10 km
   // (5 km for hela Sverige blir for stort, ca 400 MB for en halv dag). Perioden = den valda i tidslinjen.
   if (!P.detalj && +$("pUppl").value < 4) { $("pUppl").value = "4"; $("pUppl").dispatchEvent(new Event("change")); }
+  if (P.detalj) favDetaljAv();   // 25/11: ny favorit avslutar detaljlaget
   komboVal(k); favMarkera();
   // 23/11: i Favoriter galler samma grans som ovriga favoriter (forhamtat till +36) - langre fram: fliken Sannolikhet
   { const mx = SVIDX && SVIDX.tider ? Math.max(...SVIDX.tider) : 36; let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
@@ -1578,8 +1579,11 @@ function favMarkera() {   // 22/11: bara EN knapp blå - vinterknappen när en k
 function favVal(v, g) {
   if (typeof komboVal === "function" && $("pKombo").value) komboVal("");   // 21/11: vanlig favorit = ingen kombination
   const sel = $("pParam"); if (sel.value !== v) { sel.value = v; sel.dispatchEvent(new Event("change")); }
-  $("pTrosk").value = g; lagra("mt:pTrosk:" + v, String(g)); lagra("mt:favVal", v + ":" + g); sattParam(true); favMarkera(); probVisa();
-  if (P.detalj) favDetaljHamta();   // 23/11: nytt falt i detaljlaget hamtas for detaljrutan
+  // 25/11 (Jakob): nytt falt avslutar detaljlaget - vill man ha detalj for det nya faltet trycker man Detalj igen
+  // (forut hamtades det nya faltet automatiskt for samma detaljruta, vilket tog tid och var ovantat)
+  const varDetalj = !!P.detalj; if (varDetalj) favDetaljAv();
+  $("pTrosk").value = g; lagra("mt:pTrosk:" + v, String(g)); lagra("mt:favVal", v + ":" + g); sattParam(true); favMarkera(); ritaOmrade(); probVisa();
+  if (varDetalj) status("Detalj avslutad – tryck Detalj och klicka på kartan för detalj i 2,5 km för " + PPARAM[v].namn.split(",")[0].toLowerCase() + ".", "");
 }
 async function favIn() {
   favSpar = {}; for (const id of FAV_FALT) favSpar[id] = $(id).value;
@@ -1604,7 +1608,7 @@ async function favIn() {
 // 23/11: DETALJ HAR (Favoriter). Knappen -> nasta klick pa kartan valjer mitten. Valt falt (eller vald
 // vinterkombination) hamtas fran met.no for 400 x 400 km i 2,5 km (161 x 161 rutor = ungefar lika mycket som
 // hela Sverige i 10 km). Detaljrutan ritas ovanpa oversikten (finast overst). "Hela Sverige" = tillbaka till
-// den forhamtade rutan, det hamtade ligger kvar. Byter man favorit i detaljlaget hamtas den for samma ruta.
+// den forhamtade rutan, det hamtade ligger kvar. 25/11: byter man favorit avslutas detaljlaget (tryck Detalj igen).
 // ===================================================================
 const DETALJ_KM = 400, DETALJ_UPPL = "1";
 let favDetaljVantar = false;
