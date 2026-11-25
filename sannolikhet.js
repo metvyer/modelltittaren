@@ -625,7 +625,7 @@ async function svFas(o, sakn) {
   const k = o.s / S, NY = Math.floor((idx.y1 - idx.y0) / S) + 1, NX = Math.floor((idx.x1 - idx.x0) / S) + 1, ny = (r.y1 - r.y0) / o.s + 1, nx = (r.x1 - r.x0) / o.s + 1;
   let e = P.index.find(x => x.dtg === o.dtg && x.v === o.v && x.s === o.s && x.y0 === r.y0 && x.y1 === r.y1 && x.x0 === r.x0 && x.x1 === r.x1);
   if (!e) { e = { dtg: o.dtg, v: o.v, s: o.s, ...r, tider: [] }; P.index.push(e); }
-  let antal = 0, kb = 0;
+  let antal = 0, kb = 0; const lad = [];
   for (const t of tider) {
     status("Hämtar den förhämtade översikten från GitHub: +" + t + " h …");
     const d0 = await svFil(o.dtg, o.v, t, idx.bas); if (!d0) continue;
@@ -635,10 +635,31 @@ async function svFas(o, sakn) {
     if (k > 1) { arr = b16 ? new Uint16Array(ENS_MEDL * ny * nx) : new Uint8Array(ENS_MEDL * ny * nx);
       for (let m = 0; m < ENS_MEDL; m++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) arr[(m * ny + y) * nx + x] = d[(m * NY + y * k) * NX + x * k]; }
     else arr = d.subarray(0, ENS_MEDL * NY * NX);
-    await DB.put(nyckelE(e, t), arr); minneSatt(nyckelE(e, t), arr); if (!e.tider.includes(t)) e.tider.push(t); antal++;
+    lad.push([t, arr]);
   }
+  // 25/11 kvall (Jakob: "MBR0 sikt/molnbas - inga varden i fargskalan"): medlem 0 saknar sikt/molnbas i ensemblefilen,
+  // och forhamtningens reserv ur det-filen svarar 404 (det-filen ar inte klar nar ensemblen forhamtas). Fyll har:
+  // medlem 0 ur det-filen (samma korning) och medlem 15 (= forra korningens medlem 0) ur forra det-filen vid t+3.
+  if ((o.v === "sikt" || o.v === "bas") && lad.length) try { kb += await svFyllM0(o, r, lad, b16 ? 65535 : 255); } catch (x) {}
+  for (const [t, arr] of lad) { await DB.put(nyckelE(e, t), arr); minneSatt(nyckelE(e, t), arr); if (!e.tider.includes(t)) e.tider.push(t); antal++; }
   e.anv = Date.now(); await DB.put("index", P.index); await stadaLager(e);
   return { antal, kb, delvis, tackt };
+}
+async function svFyllM0(o, r, lad, ms) {
+  const pa = PPARAM[o.v], ny = (r.y1 - r.y0) / o.s + 1, nx = (r.x1 - r.x0) / o.s + 1, n = ny * nx, kb0 = { kb: 0 };
+  const tom = (arr, m) => { for (let i = m * n, e = i + n; i < e; i++) if (arr[i] !== ms) return false; return true; };
+  const dtgF = dtgText(new Date(dtgDatum(o.dtg).getTime() - ENS_LAGG_H * 3600e3));
+  const fyll = async (m, dtg, dt) => {
+    const beh = lad.filter(([, arr]) => tom(arr, m)); if (!beh.length) return;
+    const ts = beh.map(([t]) => t + dt), t0 = Math.min(...ts), t1 = Math.max(...ts), nt = t1 - t0 + 1;
+    status("Hämtar medlem " + m + ":s " + pa.namn.split(",")[0].toLowerCase() + " ur det-körningen …");
+    const fr = enc(pa.var + "[" + t0 + ":1:" + t1 + "][0][" + r.y0 + ":" + o.s + ":" + r.y1 + "][" + r.x0 + ":" + o.s + ":" + r.x1 + "]");
+    const res = await hamta(BAS + DET_FIL(dtg) + ".dods?" + fr, false, true); if (res.st !== 200 || !res.buf) return;
+    const v = lasDods(res.buf, nt * n); if (!v) return; kb0.kb += res.buf.byteLength / 1024;
+    for (const [t, arr] of beh) { const k = t + dt - t0; for (let i = 0; i < n; i++) koda(pa, arr, m * n + i, v[k * n + i]); }
+  };
+  await fyll(0, o.dtg, 0); await fyll(ENS_NYA, dtgF, ENS_LAGG_H);
+  return kb0.kb;
 }
 // NYTT 20/11: autoladdning fran Sverigeoversikten (GitHub) nar kartan ar tom for vald period - inget fran met.no.
 // Provas en gang per kombination (korning, parameter, omrade, upplosning, period).
@@ -1001,6 +1022,15 @@ async function probVisa() {
   const kand = P.index.filter(e => e.dtg === P.dtg && e.v === v).sort((x, y) => y.s - x.s);
   const vis = []; let pmax = 0;
   for (const e of kand) { const r = await beraknaOmrade(e, pa, a, b, fran, trosk, lista); if (r) vis.push(r); }
+  // 25/11 kvall: medlem 0 (och 15 = forra korningens 0) saknar sikt/molnbas i redan sparade omraden -> fyll ur det-filerna
+  // en gang per korning/parameter/period och rita om (galler aven det som sparades i webblasaren fore rattningen)
+  if ((v === "sikt" || v === "bas") && vis.length && !P.upptagen) { const u = new Set(vis.flatMap(r => r.utan || []));
+    const nyck = P.dtg + ":" + v + ":" + lista.join(","); P.m0Lagat = P.m0Lagat || new Set();
+    if ((u.has(0) || u.has(ENS_NYA)) && !P.m0Lagat.has(nyck)) { P.m0Lagat.add(nyck); let lagat = 0;
+      try { for (const e of kand) { const lad = []; for (const t of lista) if (e.tider.includes(t)) { const k = nyckelE(e, t); let arr = minneHamta(k) || await DB.get(k); if (arr) lad.push([t, arr, k]); }
+          if (!lad.length) continue; await svFyllM0(e, e, lad, SAKN[pa.bitar] !== undefined ? SAKN[pa.bitar] : 255);
+          for (const [, arr, k] of lad) { await DB.put(k, arr); minneSatt(k, arr); lagat++; } } } catch (x) {}
+      if (lagat) { status("Medlem 0 för " + pa.namn.split(",")[0].toLowerCase() + " kompletterad ur det-körningen.", ""); return probVisa(); } } }
   // 20/11 kvall: har bara medlem 0 varden (ovriga saknas) -> visa medlem 0 i stallet for sannolikhet
   if (!probVisa.inre) P.m0Auto = false;
   if (vis.length && visaLage() === "sannolikhet") { const u = new Set(vis.flatMap(r => r.utan || [])); if (u.size >= ENS_MEDL - 1 && !u.has(0)) {
