@@ -13,6 +13,8 @@ function qffTid() {   // giltig tid (ms) for fliken som visas, eller null
     // 23/11 kvall (Jakob): vald PERIOD (mer an en timme) -> inga isobarer, annars ser det ut som en enda tidpunkt
     if (a !== b) { QF.info = "Isobarer visas bara när en enda timme är vald (nu är en period vald)."; return null; }
     return isFinite(a) ? dtgDatum(P.dtg).getTime() + a * 3600e3 : null; }
+  // 25/11 (Jakob): satellit/radar - narmaste hela timme till bilden som visas (aven met.no:s prognosbilder)
+  if ((lage === "sat" || lage === "rad") && typeof OBS !== "undefined" && OBS.ramar && OBS.ramar[OBS.i] && OBS.ramar[OBS.i].t) return Math.round(OBS.ramar[OBS.i].t / 3600e3) * 3600e3;
   return Math.round(Date.now() / 3600e3) * 3600e3;
 }
 async function qffIndex() {
@@ -78,6 +80,8 @@ async function qffRita() {
   if (!QF.pa || T === null) { g.textContent = ""; QF.nyckel = ""; if (!QF.pa || lage !== "p") QF.info = ""; qffKnapp(); return; }
   const d = await qffFalt(T);
   if (!QF.pa || qffTid() !== T) return;   // tiden/fliken bytt medan vi hamtade
+  // 25/11: samma timme som redan ritad (t.ex. nar radarloopen stegar inom timmen) -> rita inte om
+  const nyck = d ? d.dtg + ":" + d.t + ":" + QF.steg + ":" + lage : ""; if (d && QF.nyckel === nyck && g.childNodes.length) return; QF.nyckel = nyck;
   g.textContent = "";
   if (!d) { QF.info = "Isobarer: inget marktryck för " + new Date(T).toISOString().slice(11, 13) + "Z (utanför körningarna)."; qffKnapp(); return; }
   if (!d.j) { d.j = qffJamna(d.f, d.o); d.c = qffCentra(d.j, d.o); }
@@ -99,7 +103,7 @@ async function qffRita() {
     g.appendChild(el("text", { x: X, y: Y + fs * 0.78, class: "qffHLv", "font-size": fs * 0.4, "font-weight": 700, "text-anchor": "middle", "dominant-baseline": "central", fill: fa, stroke: "#fff", "stroke-width": fs / 14, "paint-order": "stroke" }, String(Math.round(c.v)))); }
   const tid = new Date(T);
   QF.info = "Isobarer QFF var " + QF.steg + " hPa, " + p2(tid.getUTCHours()) + "Z " + tid.getUTCDate() + "/" + (tid.getUTCMonth() + 1) + " (körning " + d.dtg.slice(6, 8) + "/" + d.dtg.slice(9, 11) + "Z +" + d.t + ", MEPS medlem 0, 10 km" + (d.kalla === "direkt" ? ", hämtad direkt" : "") + ")." +
-    (lage === "m0" ? "" : lage === "p" ? " Vald timme." : " Närmaste hela timme nu.");
+    (lage === "m0" ? "" : lage === "p" ? " Vald timme." : lage === "sat" || lage === "rad" ? " Närmaste hela timme till bilden." : " Närmaste hela timme nu.");
   qffKnapp();
 }
 // varden pa linjen: som isoEtiketter i sannolikhet.js men dubbelt sa glest
@@ -120,7 +124,8 @@ function qffSnart() { clearTimeout(QF.tim); QF.tim = setTimeout(qffRita, 250); }
   if (st) st.addEventListener("change", () => { QF.steg = +st.value; lagra("mt:qffSteg", String(QF.steg)); qffRita(); });
   // tiden byts: tidsrutorna i kartan (Sannolikhet/MBR0) skrivs om, flikbyte (body-klass), zoom (H/L-storlek)
   const mo = new MutationObserver(() => { if (QF.pa) qffSnart(); });
-  for (const id of ["kartTid", "kartTidM0"]) { const e = $(id); if (e) mo.observe(e, { childList: true, subtree: true, characterData: true }); }
+  // 25/11: obsTid = satellit/radarbildens tid
+  for (const id of ["kartTid", "kartTidM0", "obsTid"]) { const e = $(id); if (e) mo.observe(e, { childList: true, subtree: true, characterData: true }); }
   mo.observe(document.body, { attributes: true, attributeFilter: ["class"] });
   const svg = $("karta"); if (svg) new MutationObserver(() => { if (!QF.pa) return; const fs = vb.w / 30;
     document.querySelectorAll(".qffHL").forEach(t => { t.setAttribute("font-size", fs); t.setAttribute("stroke-width", fs / 7); });
