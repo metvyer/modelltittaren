@@ -1104,6 +1104,9 @@ async function probVisa() {
   }
   P.varden = vis.length ? { vis: vis.slice().reverse(), pa, visa } : null;   // finast forst for hovring
   const o0 = berakna(), aktuell = o0 && vis.some(r => innehaller(r.o, { ...o0, dtg: P.dtg }));
+  // 25/11 kvall (Jakob: "MBR0 byvind tom fore 03Z"): fanns bara en mindre ruta (Detalj har) for timmen laddades inte
+  // oversikten - kartan visade bara detaljrutan. Nu laddas den forhamtade oversikten aven da (svAuto gor inget om den saknas).
+  if (vis.length && !aktuell) svAuto();
   if (!vis.length) { svAuto();
     if (fav) { const mx = SVIDX && SVIDX.tider ? Math.max(...SVIDX.tider) : 36; status(b > mx ? "Förhämtat finns till +" + mx + " h – välj en tidigare period (eller använd fliken Sannolikhet)." : "Laddar från den förhämtade översikten …", ""); return; }
     if (!P.upptagen && !P.fragar) status(kand.length ? "Perioden är inte hämtad – tryck Hämta fält." : "Inget hämtat för " + pa.namn.split(",")[0].toLowerCase() + " i den här körningen – tryck Hämta fält.", ""); return; }
