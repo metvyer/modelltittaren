@@ -1,13 +1,10 @@
-import urllib.request, urllib.parse
-B="https://thredds.met.no/thredds/dodsC/mepslatest/"
-from datetime import datetime, timezone, timedelta
-nu=datetime.now(timezone.utc); h=(nu.hour//3)*3-3
-d=nu.replace(hour=0,minute=0,second=0,microsecond=0)+timedelta(hours=h)
-dtg=d.strftime("%Y%m%dT%HZ")
-for fil in ["meps_det_2_5km_"+dtg+".ncml","meps_det_2_5km_"+dtg+".nc"]:
-  for q in ["visibility_in_air[0:1:1][0][0:2:4][0:2:4]","cloud_base_altitude[0:1:1][0][0:2:4][0:2:4]","air_temperature_2m[0:1:1][0][0:2:4][0:2:4]"]:
-    for e in [q, urllib.parse.quote(q, safe="")]:
-      u=B+fil+".ascii?"+e
-      try:
-        r=urllib.request.urlopen(urllib.request.Request(u,headers={"User-Agent":"mt"}),timeout=40); print(fil,q[:20],"OK",r.read(200)[:80])
-      except Exception as x: print(fil,q[:20],"enc" if e!=q else "raw",x)
+import sys, os; sys.path.insert(0, "verktyg")
+import forhamta as F
+dtg = F.senaste_ens(); print("dtg", dtg)
+for q in ["visibility_in_air[0:1:12][0][0:2:856][280:2:800]", "visibility_in_air[0:1:1][0][0:2:4][280:2:284]", "visibility_in_air[0:1:12][0][0:2:4][280:2:284]"]:
+    u = F.BAS + F.FIL(dtg) + ".dods?" + F.enc(q); print(u)
+    import urllib.request
+    try:
+        r = urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": F.UA}), timeout=120); b = r.read(); print("OK", len(b))
+    except urllib.error.HTTPError as e: print("HTTP", e.code, e.read()[:300])
+    except Exception as e: print("fel", e)
