@@ -210,10 +210,7 @@ function obsVisa() {
   const g = $("kObs"); if (!g) return;
   const r = OBS.ramar[OBS.i]; if (!r || !OBS.lage) { g.textContent = ""; obsPrognosSkylt(null); return; }
   const v = r.bild;
-  const sistObs = OBS.ramar.filter(x => !x.prognos).pop(), rel = sistObs ? Math.round((r.t - sistObs.t) / 60e3) : 0;   /* 21/11 kvall: minus-tid for aldre bilder */
-  $("obsTid").textContent = obsTidTxt(r.t) + (r.prognos ? "  PROGNOS +" + rel + " min" : rel < 0 ? "  −" + -rel + " min" : "  senaste") + "  ·  " + obsSen(r.t);
-  $("obsTid").classList.toggle("prognos", !!r.prognos);
-  obsPrognosSkylt(r);
+  obsTidTexter(r);
   $("obsReglage").max = Math.max(0, OBS.ramar.length - 1); $("obsReglage").value = OBS.i;
   if (!v) return;   // behall forra bilden tills denna ar klar
   const lag = v.lager || [];   // [bas, ev. blixtar]
@@ -226,10 +223,21 @@ function obsPrognosSkylt(r) {
   const sk = $("obsPrognosSkylt"); if (!sk) return;
   const p = !!(r && r.prognos && OBS.lage === "rad"); document.querySelector(".kartram").classList.toggle("prognosram", p);
   if (!r || !OBS.lage) { sk.hidden = true; return; }
-  const sist = OBS.ramar.filter(x => !x.prognos).pop(), rel = sist ? Math.round((r.t - sist.t) / 60e3) : 0;
   sk.hidden = false; sk.classList.toggle("obs", !p);
-  sk.textContent = (p ? "PROGNOS +" + rel + " min" : rel < 0 ? "−" + -rel + " min" : "Senaste") + " · " + obsTidTxt(r.t);
+  sk.textContent = (p ? "PROGNOS " : "") + obsAlder(r.t) + (obsArSenaste(r) ? " (senaste)" : "") + " · " + obsTidTxt(r.t);
 }
+// 25/11 kvall (Jakob): bildens alder raknas mot datorns klocka (forut mot senaste bilden, sa en 60 min gammal bild
+// stod som -30 om senaste var 30 min gammal). Minus = sa gammal, plus = prognos sa langt fram. Uppdateras varje halvminut.
+function obsAlder(t) { const m = Math.round((Date.now() - t) / 60e3), a = Math.abs(m), txt = a < 120 ? a + " min" : Math.floor(a / 60) + " h " + (a % 60) + " min"; return (m >= 0 ? "−" : "+") + txt; }
+const obsArSenaste = r => !r.prognos && r === OBS.ramar.filter(x => !x.prognos).pop();
+function obsTidTexter(r) {
+  r = r || OBS.ramar[OBS.i]; if (!r || !OBS.lage) return;
+  $("obsTid").textContent = obsTidTxt(r.t) + "  " + (r.prognos ? "PROGNOS " : "") + obsAlder(r.t) + (obsArSenaste(r) ? "  (senaste)" : "");
+  $("obsTid").title = r.prognos ? "Prognosbild: så här långt fram från nu (datorns klocka)" : "Bildens ålder räknat mot datorns klocka";
+  $("obsTid").classList.toggle("prognos", !!r.prognos);
+  obsPrognosSkylt(r);
+}
+setInterval(() => { if (!document.hidden && OBS.lage) obsTidTexter(); }, 30e3);
 const obsSen = t => { const m = Math.round((Date.now() - t) / 60e3); return m < 0 ? "om " + -m + " min" : m < 90 ? m + " min sedan" : Math.round(m / 6) / 10 + " h sedan"; };
 function obsStatus(txt) { const s = $("obsStatus"); if (s) s.textContent = txt; }
 
