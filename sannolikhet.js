@@ -1048,9 +1048,10 @@ async function probVisa() {
   }
   // NYTT 20/11 kvall: medlem 0:s linje for troskeln ovanpa sannolikheten (bla) - ligger den langt fran de roda
   // omradena skiljer sig medlem 0 fran ensemblen
-  if (visaM0Linje && visa === "sannolikhet" && isFinite(trosk)) for (const r of vis) {
+  const lt = linjeTrosk(trosk);   // 25/11: i Favoriter egen linjetroskel (foljer annars troskeln)
+  if (linjeAktiv() && visa === "sannolikhet" && isFinite(lt)) for (const r of vis) {
     const n = r.o.ny * r.o.nx, f0 = r.agg.subarray(0, n); if (!f0.some(isFinite)) continue;
-    const d = isoSegment(f0, r.o, trosk); if (!d) continue;
+    const d = isoSegment(f0, r.o, lt); if (!d) continue;
     g.appendChild(el("path", { d, fill: "none", stroke: "#ffffff", "stroke-width": 5, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round", opacity: 0.8 }));
     g.appendChild(el("path", { d, fill: "none", stroke: "#1d4ed8", "stroke-width": 2.6, "vector-effect": "non-scaling-stroke", "stroke-linecap": "round" }));
     isoEtiketter(g, d, "m0");
@@ -1131,7 +1132,11 @@ function ritaIsoForkl(f) {
 }
 function ritaPForklaring() {
   const f = $("pForkl"); f.textContent = ""; ritaIsoForkl(f);
-  if (visaM0Linje && visaLage() === "sannolikhet") { const sp = document.createElement("span"); sp.innerHTML = '<svg width="26" height="10" style="vertical-align:middle;margin-right:4px"><line x1="1" x2="25" y1="5" y2="5" stroke="#1d4ed8" stroke-width="2.6"/></svg>medlem 0 vid tröskeln'; f.append(sp); }
+  if (linjeAktiv() && visaLage() === "sannolikhet") { const sp = document.createElement("span"), pa = PPARAM[$("pParam").value] || {};
+    const tr = parseFloat($("pTrosk").value.replace(",", ".")), lt = linjeTrosk(tr), per = +$("pFran").value !== +$("pTill").value;
+    const txt = (fav ? "MBR0 " : "medlem 0 ") + (isFinite(lt) ? (pa.villkor || "") + " " + lt.toLocaleString("sv-SE") + " " + (pa.enhet || "") : "vid tröskeln") +
+      (per ? (pa.agg === "summa" ? " (summa över perioden)" : " (någon gång under perioden)") : "");
+    sp.innerHTML = '<svg width="26" height="10" style="vertical-align:middle;margin-right:4px"><line x1="1" x2="25" y1="5" y2="5" stroke="#1d4ed8" stroke-width="2.6"/></svg>'; sp.append(txt); f.append(sp); }
   if (visaLage() === "m0rang") {
     for (const [, c, t] of M0RANG) { const sp = document.createElement("span"), r = document.createElement("i"); r.className = "pruta";
       r.style.background = c || "transparent"; if (!c) r.style.border = "1px solid #9ca3af"; sp.append(r, t); f.append(sp); }
@@ -1532,7 +1537,7 @@ function probOmradeAndrat() { P.fragar = false; ritaOmrade(); probVisa().then(()
 // NYTT 20/11 kvall: FAVORITER. Samma karta och data som sannolikhetsvyn (lage "p"), men last till den forhamtade
 // Sverigerutan (5 km, GitHub-korningen) med fardiga knappar. Inget hamtas fran met.no i den har fliken.
 // Sannolikhetsvyns egna val sparas nar man gar in och aterstalls nar man gar ut.
-const FAV_KNAPPAR = { by: [27, 32, 45], sikt: [5000, 3000, 2000, 1000], bas: [1200, 500, 400, 300, 200] };
+const FAV_KNAPPAR = { by: [27, 32, 45], sikt: [5000, 3000, 2000, 1000], bas: [1200, 500, 400, 300, 200], nb: [0.5, 1, 2, 5] };   // 25/11: nederbord (summa i perioden)
 let fav = false, favSpar = null;
 const FAV_FALT = ["pKorningVal", "pParam", "pVisa", "pTrosk", "pStorlek", "pUppl", "pDt", "pFran", "pTill", "pSteg", "pKombo", "pKomboA", "pKomboB"];
 // 21/11: vintergruppen - kombinerad sannolikhet, hamtas fran met.no nar man trycker (inte forhamtat)
@@ -1565,15 +1570,22 @@ function favKnappar() {
   const vb_ = $("favVinter"); vb_.textContent = "";
   for (const [k, n] of FAV_VINTER) { const b = document.createElement("button"); b.className = "sek liten"; b.dataset.k = k; b.textContent = n;
     setTimeout(() => { if (typeof KOMBO !== "undefined" && KOMBO[k]) b.title = KOMBO[k].text(KOMBO[k].A ? KOMBO[k].A.std : 0, KOMBO[k].B.std) + " – förhämtat 15 okt–31 mars (10 km), annars från met.no när du trycker"; }, 0); b.addEventListener("click", () => favVinter(k)); vb_.appendChild(b); }
-  for (const [v, id] of [["by", "favBy"], ["sikt", "favSikt"], ["bas", "favBas"]]) {
-    const box = $(id); box.textContent = "";
+  for (const [v, id] of [["by", "favBy"], ["sikt", "favSikt"], ["bas", "favBas"], ["nb", "favNb"]]) {
+    const box = $(id); if (!box) continue; box.textContent = "";
+    // 25/11 (Jakob): MBR0 forst - medlem 000:s varden som farg (forhamtat, laddas direkt)
+    const m = document.createElement("button"); m.className = "sek liten"; m.dataset.m0 = v; m.textContent = "MBR0";
+    m.title = "Medlem 000 (det-körningen): " + PPARAM[v].namn.split(",")[0].toLowerCase() + " som färg" + (PPARAM[v].agg === "summa" ? ", summa över perioden" : "");
+    m.addEventListener("click", () => favM0(v)); box.appendChild(m);
     for (const g of FAV_KNAPPAR[v]) { const b = document.createElement("button"); b.className = "sek liten"; b.dataset.v = v; b.dataset.g = g;
       b.textContent = g.toLocaleString("sv-SE") + " " + PPARAM[v].enhet; b.addEventListener("click", () => favVal(v, g)); box.appendChild(b); }
   }
 }
 function favMarkera() {   // 22/11: bara EN knapp blå - vinterknappen när en kombination är vald, annars tröskelknappen
   const kb = $("pKombo") ? $("pKombo").value : "";
-  document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", String(!kb && b.dataset.v === $("pParam").value && +b.dataset.g === parseFloat($("pTrosk").value.replace(",", ".")))));
+  const sann = $("pVisa").value === "sannolikhet";
+  document.querySelectorAll("#favPanel button[data-v]").forEach(b => b.setAttribute("aria-pressed", String(!kb && sann && b.dataset.v === $("pParam").value && +b.dataset.g === parseFloat($("pTrosk").value.replace(",", ".")))));
+  document.querySelectorAll("#favPanel button[data-m0]").forEach(b => b.setAttribute("aria-pressed", String(!kb && $("pVisa").value === "m0" && b.dataset.m0 === $("pParam").value)));
+  favLinjeRad();
   document.querySelectorAll("#favVinter button").forEach(b => b.setAttribute("aria-pressed", String(!!kb && b.dataset.k === kb)));
 }
 function favVal(v, g) {
@@ -1582,8 +1594,29 @@ function favVal(v, g) {
   // 25/11 (Jakob): nytt falt avslutar detaljlaget - vill man ha detalj for det nya faltet trycker man Detalj igen
   // (forut hamtades det nya faltet automatiskt for samma detaljruta, vilket tog tid och var ovantat)
   const varDetalj = !!P.detalj; if (varDetalj) favDetaljAv();
+  $("pVisa").value = "sannolikhet"; P.linjeTrosk = g;   // 25/11: MBR0-linjen foljer den valda troskeln (kan andras i rutan Linje)
   $("pTrosk").value = g; lagra("mt:pTrosk:" + v, String(g)); lagra("mt:favVal", v + ":" + g); sattParam(true); favMarkera(); ritaOmrade(); probVisa();
   if (varDetalj) status("Detalj avslutad – tryck Detalj och klicka på kartan för detalj i 2,5 km för " + PPARAM[v].namn.split(",")[0].toLowerCase() + ".", "");
+}
+// 25/11 (Jakob): MBR0-knappen - medlem 000:s varden for faltet som farg
+function favM0(v) {
+  if (typeof komboVal === "function" && $("pKombo").value) komboVal("");
+  const sel = $("pParam"); if (sel.value !== v) { sel.value = v; sel.dispatchEvent(new Event("change")); }
+  const varDetalj = !!P.detalj; if (varDetalj) favDetaljAv();
+  $("pVisa").value = "m0"; lagra("mt:favVal", v + ":m0"); sattParam(true); favMarkera(); ritaOmrade(); probVisa();
+  if (varDetalj) status("Detalj avslutad – tryck Detalj och klicka på kartan för detalj i 2,5 km.", "");
+}
+// MBR0-linjen i Favoriter: tand som standard, foljer vald troskel, egen troskel i rutan
+let favLinjePa = lasa("mt:favLinje") !== "nej";
+const linjeAktiv = () => fav ? favLinjePa : visaM0Linje;
+const linjeTrosk = trosk => fav && isFinite(P.linjeTrosk) ? P.linjeTrosk : trosk;
+function favLinjeRad() {
+  const b = $("favLinje"), i = $("favLinjeTr"), e = $("favLinjeEnh"); if (!b) return;
+  const v = $("pParam").value, pa = PPARAM[v], sann = $("pVisa").value === "sannolikhet" && !($("pKombo") && $("pKombo").value);
+  $("favLinjeRad").hidden = !sann;
+  b.setAttribute("aria-pressed", String(favLinjePa));
+  if (document.activeElement !== i) i.value = isFinite(P.linjeTrosk) ? String(P.linjeTrosk).replace(".", ",") : "";
+  e.textContent = pa ? pa.enhet : "";
 }
 async function favIn() {
   favSpar = {}; for (const id of FAV_FALT) favSpar[id] = $(id).value;
@@ -1591,7 +1624,7 @@ async function favIn() {
   const sk = $("favSkylt");
   if (!idx || !idx.dtg) { sk.textContent = "Den förhämtade översikten finns inte just nu – använd fliken Sannolikhet."; return; }
   const kl = idx.skapad ? new Date(idx.skapad) : null;
-  sk.innerHTML = "<b>Förhämtat – laddas direkt, inget hämtas från met.no.</b> Byvind, sikt och molnbas ur MEPS-ensemblen (30 medlemmar), 5 km" + ((idx.v || []).includes("sno") ? ", vinterfälten (snöfall, nederbörd, yt-/2 m-temperatur, fukt) 10 km" : "") + ", +0 till +" + Math.max(...idx.tider) +
+  sk.innerHTML = "<b>Förhämtat – laddas direkt, inget hämtas från met.no.</b> Byvind, sikt, molnbas" + ((idx.v || []).includes("nb") ? " och nederbörd" : "") + " ur MEPS-ensemblen (30 medlemmar), 5 km" + ((idx.v || []).includes("sno") ? ", vinterfälten (snöfall 5 km, yt-/2 m-temperatur och fukt 10 km)" : "") + ", +0 till +" + Math.max(...idx.tider) +
     " h, för Sverige, Östersjön, Finland och Baltikum. Körning " + idx.dtg + (kl && !isNaN(kl) ? " (klar " + kl.getUTCHours().toString().padStart(2, "0") + ":" + kl.getUTCMinutes().toString().padStart(2, "0") + "Z)" : "") +
     ". Välj en tröskel nedan eller skriv en egen i rutan Tröskel. Klicka på kartan för meteogram i en punkt.";
   $("pStorlek").value = "sv"; $("pUppl").value = String(idx.s); $("pVisa").value = "sannolikhet"; $("pDt").value = "1";
@@ -1601,7 +1634,7 @@ async function favIn() {
   const nu = Math.max(0, Math.min(Math.max(...idx.tider), Math.round((Date.now() - dtgDatum(idx.dtg).getTime()) / 3600e3)));
   $("pFran").value = nu; $("pTill").value = nu; $("pSteg").value = "1";
   const [v, g] = (lasa("mt:favVal") || "by:27").split(":");
-  if (idx.v.includes(v)) favVal(v, +g); else favVal("by", 27);
+  if (!idx.v.includes(v)) favVal("by", 27); else if (g === "m0") favM0(v); else favVal(v, +g);
   ritaOmrade(); probVisa();
 }
 // ===================================================================
@@ -1644,6 +1677,12 @@ function favDetaljAv() {
   if (P.detalj && P.detaljSpar) { $("pStorlek").value = P.detaljSpar.pStorlek; $("pUppl").value = P.detaljSpar.pUppl; }
   P.detalj = null; P.detaljSpar = null; favDetaljKnappar();
 }
+(function favLinjeInit() {
+  const b = $("favLinje"), i = $("favLinjeTr"); if (!b) return;
+  b.addEventListener("click", () => { favLinjePa = !favLinjePa; lagra("mt:favLinje", favLinjePa ? "ja" : "nej"); favLinjeRad(); probVisa(); });
+  i.addEventListener("change", () => { const x = parseFloat(i.value.replace(",", ".")); P.linjeTrosk = isFinite(x) ? x : parseFloat($("pTrosk").value.replace(",", "."));
+    if (!favLinjePa) { favLinjePa = true; lagra("mt:favLinje", "ja"); } favLinjeRad(); probVisa(); });
+})();
 (function favDetaljInit() {
   const b = $("favDetalj"), h = $("favHela"); if (!b) return;
   b.addEventListener("click", () => { favDetaljVantar = !favDetaljVantar; favDetaljKnappar();

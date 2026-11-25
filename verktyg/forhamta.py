@@ -428,6 +428,8 @@ SV_PARAM = {
              "tabell": _trapp([[0, 200, 10], [225, 500, 25], [550, 1000, 50], [1100, 5000, 100], [5200, 10000, 200], [11000, 75000, 1000]])},
     "bas": {"var": "cloud_base_altitude", "konv": lambda v: v * FOT,
             "tabell": _trapp([[0, 200, 10], [250, 1000, 50], [1100, 5000, 100], [5500, 20000, 500], [25000, 25000, 1]])},
+    # 25/11 (Jakob): nederbord ARET OM (forut bara i vintergruppen) - 5 km, ackumulerad summa i 16 bitar (0,1 mm)
+    "nb": {"var": "precipitation_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 2},
 }
 
 
@@ -436,7 +438,6 @@ SV_PARAM = {
 SV_VINTER = {
     # 23/11 em: nederbord och snofall i 5 km (s = 2) - skurar/snobyar syns battre. Lagras i R2.
     "sno": {"var": "snowfall_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 2},
-    "nb": {"var": "precipitation_amount_acc", "konv": lambda v: v, "tabell": None, "steg": 0.1, "bitar": 16, "s": 2},
     "t0": {"var": "air_temperature_0m", "konv": lambda v: v - 273.15, "tabell": _trapp([[-50, 40, 1]]), "s": 4},
     "t2": {"var": "air_temperature_2m", "konv": lambda v: v - 273.15, "tabell": _trapp([[-50, 40, 1]]), "s": 4},
     "rh": {"var": "relative_humidity_2m", "konv": lambda v: __import__("numpy").minimum(100, __import__("numpy").where(v > 1.5, v, v * 100)), "tabell": None, "steg": 1, "s": 4},

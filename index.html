@@ -530,6 +530,10 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
     <div class="favrad"><b>Byvind ≥</b><span id="favBy"></span></div>
     <div class="favrad"><b>Sikt &lt;</b><span id="favSikt"></span></div>
     <div class="favrad"><b>Molnbas &lt;</b><span id="favBas"></span></div>
+    <div class="favrad" title="Nederbörd summerad över perioden (Från–Till). Förhämtat året om i 5 km. Timnederbörd är brusig – dra gärna ut perioden till 3–12 h."><b>Nederbörd ≥</b><span id="favNb"></span></div>
+    <!-- 25/11: MBR0-linjen - tands vid vald troskel och foljer med; egen troskel i rutan -->
+    <div class="favrad" id="favLinjeRad"><b>MBR0-linje</b><button class="sek liten" id="favLinje" aria-pressed="true" title="Medlem 000:s linje (blå) ovanpå sannolikheten. Följer den valda tröskeln – skriv ett annat värde i rutan för att flytta linjen. Över en period: där MBR0 når värdet någon gång (nederbörd: summan).">Visa</button>
+      <span class="dim">vid</span> <input id="favLinjeTr" class="koord" inputmode="decimal" style="width:4.5em" title="Linjens tröskel – följer med när du väljer en ny tröskel ovan"> <span id="favLinjeEnh" class="enhet"></span></div>
     <div class="favrad" title="Kombinerad sannolikhet (per medlem och timme). Förhämtat i 10 km 15 okt–31 mars (laddas direkt). Utanför säsongen, i Detalj här eller längre än +36 h hämtas fälten från met.no."><b>Vinter</b><span id="favVinter"></span></div>
     <!-- 23/11: Detalj har - en ruta 400 x 400 km i 2,5 km runt en punkt man klickar (lika mycket data som hela Sverige i 10 km) -->
     <div class="favrad"><b>Detalj</b><button class="sek liten" id="favDetalj" aria-pressed="false" title="Tryck, klicka sedan på kartan: valt fält hämtas för 400 × 400 km i 2,5 km runt punkten (från met.no, ca 15–60 s). Detaljrutan ritas ovanpå översikten.">🔍 Detalj här</button><button class="sek liten" id="favHela" hidden title="Tillbaka till hela den förhämtade rutan. Det hämtade detaljområdet ligger kvar ovanpå.">Hela Sverige</button><span id="favDetaljInfo" class="dim"></span></div>
@@ -2956,7 +2960,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
   $("skroll").addEventListener("scroll", gomTips);
 })();
 </script>
-<script src="sannolikhet.js?v=20261125-1000"></script>
+<script src="sannolikhet.js?v=20261125-1140"></script>
 <script src="kombo.js?v=20261125-0930"></script>
 <script src="m0karta.js?v=20261123-1730"></script>
 <script src="taf.js?v=20261123-1145"></script>
