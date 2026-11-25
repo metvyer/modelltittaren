@@ -12,12 +12,12 @@ async def main():
         for i in range(40):
             if await s.evaluate("typeof M !== 'undefined' && M && M.ytaOK && M.ytaOK.filter(x => x).length > 10"): break
             await s.wait_for_timeout(1500)
-        rad = """(() => { const all = [...document.querySelectorAll('svg text')]; const lab = all.find(t => t.textContent === 'Td °C' || t.textContent === 'RH %'); if (!lab) return 'ingen etikett';
-          const y = lab.getAttribute('y'); return lab.textContent + ': ' + all.filter(t => t.getAttribute('y') === y && t !== lab).slice(0, 12).map(t => t.textContent).join(' '); })()"""
+        rad = """(() => { const all = [...document.querySelectorAll('svg text')]; const lab = all.find(t => (t.textContent.startsWith('Td °C') || t.textContent.startsWith('RH %'))); if (!lab) return 'ingen etikett';
+          const y = lab.getAttribute('y'); return lab.firstChild.textContent + ': ' + all.filter(t => t.getAttribute('y') === y && t !== lab).slice(0, 12).map(t => t.textContent).join(' '); })()"""
         print("fore:", await s.evaluate(rad))
-        await s.evaluate("[...document.querySelectorAll('svg text')].find(t => t.textContent === 'Td °C' || t.textContent === 'RH %').dispatchEvent(new MouseEvent('click', { bubbles: true }))"); await s.wait_for_timeout(800)
+        await s.evaluate("[...document.querySelectorAll('svg text')].find(t => (t.textContent.startsWith('Td °C') || t.textContent.startsWith('RH %'))).dispatchEvent(new MouseEvent('click', { bubbles: true }))"); await s.wait_for_timeout(800)
         print("efter klick:", await s.evaluate(rad))
-        await s.evaluate("[...document.querySelectorAll('svg text')].find(t => t.textContent === 'Td °C' || t.textContent === 'RH %').dispatchEvent(new MouseEvent('click', { bubbles: true }))"); await s.wait_for_timeout(800)
+        await s.evaluate("[...document.querySelectorAll('svg text')].find(t => (t.textContent.startsWith('Td °C') || t.textContent.startsWith('RH %'))).dispatchEvent(new MouseEvent('click', { bubbles: true }))"); await s.wait_for_timeout(800)
         print("klick igen:", await s.evaluate(rad))
         await s.evaluate("bytLage('f')"); await s.wait_for_timeout(5000); await s.evaluate("$('testskylt').hidden = true")
         await s.evaluate("favVal('by', 27); P.detaljSpar = { pStorlek: $('pStorlek').value, pUppl: $('pUppl').value }; P.detalj = { lat: 59.86, lon: 17.64 }; $('pStorlek').value = '400'; $('pUppl').value = '1'; favDetaljKnappar()")
