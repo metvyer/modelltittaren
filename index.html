@@ -269,6 +269,10 @@ body.p #karta { width: 100%; height: 78vh; aspect-ratio: auto; margin: 0 auto; }
 /* 21/11 kvall: prognosskylt + rod ram (radar met.no) och legend i kartan (sannolikhet, Karta m0) - fasta, foljer inte zoom */
 .obsprognos { position: absolute; left: 8px; top: 8px; z-index: 4; background: #dc2626; color: #fff; font-weight: 700; font-size: 13px; padding: 4px 9px; border-radius: 5px; pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,.3); }
 .obsprognos.obs { background: rgba(31,41,55,.82); }
+.obsnybild { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); z-index: 6; background: #16a34a; color: #fff; font-weight: 800; font-size: 30px; padding: 14px 28px; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.35); text-align: center; cursor: pointer; border: 3px solid #fff; }
+.obsnybild small { display: block; font-size: 16px; font-weight: 600; margin-top: 4px; opacity: .95; }
+.obsnybild.in { animation: obsny .5s ease-out; } .obsnybild.ut { opacity: 0; transition: opacity .6s; }
+@keyframes obsny { 0% { transform: translateX(-50%) scale(.6); opacity: 0; } 70% { transform: translateX(-50%) scale(1.08); opacity: 1; } 100% { transform: translateX(-50%) scale(1); } }
 .kartram.prognosram::after { content: ""; position: absolute; inset: 0; border: 4px solid #dc2626; border-radius: 4px; pointer-events: none; z-index: 3; }
 .kartlegend { position: absolute; left: 8px; top: 8px; z-index: 3; background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 6px;
   padding: 5px 7px; font-size: 10.5px; line-height: 1.25; pointer-events: none; max-height: 85%; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
@@ -507,6 +511,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
+  <div class="obsnybild" id="obsNyBild" hidden title="Klicka för att stänga"></div>
   <div class="kartlegend" id="kartLegend" hidden></div>
   </div>
   <div class="varnlista" id="varnLista" hidden></div>
@@ -2967,7 +2972,7 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261123-2210"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261125-1840"></script>
+<script src="obs.js?v=20261125-1850"></script>
 <script src="exp.js?v=20261123-0945"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>

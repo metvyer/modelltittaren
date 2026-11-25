@@ -226,6 +226,15 @@ function obsPrognosSkylt(r) {
   sk.hidden = false; sk.classList.toggle("obs", !p);
   sk.textContent = (p ? "PROGNOS " : "") + obsAlder(r.t) + (obsArSenaste(r) ? " (senaste)" : "") + " · " + obsTidTxt(r.t);
 }
+const obsKallaNamn = () => OBS.lage + ":" + (OBS.lage === "sat" ? OBS.sat : OBS.rad);
+let obsNyTimer = 0;
+function obsNyBild(r) {
+  const e = $("obsNyBild"); if (!e) return;
+  const namn = OBS.lage === "sat" ? "satellitbild" : "radarbild";
+  e.innerHTML = "🆕 Ny " + namn + "<small>" + obsTidTxt(r.t) + " · " + obsAlder(r.t) + "</small>";
+  e.hidden = false; e.classList.remove("ut"); void e.offsetWidth; e.classList.add("in");
+  clearTimeout(obsNyTimer); obsNyTimer = setTimeout(() => { e.classList.add("ut"); setTimeout(() => { e.hidden = true; }, 600); }, 10e3);
+}
 // 25/11 kvall (Jakob): bildens alder raknas mot datorns klocka (forut mot senaste bilden, sa en 60 min gammal bild
 // stod som -30 om senaste var 30 min gammal). Minus = sa gammal, plus = prognos sa langt fram. Uppdateras varje halvminut.
 function obsAlder(t) { const m = Math.round((Date.now() - t) / 60e3), a = Math.abs(m), txt = a < 120 ? a + " min" : Math.floor(a / 60) + " h " + (a % 60) + " min"; return (m >= 0 ? "−" : "+") + txt; }
@@ -251,6 +260,10 @@ async function obsLadda(nyLista) {
       obsStatus("Hämtar lista …"); const ramar = await obsRamar(); if (gen !== OBS.gen) return;
       for (const r of ramar) r.bild = gamla.get(r.nyckel) || null;
       const sistObs = ramar.filter(r => !r.prognos).length - 1;
+      // 25/11 kvall (Jakob): ny observationsbild sedan forra listan -> stor ruta "Ny bild" i 10 s (inte vid forsta laddningen/byte av kalla)
+      const nyT = sistObs >= 0 ? ramar[sistObs].t : 0, forT = OBS.sistT && OBS.sistKalla === obsKallaNamn() ? OBS.sistT : 0;
+      if (nyLista && forT && nyT > forT) obsNyBild(ramar[sistObs]);
+      OBS.sistT = nyT; OBS.sistKalla = obsKallaNamn();
       OBS.ramar = ramar; if (OBS.lage === "rad") obsFyllForkl(); if (!nyLista || varSist || OBS.i > ramar.length - 1) OBS.i = Math.max(0, sistObs);
     }
     // ordning: den som visas forst, sedan nyast -> aldst, sist prognosen
@@ -331,7 +344,7 @@ function obsLage(nytt) {
   if (!OBS.lage) { obsSpela(false); clearInterval(obsAutoTimer); $("kObs").textContent = ""; OBS.gen++; obsPrognosSkylt(null); return; }
   if (typeof tafLaddaEuropa === "function") tafLaddaEuropa().then(() => satVb(vb.x, vb.y, vb.w));
   obsFyllVal();
-  if (var_ !== OBS.lage) { OBS.ramar = []; OBS.i = 0; $("kObs").textContent = ""; }
+  if (var_ !== OBS.lage) { OBS.ramar = []; OBS.i = 0; $("kObs").textContent = ""; if ($("obsNyBild")) $("obsNyBild").hidden = true; }
   obsLadda(true); obsAuto();
 }
 function obsFyllVal() {
@@ -350,6 +363,7 @@ function obsFyllForkl() {
     : OBS_SAT[OBS.sat].genom ? "Genomskinligt lager – kartan syns under." : "";
 }
 (function obsInit() {
+  if ($("obsNyBild")) $("obsNyBild").addEventListener("click", e => { e.currentTarget.hidden = true; });
   if (!$("obsKalla")) return;
   const ls = $("obsLangd"); for (const [n, t] of OBS_LANGD) ls.add(new Option(t, n)); ls.value = OBS.langd;
   $("obsKalla").addEventListener("change", e => { if (OBS.lage === "sat") OBS.sat = e.target.value; else OBS.rad = e.target.value; obsSpara(); obsFyllVal(); OBS.ramar = []; OBS.i = 0; obsLadda(true); });
