@@ -31,9 +31,12 @@ const komboA = () => parseFloat(($("pKomboA").value || "").replace(",", "."));
 const komboB = () => parseFloat(($("pKomboB").value || "").replace(",", "."));
 
 // Timmarna perioden behöver för fältet p (summa-fält: även steget före varje timme)
+// 25/11: perioden lases EN gang nar hamtningen startar (P.komboPer) - forut lastes den om for varje del, och flyttades
+// tidslinjen under tiden (Favoriter satter "nu") hamtades delarna for olika timmar -> "... saknas for ..." som stod kvar
+const komboPeriod = () => { let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a]; return [a, b, +$("pDt").value || 1]; };
+const komboNyckel = K => [P.dtg, K.namn, ...komboPeriod(), $("pUppl").value, P.detalj ? "d" : ""].join(":");
 function komboTimmar(p) {
-  let a = +$("pFran").value, b = +$("pTill").value; if (b < a) [a, b] = [b, a];
-  const dt = +$("pDt").value || 1, L = []; for (let t = a; t <= b; t++) if (t % dt === 0 || t === a) L.push(t);
+  const [a, b, dt] = P.komboPer || komboPeriod(), L = []; for (let t = a; t <= b; t++) if (t % dt === 0 || t === a) L.push(t);
   if (PPARAM[p].agg !== "summa") return L;
   return [...new Set(L.flatMap(t => t - dt >= 0 ? [t - dt, t] : [t]))].sort((x, y) => x - y);
 }
@@ -47,6 +50,7 @@ async function komboHamta(auto) {
   // nasta del felflaggan och felet skrevs over av "behover ... hamtas ..." som stod kvar for alltid). Blir
   // kombinationen tom fast alla delar ar hamtade sags vad som saknas (falt, timme, rutnat).
   const t0 = Date.now(); let fel = null;
+  P.komboPer = komboPeriod(); P.komboSenast = komboNyckel(K); clearTimeout(P.komboTimer);
   try {
     for (let di = 0; di < K.delar.length; di++) { const p = K.delar[di];
       if (stoppad && P.komboStopp) break;
@@ -56,7 +60,7 @@ async function komboHamta(auto) {
       await probHamta(auto === true);
       if (P.fragar) { fel = P.komboDel + " avbröts: " + $("pStatus").textContent.replace(/^.*?\): /, ""); break; }
     }
-  } finally { const delNamn = P.komboDel; P.vOverride = null; P.listaOverride = null; P.komboStopp = false; P.komboDel = null;
+  } finally { const delNamn = P.komboDel; P.vOverride = null; P.listaOverride = null; P.komboStopp = false; P.komboDel = null; P.komboPer = null;
     P.komboSakn = null; await probVisa();
     if (fel) { status(fel, "fel"); P.fragar = true; }
     else if (stoppad) { /* Stoppad-texten fran probHamta far sta kvar */ }
@@ -104,6 +108,17 @@ async function komboOmrade(e, K, A, B) {
   return { o, agg, prob, utan: [...ute].filter(m => iUrval(m)), nAnv, timmar: L.length };
 }
 
+// 25/11 (Jakob: "byter man tid eller tidssteg hander ingenting, felet star kvar"): nar perioden, tidssteget eller
+// upplosningen andras och kombinationen saknar data hamtas den automatiskt i Favoriter (en gang per period, sa
+// det inte blir en slinga om datat verkligen saknas hos met.no). I Sannolikhet: tydlig uppmaning i stallet for gammalt fel.
+function komboNyPeriod(K) {
+  if (P.upptagen || P.autoVantar || P.komboVantar || P.komboPer) return;
+  const k = komboNyckel(K); if (P.komboSenast === k) return;
+  P.komboSenast = k; P.fragar = false; clearTimeout(P.komboTimer);
+  if (!fav) { status("Perioden eller tidssteget har ändrats – tryck Hämta fält för att räkna " + K.namn + "."); return; }
+  status(K.namn + ": ny period – hämtar strax …");
+  P.komboTimer = setTimeout(() => { if (komboAktiv() !== K || P.upptagen || komboNyckel(K) !== k) return; P.komboSenast = ""; komboHamta(false); }, 1200);
+}
 // Ritar kombinationen (anropas från probVisa när en kombination är vald)
 async function komboVisa(g, rensa) {
   const K = komboAktiv(), A = komboA(), B = komboB();
@@ -112,6 +127,7 @@ async function komboVisa(g, rensa) {
   const vis = []; let pmax = 0, komboRitade = 0;   // 22/11: komboRitade = antal fargade rutor (skylt om 0)
   for (const e of kand) { const r = await komboOmrade(e, K, A, B); if (r) vis.push(r); }
   P.komboTom = !vis.length;   // 22/11: Favoriternas vinterknapp hamtar nar detta ar sant (P.varden kunde ligga kvar fran forra faltet)
+  if (!vis.length) komboNyPeriod(K);   // 25/11: ny period/tidssteg som inte ar hamtad
   if (!vis.length && (P.upptagen || P.autoVantar)) return;
   rensa();
   const rgb = PKLASS.map(([gr, c]) => [gr, parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);

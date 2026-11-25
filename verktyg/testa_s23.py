@@ -19,15 +19,20 @@ async def main():
         s.on("pageerror", lambda e: fel.append(str(e)))
         await s.goto(SIDA); await s.wait_for_timeout(4000)
         await s.evaluate("bytLage('f')"); await s.wait_for_timeout(5000); await s.evaluate("$('testskylt').hidden = true")
-        nu = await s.evaluate("+$('pFran').value"); print("nu-timme", nu)
-        await s.evaluate(f"$('pTill').value = {nu + 1}; $('pTill').dispatchEvent(new Event('change'))"); await s.wait_for_timeout(2000)
+        async def vanta(namn):
+            st = ""
+            for i in range(150):
+                await s.wait_for_timeout(2000); st = await s.evaluate("$('pStatus').textContent")
+                if (st.startswith("Klart") or "kunde inte" in st or "avbröts" in st or "hämtades inte" in st) and not await s.evaluate("P.upptagen"): break
+            print(namn + " (" + str(i * 2) + " s):\n" + await s.evaluate(DUMP))
         await s.evaluate("document.querySelector('#favVinter button[data-k=snofok]').click()")
-        for i in range(150):
-            await s.wait_for_timeout(2000); st = await s.evaluate("$('pStatus').textContent")
-            if st.startswith("Klart") or "kunde inte" in st or "avbröts" in st or "hämtades inte" in st: break
-        print("EFTER SNODREV:\n" + await s.evaluate(DUMP))
-        await s.evaluate("$('pDt').value = '3'; $('pDt').dispatchEvent(new Event('change'))"); await s.wait_for_timeout(5000)
-        print("EFTER DT=3:\n" + await s.evaluate(DUMP))
+        await vanta("EFTER SNODREV")
+        nu = await s.evaluate("+$('pTill').value")
+        await s.evaluate(f"$('pTill').value = {nu + 2}; $('pTill').dispatchEvent(new Event('change'))")
+        await s.wait_for_timeout(500); print("direkt efter ny period:", await s.evaluate("$('pStatus').textContent"))
+        await vanta("EFTER NY PERIOD")
+        await s.evaluate("$('pDt').value = '3'; $('pDt').dispatchEvent(new Event('change'))")
+        await vanta("EFTER DT=3")
         await s.screenshot(path="matprov/s23a.png")
         print("fel:", fel[:5]); await b.close()
 asyncio.run(main())
