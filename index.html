@@ -80,6 +80,10 @@ button.sek[aria-pressed="true"] { background: var(--acc); color: var(--accfg); }
 #kHavEU { fill: var(--hav); } body:not(.taf):not(.sat):not(.rad) #kHavEU, body:not(.taf):not(.sat):not(.rad) #kGeoEU { display: none; }
 #kGeoEU .land { fill: var(--land); stroke: none; fill-rule: evenodd; } #kGeoEU .sjo { fill: var(--hav); stroke: none; }
 #kGeoEU .grans { fill: none; stroke: var(--grans); } #kGeoEU .grad { fill: none; stroke: var(--gradnat); } #kGeoEU .meps { fill: none; stroke: var(--dim); }
+/* 25/11 kvall: Afrika och Mellanostern - bara i satellitfliken (MTG ser hela jordskivan) */
+#kHavAF { fill: var(--hav); } #kGeoAF .land { fill: var(--land); stroke: none; fill-rule: evenodd; } #kGeoAF .sjo { fill: var(--hav); stroke: none; } #kGeoAF .grad { fill: none; stroke: var(--gradnat); }
+#kKustAF .akust { fill: none; stroke: var(--kustO); } #kKustAF .agrans { fill: none; stroke: var(--gransO); }
+body:not(.sat) #kHavAF, body:not(.sat) #kGeoAF, body:not(.sat) #kKustAF { display: none; }
 #karta .land { fill: var(--land); stroke: none; fill-rule: evenodd; }
 #karta .sjo { fill: var(--hav); stroke: none; }   /* 21/11 kvall: kusten ritas i kKust/kKustEU (klippta, utan ram vid kanten) */
 #karta .grans { fill: none; stroke: var(--grans); }
@@ -505,9 +509,9 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <div class="mattips" id="matTips" hidden>Mäter: klicka nästa punkt · högerklick, dubbelklick, Enter eller Esc = klar</div>
   <div class="karttid baraM0" id="kartTidM0" aria-live="polite"></div>
   <svg id="karta" viewBox="0 0 949 1069" role="img" aria-label="Karta över MEPS-området. Klicka för att välja punkt.">
-    <rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
+    <rect id="kHavAF" x="0" y="0" width="0" height="0"/><g id="kGeoAF"></g><rect id="kHavEU" x="-1406" y="-184" width="3250" height="2172"/><g id="kGeoEU"></g>
     <rect id="kHav" x="0" y="0" width="949" height="1069"/>
-    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kBrand"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><g id="kLed" style="pointer-events:none"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
+    <g id="kGeo"></g><g id="kObs"></g><g id="kProb"></g><g id="kM0"></g><g id="kBrand"></g><g id="kQff" style="pointer-events:none"></g><g id="kSiff"></g><g id="kOmr"></g><g id="kExp"></g><g id="kOmraden"></g><g id="kVarn"></g><g id="kKonrad"></g><g id="kVvis"></g><g id="kKam"></g><g id="kMark"></g><g id="kLed" style="pointer-events:none"></g><defs><clipPath id="klipMeps"><rect x="1" y="1" width="947" height="1067"/></clipPath><clipPath id="klipEU"><path id="klipEUv" clip-rule="evenodd" d=""/></clipPath></defs><g id="kKustAF" style="pointer-events:none"></g><g id="kKustEU" clip-path="url(#klipEU)"></g><g id="kKust" clip-path="url(#klipMeps)"></g><g id="kTaf"></g><g id="kRit"></g><g id="kMat" style="pointer-events:none"></g>
   </svg>
   <div class="ritrad" id="ritRad" hidden></div>
   <div class="obsprognos" id="obsPrognosSkylt" hidden></div>
@@ -2629,7 +2633,9 @@ function hamtStatus(dtg, iy, ix) {
 function kartAspekt() { const r = $("karta").getBoundingClientRect(); return r.width > 20 && r.height > 20 ? r.height / r.width : KY / KX; }
 // 21/11: kartans granser - MEPS-rutan, men hela Europa i TAF-fliken (karta_europa.json)
 let KARTA_EU = null;
-const kartGr = () => (lage === "taf" || lage === "sat" || lage === "rad") && KARTA_EU ? KARTA_EU : { x0: 0, y0: 0, x1: KX, y1: KY };
+let KARTA_AF = null;   // 25/11 kvall: Afrika + Mellanostern (satellit)
+const kartGr = () => lage === "sat" && KARTA_EU && KARTA_AF ? { x0: Math.min(KARTA_EU.x0, KARTA_AF.x0), y0: Math.min(KARTA_EU.y0, KARTA_AF.y0), x1: Math.max(KARTA_EU.x1, KARTA_AF.x1), y1: Math.max(KARTA_EU.y1, KARTA_AF.y1) }
+  : (lage === "taf" || lage === "sat" || lage === "rad") && KARTA_EU ? KARTA_EU : { x0: 0, y0: 0, x1: KX, y1: KY };
 const kartMaxBredd = () => { const G = kartGr(); return Math.max(G.x1 - G.x0, (G.y1 - G.y0) / kartAspekt()); };
 function satVb(x, y, w) {
   const a = kartAspekt(); w = Math.min(kartMaxBredd(), Math.max(MIN_BREDD, w)); const h = w * a;
@@ -2788,7 +2794,9 @@ function startaKarta() {
   svg.addEventListener("pointerup", slut); svg.addEventListener("pointercancel", slut);
   svg.addEventListener("pointerleave", () => { if (!pek.size) $("kartPos").textContent = ""; $("kTips").hidden = true; });
   $("zIn").addEventListener("click", () => zooma(0.67)); $("zUt").addEventListener("click", () => zooma(1.5));
-  $("zHem").addEventListener("click", () => { if (lage === "taf" && typeof tafHela === "function" && tafHela()) return; satVb(0, 0, 1e9); });
+  $("zHem").addEventListener("click", () => { if (lage === "taf" && typeof tafHela === "function" && tafHela()) return;
+    if (lage === "sat" && KARTA_EU) { const G = KARTA_EU, a = kartAspekt(), w = Math.max(G.x1 - G.x0, (G.y1 - G.y0) / a); satVb((G.x0 + G.x1) / 2 - w / 2, (G.y0 + G.y1) / 2 - w * a / 2, w); return; }   // 25/11: Hela = Europa, zooma ut for Afrika
+    satVb(0, 0, 1e9); });
   $("visaFlyg").setAttribute("aria-pressed", String(visaFlyg));
   $("visaFlyg").addEventListener("click", e => { visaFlyg = !visaFlyg; lagra("mt:visaFlyg", visaFlyg ? "ja" : "nej"); e.currentTarget.setAttribute("aria-pressed", String(visaFlyg)); ritaMarkorer(); });
   let skift = false;
@@ -2968,11 +2976,11 @@ function sattPunkt() { const sel = $("punkt"); if (sel.value !== "egen") { const
 <script src="sannolikhet.js?v=20261125-2040"></script>
 <script src="kombo.js?v=20261125-0930"></script>
 <script src="m0karta.js?v=20261123-1730"></script>
-<script src="taf.js?v=20261123-1145"></script>
+<script src="taf.js?v=20261125-2220"></script>
 <script src="rita.js?v=20261121-1300"></script>
 <script src="dela.js?v=20261123-2210"></script>
 <script src="bild.js?v=20261121-1900"></script>
-<script src="obs.js?v=20261125-1850"></script>
+<script src="obs.js?v=20261125-2220"></script>
 <script src="exp.js?v=20261123-0945"></script>
 <script src="extra.js?v=20261122-2140"></script>
 <script src="varn.js?v=20261122-0940"></script>

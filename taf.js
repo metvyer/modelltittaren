@@ -302,6 +302,21 @@ function tafLaddaEuropa() {
     }).catch(() => {})]).then(() => { if (lage === "taf") { tafRita(); ritaMarkorer(); } });
   return euLaddad;
 }
+// NYTT 25/11 kvall: Afrika och Mellanostern (karta_afrika.json, Natural Earth 50m) - bara satellitfliken
+let afLaddad = null;
+function laddaAfrika() {
+  if (afLaddad) return afLaddad;
+  afLaddad = fetch("karta_afrika.json").then(r => r.json()).then(k => {
+    const g = $("kGeoAF"), h = $("kHavAF"); g.textContent = "";
+    h.setAttribute("x", k.x0); h.setAttribute("y", k.y0); h.setAttribute("width", k.x1 - k.x0); h.setAttribute("height", k.y1 - k.y0);
+    for (const [n, w, d] of [["land", 0.7], ["sjo", 0.5], ["grad", 0.6, "4 4"]]) { const a = { d: k[n], class: n, "vector-effect": "non-scaling-stroke", "stroke-width": w }; if (d) a["stroke-dasharray"] = d; g.appendChild(el("path", a)); }
+    const ku = $("kKustAF"); ku.textContent = "";
+    ku.appendChild(el("path", { d: k.kust, class: "akust", "vector-effect": "non-scaling-stroke", "stroke-width": 0.9 }));
+    ku.appendChild(el("path", { d: k.grans, class: "agrans", "vector-effect": "non-scaling-stroke", "stroke-width": 0.8, "stroke-dasharray": "5 2" }));
+    KARTA_AF = { x0: k.x0, y0: k.y0, x1: k.x1, y1: k.y1 };
+  }).catch(() => { afLaddad = null; });
+  return afLaddad;
+}
 // "Hela" i TAF-fliken: zooma till alla bevakade flygplatser
 function tafHela() {
   const P_ = TAFS.lista.map(tafPlats).filter(p => isFinite(p[1])).map(p => tillKarta(p[1], p[2])); if (!P_.length) return false;
