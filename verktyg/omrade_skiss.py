@@ -17,7 +17,8 @@ UT = "matprov"; os.makedirs(UT, exist_ok=True)
 BAS = "https://thredds.met.no/thredds/dodsC/mepslatest/meps_det_2_5km_{}.ncml"
 KAND = {"Åre/Jämtlandsfjällen": (63.40, 13.10), "Sylarna/Helags": (62.95, 12.40), "Kebnekaise": (67.90, 18.55),
         "Jotunheimen": (61.60, 8.40), "Hardangervidda": (60.20, 7.40), "Abisko/Riksgränsen": (68.35, 18.80),
-        "Lofoten": (68.15, 14.20), "Sälenfjällen": (61.20, 12.95)}
+        "Lofoten": (68.15, 14.20), "Sälenfjällen": (61.20, 12.95), "Narvik/Ofotfjorden": (68.43, 17.40), "Lyngen": (69.60, 20.20),
+        "Trollheimen/Sunndal": (62.70, 9.00), "Romsdalen": (62.50, 7.70), "Sognefjorden/Lærdal": (61.10, 7.40), "Hemsedal": (60.85, 8.55)}
 HALV = 8          # 17 x 17 punkter = 40 x 40 km
 TIDER = 25        # +0..+24
 PTOPP = 480e2
@@ -49,12 +50,12 @@ for namn, (la, lo) in KAND.items():
     iy, ix = index(la, lo)
     zs_ = np.array(ds.variables["surface_geopotential"][0, 0, iy - HALV:iy + HALV + 1, ix - HALV:ix + HALV + 1]) / 9.80665
     spann = zs_.max() - zs_.min()
-    if spann < 400 or zs_.min() < 1: print(namn, "for flackt/hav"); continue
+    if spann < 500: print(namn, "for flackt"); continue
     cb = np.array(ds.variables["cloud_base_altitude"][0:NT_ALLA, 0, iy - HALV:iy + HALV + 1, ix - HALV:ix + HALV + 1], dtype="f8")
     lag = np.nan_to_num((cb < 300).mean(axis=(1, 2)) if np.isfinite(cb).any() else np.zeros(NT_ALLA))
     lag = np.where(np.isfinite(cb).all(axis=(1, 2)) | True, lag, 0)
     for a in range(0, NT_ALLA - TIDER + 1, 3):
-        w = lag[a:a + TIDER]; poang = w.mean() + 0.5 * w.std() + min(spann, 1200) / 3000
+        w = lag[a:a + TIDER]; poang = w.mean() + 0.5 * w.std() + min(spann, 1500) / 1500
         if not bast or poang > bast[0]: bast = (poang, namn, iy, ix, a)
     print(f"{namn}: terrang {zs_.min():.0f}-{zs_.max():.0f} m, andel bas<300 m max {lag.max():.2f} medel {lag.mean():.2f}")
 _, NAMN, iy, ix, A0 = bast; print("valt:", NAMN, "fran +", A0)
@@ -176,19 +177,17 @@ def fargstapel(f, ax, m, etikett, ticks=None):
 # A
 f, ax = fig("A · Nuvarande sätt: andel av ALLA punkter med moln (höjd över havet)", UNDER)
 m = ax.pcolormesh(X_, HM, andelAlla.T, cmap=GRA, norm=GN, shading="nearest"); isoterm(ax, HM, TM); terrang(ax); vind(ax, HM)
-tidsaxel(ax); ax.set_ylabel("Höjd över havet (m)"); ax.set_ylim(0, 4000); fargstapel(f, ax, m, "% av alla punkter", [5, 20, 40, 60, 80, 95])
+tidsaxel(ax); ax.set_ylabel("Höjd över havet (m)"); ax.set_ylim(max(0, zs.min() - 250), 3500); fargstapel(f, ax, m, "% av alla punkter", [5, 20, 40, 60, 80, 95])
 f.savefig(f"{UT}/omr_A_nuvarande.png", bbox_inches="tight"); plt.close(f)
 # 1
 f, ax = fig("1 · Andel bland punkter OVAN MARK (höjd över havet)", UNDER)
 m = ax.pcolormesh(X_, HM, andelOvan.T, cmap=GRA, norm=GN, shading="nearest")
-def underMarkRita(ax):   # andel av omradet som ligger under marken pa hojden: tunn brun ton + linjer 25/50/75 %
-    ax.contourf(X_, HM, underMark.T, levels=[25, 50, 75, 100.1], colors=["#a16207"], alpha=0.0)
-    for niv, a in [(25, 0.06), (50, 0.10), (75, 0.14)]: ax.contourf(X_, HM, underMark.T, levels=[niv, 100.1], colors=["#a16207"], alpha=a)
-    cs = ax.contour(X_, HM, underMark.T, levels=[25, 50, 75], colors="#78350f", linewidths=0.7, linestyles=":")
-    ax.clabel(cs, fmt=lambda v: "%d %% under mark" % v, fontsize=7)
+def underMarkRita(ax):   # andel av omradet som ligger under marken pa hojden: streckade linjer 25/50/75 % (ingen tackande fargning)
+    cs = ax.contour(X_, HM, underMark.T, levels=[25, 50, 75], colors="#92400e", linewidths=[0.6, 1.0, 0.6], linestyles=["--", "-", "--"])
+    ax.clabel(cs, fmt=lambda v: "%d %% av området under mark" % v, fontsize=7)
     ax.fill_between(X_, 0, zs.min(), color="#a16207", alpha=0.35, lw=0)
 underMarkRita(ax)
-isoterm(ax, HM, TM); terrang(ax); vind(ax, HM); tidsaxel(ax); ax.set_ylabel("Höjd över havet (m)"); ax.set_ylim(0, 4000)
+isoterm(ax, HM, TM); terrang(ax); vind(ax, HM); tidsaxel(ax); ax.set_ylabel("Höjd över havet (m)"); ax.set_ylim(max(0, zs.min() - 250), 3500)
 fargstapel(f, ax, m, "% av punkterna som finns på höjden", [5, 20, 40, 60, 80, 95])
 f.savefig(f"{UT}/omr_1_ovan_mark.png", bbox_inches="tight"); plt.close(f)
 # 2
@@ -215,7 +214,7 @@ f, ax = fig("4 · Som 1 + isbildning: HÖGSTA i området per höjd (BETA, egen M
 ax.pcolormesh(X_, HM, andelOvan.T, cmap=GRA, norm=GN, shading="nearest", alpha=0.75)
 m = ax.pcolormesh(X_, HM, np.where(iM >= 0.05, iM, np.nan).T, cmap=ISC, norm=ISN, shading="nearest", alpha=0.85)
 underMarkRita(ax)
-isoterm(ax, HM, TM); terrang(ax); tidsaxel(ax); ax.set_ylabel("Höjd över havet (m)"); ax.set_ylim(0, 4000)
+isoterm(ax, HM, TM); terrang(ax); tidsaxel(ax); ax.set_ylabel("Höjd över havet (m)"); ax.set_ylim(max(0, zs.min() - 250), 3500)
 c = f.colorbar(m, ax=ax, pad=0.01, fraction=0.035, ticks=[0.05, 0.6, 2.5, 7.5]); c.set_label("isbildning cm/h (Trace/Light/Mod/Sev)")
 f.savefig(f"{UT}/omr_4_isbildning.png", bbox_inches="tight"); plt.close(f)
 # karta over rutan
