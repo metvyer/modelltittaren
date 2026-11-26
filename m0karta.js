@@ -55,7 +55,7 @@ const M0P = {
   blixt:  { g: "Instabilitet och konvektion", namn: "Blixtindex", var: "lightning_index", enh: "", klass: [0.1, 0.5, 1, 2, 5], konv: v => v, iso: [1] },
   pw:     { g: "Nederbörd och moln", namn: "Utfällbart vatten", var: "lwe_thickness_of_atmosphere_mass_content_of_water_vapor", enh: "mm", klass: [5, 10, 15, 20, 25, 30, 40], konv: v => v < 1 ? v * 1000 : v, iso: [10, 20, 30] },
   // 26/11 (Jakob): FLYGISBILDNING, hogsta vardet i kolumnen - egen berakning enligt Makkonens istillvaxtmodell
-  isb:    { g: "Nederbörd och moln", namn: "Isbildning, högsta i kolumnen (egen beräkning, Makkonen)", var: "isb", typ: "isb", enh: "cm/h", klass: [0.05, 0.6, 2.5, 7.5],
+  isb:    { g: "Nederbörd och moln", namn: "Isbildning, högsta i kolumnen (BETA – testas, egen beräkning)", var: "isb", typ: "isb", enh: "cm/h", klass: [0.05, 0.6, 2.5, 7.5],
             pal: ["#2563eb", "#22c55e", "#facc15", "#dc2626"], konv: v => v, iso: [0.6, 2.5] },
   // Vind
   vind:   { g: "Vind", namn: "Medelvind 10 m", var: "wind_speed", enh: "kt", klass: [10, 15, 20, 25, 30, 40], konv: v => v * KT, iso: [15, 25, 34], isoVal: [10, 15, 20, 25, 27, 30, 34, 40] },
@@ -228,7 +228,7 @@ async function m0Isbildning(o, t, d) {
     for (let i = 0; i < nC; i++) { const r = isbHastighet(bit.T[j0 + i], ab.ap[k] + ab.b[k] * ps[i], bit.q[j0 + i]); if (r > mx[i]) mx[i] = r; } }
   for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) { const cy = Math.min(nyC - 1, Math.round(y / ISB.s)), cx = Math.min(nxC - 1, Math.round(x / ISB.s)); d[y * o.nx + x] = mx[cy * nxC + cx]; }
   let hogst = 0; for (const r of mx) if (r > hogst) hogst = r;
-  m0Status("Isbildning klar (nivå " + kTop + "–64, var 10 km): högst " + hogst.toFixed(1).replace(".", ",") + " cm/h. Egen beräkning (Makkonen) – antaget droppantal 100/cm³, kan avvika från SMHI.");
+  m0Status("Isbildning (BETA) klar (nivå " + kTop + "–64, var 10 km): högst " + hogst.toFixed(1).replace(".", ",") + " cm/h. Egen beräkning (Makkonen) – antaget droppantal 100/cm³, kan avvika från SMHI.");
 }
 
 async function m0Uppdatera() {

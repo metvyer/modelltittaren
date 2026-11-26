@@ -130,6 +130,20 @@ jobs:
           T=$(echo "$L" | python3 -c "import json,sys; l=json.load(sys.stdin); print(l[-1] if l else '')")
           [ -n "$T" ] && curl -s -o /dev/null -w "bild %{http_code} %{size_download} %{content_type}\n" -H 'Origin: https://metvyer.github.io' $R/$T.png || true
 
+      # 26/11: skisser omradesmeteogram (fyra satt) - taggen 77
+      - name: Omradesmeteogram-skisser
+        if: contains(inputs.delar, '77')
+        run: |
+          python3 -m pip install -q netCDF4 matplotlib numpy || python3 -m pip install -q --break-system-packages netCDF4 matplotlib numpy
+          python3 verktyg/omrade_skiss.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan matprov-sida
+          git rm -rq --cached .
+          git add -f matprov sida.md
+          git commit -qm "Omradesmeteogram-skisser $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -qf origin HEAD:matprov-sida
+
       - name: Prov ra modellprofil Uppsala
         if: contains(inputs.delar, 'Q2')
         run: python3 verktyg/testa_profil.py
