@@ -43,28 +43,31 @@ ap = ds.variables["ap"][:]; b = ds.variables["b"][:]
 kTop = max(0, int(np.argmax(ap + b * 101325 >= PTOPP)) - 1); K = slice(kTop, 65)
 print("nivaer", kTop, "-64")
 
-# --- valj omrade: mest varierande laga moln (low_type_cloud_area_fraction) ---
-bast = None
+# --- valj omrade OCH 24-timmarsfonster: mest laga moln/dimma mot terrangen (molnbas < 300 m over mark) i kuperat landomrade ---
+NT_ALLA = len(ds.variables["time"][:]); bast = None
 for namn, (la, lo) in KAND.items():
     iy, ix = index(la, lo)
-    lc = ds.variables["low_type_cloud_area_fraction"][0:TIDER, 0, iy - HALV:iy + HALV + 1, ix - HALV:ix + HALV + 1]
-    lc = np.array(lc); lc = lc / 100 if lc.max() > 1.5 else lc
-    zs = np.array(ds.variables["surface_geopotential"][0, 0, iy - HALV:iy + HALV + 1, ix - HALV:ix + HALV + 1]) / 9.80665
-    m = lc.mean(); varr = lc.mean(axis=(1, 2)).std(); spann = zs.max() - zs.min()
-    poang = (m * (1 - m)) * 4 + varr + min(spann, 1200) / 1200 - (5 if (spann < 400 or zs.min() < 1) else 0)   # kuperat och bara land
-    print(f"{namn}: laga moln {m:.2f} variation {varr:.2f} terrang {zs.min():.0f}-{zs.max():.0f} m poang {poang:.2f}")
-    if not bast or poang > bast[0]: bast = (poang, namn, iy, ix)
-_, NAMN, iy, ix = bast; print("valt:", NAMN)
+    zs_ = np.array(ds.variables["surface_geopotential"][0, 0, iy - HALV:iy + HALV + 1, ix - HALV:ix + HALV + 1]) / 9.80665
+    spann = zs_.max() - zs_.min()
+    if spann < 400 or zs_.min() < 1: print(namn, "for flackt/hav"); continue
+    cb = np.array(ds.variables["cloud_base_altitude"][0:NT_ALLA, 0, iy - HALV:iy + HALV + 1, ix - HALV:ix + HALV + 1], dtype="f8")
+    lag = np.nan_to_num((cb < 300).mean(axis=(1, 2)) if np.isfinite(cb).any() else np.zeros(NT_ALLA))
+    lag = np.where(np.isfinite(cb).all(axis=(1, 2)) | True, lag, 0)
+    for a in range(0, NT_ALLA - TIDER + 1, 3):
+        w = lag[a:a + TIDER]; poang = w.mean() + 0.5 * w.std() + min(spann, 1200) / 3000
+        if not bast or poang > bast[0]: bast = (poang, namn, iy, ix, a)
+    print(f"{namn}: terrang {zs_.min():.0f}-{zs_.max():.0f} m, andel bas<300 m max {lag.max():.2f} medel {lag.mean():.2f}")
+_, NAMN, iy, ix, A0 = bast; print("valt:", NAMN, "fran +", A0)
 Y = slice(iy - HALV, iy + HALV + 1); X = slice(ix - HALV, ix + HALV + 1)
-def v3(n): return np.array(ds.variables[n][0:TIDER, K, Y, X], dtype="f8")
+def v3(n): return np.array(ds.variables[n][A0:A0 + TIDER, K, Y, X], dtype="f8")
 T = v3("air_temperature_ml"); q = v3("specific_humidity_ml"); qc = v3("mass_fraction_of_cloud_condensed_water_in_air_ml")
 qi = v3("mass_fraction_of_cloud_ice_in_air_ml")
 try: cf = v3("cloud_area_fraction_ml"); cf = cf / 100 if np.nanmax(cf) > 1.5 else cf
 except Exception: cf = None
-ps = np.array(ds.variables["surface_air_pressure"][0:TIDER, 0, Y, X], dtype="f8")
+ps = np.array(ds.variables["surface_air_pressure"][A0:A0 + TIDER, 0, Y, X], dtype="f8")
 zs = np.array(ds.variables["surface_geopotential"][0, 0, Y, X], dtype="f8") / 9.80665
 U = v3("x_wind_ml"); V = v3("y_wind_ml")
-t0 = dt.datetime.strptime(dtg, "%Y%m%dT%HZ"); tid = [t0 + dt.timedelta(hours=h) for h in range(TIDER)]
+t0 = dt.datetime.strptime(dtg, "%Y%m%dT%HZ"); tid = [t0 + dt.timedelta(hours=A0 + h) for h in range(TIDER)]
 nt, nk, ny, nx = T.shape; NP = ny * nx
 print("form", T.shape, "moln ur", "cloud_area_fraction_ml" if cf is not None else "kondensat")
 
