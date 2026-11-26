@@ -54,6 +54,9 @@ const M0P = {
   hagel:  { g: "Instabilitet och konvektion", namn: "Hagel (diagnos)", var: "hail_diagnostic", enh: "%", klass: [5, 10, 30, 50], konv: v => v > 1.5 ? v : v * 100, iso: [10] },
   blixt:  { g: "Instabilitet och konvektion", namn: "Blixtindex", var: "lightning_index", enh: "", klass: [0.1, 0.5, 1, 2, 5], konv: v => v, iso: [1] },
   pw:     { g: "Nederbörd och moln", namn: "Utfällbart vatten", var: "lwe_thickness_of_atmosphere_mass_content_of_water_vapor", enh: "mm", klass: [5, 10, 15, 20, 25, 30, 40], konv: v => v < 1 ? v * 1000 : v, iso: [10, 20, 30] },
+  // 26/11 (Jakob): FLYGISBILDNING, hogsta vardet i kolumnen - egen berakning enligt Makkonens istillvaxtmodell
+  isb:    { g: "Nederbörd och moln", namn: "Isbildning, högsta i kolumnen (egen beräkning, Makkonen)", var: "isb", typ: "isb", enh: "cm/h", klass: [0.05, 0.6, 2.5, 7.5],
+            pal: ["#2563eb", "#22c55e", "#facc15", "#dc2626"], konv: v => v, iso: [0.6, 2.5] },
   // Vind
   vind:   { g: "Vind", namn: "Medelvind 10 m", var: "wind_speed", enh: "kt", klass: [10, 15, 20, 25, 30, 40], konv: v => v * KT, iso: [15, 25, 34], isoVal: [10, 15, 20, 25, 27, 30, 34, 40] },
   by:     { g: "Vind", namn: "Byvind", var: "wind_speed_of_gust", enh: "kt", klass: [20, 25, 32, 40, 50, 64], konv: v => v * KT, iso: [25, 32, 45], isoVal: [20, 25, 27, 32, 40, 45, 50, 64] },
@@ -163,6 +166,7 @@ async function m0Falt(v, t) {
     if (!raa || raa.length < n) throw new Error("oväntat svar"); return raa;
   };
   const d = new Float32Array(n);
+  if (pa.typ === "isb") { await m0Isbildning(o, t, d); m0Cache.set(nyckel, d); return { d, o, nyckel }; }
   if (pa.diff) {   // ackumulerat -> mangd senaste timmen
     const ta = Math.max(0, t - 1), raa = await hamtaVar(pa.var, ta, t);
     for (let i = 0; i < n; i++) { const a = raa[i], b = raa[raa.length > n ? n + i : i]; d[i] = t === 0 ? 0 : isFinite(a) && isFinite(b) ? Math.max(0, pa.konv(b - a)) : NaN; }
@@ -176,6 +180,53 @@ async function m0Falt(v, t) {
   } else { const raa = await hamtaVar(pa.var, t, t); for (let i = 0; i < n; i++) d[i] = isFinite(raa[i]) ? pa.konv(raa[i]) : NaN; }
   m0Cache.set(nyckel, d); if (m0Cache.size > 60) m0Cache.delete(m0Cache.keys().next().value);
   return { d, o, nyckel };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// ISBILDNING (NYTT 26/11) - egen tolkning av samma princip som AROME-isbildningen (Makkonens modell), for jamforelse.
+// Per modellniva (ca 400 hPa och nedat) dar -40 < T < 0 °C och det finns molnvatten:
+//   w   = molnvatten (kg/m3) = blandningsforhallande * luftens densitet
+//   v   = 92 m/s (relativ hastighet luft-flygplan, fast), D = 0,15 m (standardcylinder), isdensitet 400 kg/m3
+//   MVD = droppdiameter ur w med antaget droppantal N = 100 per cm3 (ANTAGANDE - SMHI:s empiriska samband ar okant)
+//   a1  = kollisionseffektivitet enligt Finstad m.fl. (1988) ur Stokes tal K och Langmuirs phi
+//   a2  = 1;  a3 = ur varmebalansen vid 0 °C-yta (Makkonen 2000): fryser allt -> 1, annars andelen som hinner frysa
+//   istillvaxt (cm/h) = a1*a2*a3*w*v / (pi * rho_is)   (jamn tillvaxt runt cylindern)
+// Kartan visar hogsta vardet i kolumnen. Hamtas var 10 km (fyra 5 km-rutor far samma varde) for att halla nere mangden.
+const ISB = { v: 92, D: 0.15, rhoIs: 400, N: 100e6, ptopp: 400e2, s: 2 };
+function isbHastighet(T, p, q) {   // T (K), p (Pa), q molnvatten (kg/kg) -> cm/h
+  if (!(q > 1e-6) || !(T < 273.15) || T < 233.15) return 0;
+  const rho = p / (287.05 * T), w = q * rho, v = ISB.v, D = ISB.D;   // w kg/m3
+  const d = Math.cbrt(6 * w / (Math.PI * 1000 * ISB.N));                // droppdiameter (m)
+  const mu = 1.458e-6 * Math.pow(T, 1.5) / (T + 110.4);                 // luftens viskositet (Sutherland)
+  const K = 1000 * d * d * v / (9 * mu * D), Re = rho * v * d / mu, phi = Re * Re / K;
+  if (!(K > 0.17)) return 0;                                            // sma droppar foljer stromningen runt cylindern
+  const A = 1.066 * Math.pow(K, -0.00616) * Math.exp(-1.103 * Math.pow(K, -0.688)), B = 3.641 * Math.pow(K, -0.498) * Math.exp(-1.497 * Math.pow(K, -0.694));
+  const C = 0.00637 * Math.pow(Math.max(phi - 100, 0), 0.381), a1 = Math.max(0, Math.min(1, A - 0.028 - C * (B - 0.0454)));
+  const F = a1 * w * v;                                                 // vatteninflode kg/m2/s
+  if (!(F > 0)) return 0;
+  // varmebalans (Makkonen 2000) med ytan vid 0 °C: fryser allt om varmen kan foras bort, annars vatten rinner av
+  const ReD = rho * v * D / mu, h = 0.032 * Math.pow(ReD, 0.85) * 0.024 / D, Tc = T - 273.15, cp = 1005;
+  const esw = t => 6.112 * Math.exp(17.62 * t / (243.12 + t)) * 100;  // Pa over vatten
+  const Qv = h * 0.79 * v * v / (2 * cp);                               // friktionsuppvarmning
+  const Qc = h * (0 - Tc), Qe = h * 0.622 * 2.501e6 * (esw(0) - esw(Tc)) / (cp * p), Ql = F * 4218 * (0 - Tc), Qs = 4 * 5.67e-8 * Math.pow(273.15, 3) * (0 - Tc);
+  const a3 = Math.max(0, Math.min(1, (Qc + Qe + Ql + Qs - Qv) / (F * 3.337e5)));
+  return a1 * a3 * w * v / (Math.PI * ISB.rhoIs) * 100 * 3600;
+}
+async function m0Isbildning(o, t, d) {
+  const ab = await expAB(), s = o.s * ISB.s, nyC = Math.floor((o.y1 - o.y0) / s) + 1, nxC = Math.floor((o.x1 - o.x0) / s) + 1, nC = nyC * nxC;
+  let kTop = 0; for (let k = 0; k < ab.ap.length; k++) if (ab.ap[k] + ab.b[k] * 101325 >= ISB.ptopp) { kTop = Math.max(0, k - 1); break; }
+  const yx = "[" + o.y0 + ":" + s + ":" + (o.y0 + (nyC - 1) * s) + "][" + o.x0 + ":" + s + ":" + (o.x0 + (nxC - 1) * s) + "]";
+  // nivaerna i tre bitar parallellt (thredds ar langsamt pa stora 3D-utsnitt)
+  const bitar = [], kSist = EXP_NIV - 1, steg = Math.ceil((kSist - kTop + 1) / 3); for (let a = kTop; a <= kSist; a += steg) bitar.push([a, Math.min(kSist, a + steg - 1)]);
+  let klara = 0; m0Status("Isbildning: hämtar temperatur och molnvatten på modellnivåerna (0/" + bitar.length + ") …");
+  const hamtaBit = async ([a, b]) => { const rum = "[" + t + ":1:" + t + "][" + a + ":1:" + b + "]" + yx, nn = (b - a + 1) * nC;
+    const [T, q] = await Promise.all([expVar("air_temperature_ml", rum, nn), expVar("mass_fraction_of_cloud_condensed_water_in_air_ml", rum, nn)]);
+    m0Status("Isbildning: hämtar temperatur och molnvatten på modellnivåerna (" + (++klara) + "/" + bitar.length + ") …"); return { a, b, T, q }; };
+  const [ps, ...B] = await Promise.all([expVar("surface_air_pressure", "[" + t + ":1:" + t + "][0]" + yx, nC), ...bitar.map(hamtaBit)]);
+  const mx = new Float32Array(nC);
+  for (const bit of B) for (let k = bit.a; k <= bit.b; k++) { const j0 = (k - bit.a) * nC;
+    for (let i = 0; i < nC; i++) { const r = isbHastighet(bit.T[j0 + i], ab.ap[k] + ab.b[k] * ps[i], bit.q[j0 + i]); if (r > mx[i]) mx[i] = r; } }
+  for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) { const cy = Math.min(nyC - 1, Math.round(y / ISB.s)), cx = Math.min(nxC - 1, Math.round(x / ISB.s)); d[y * o.nx + x] = mx[cy * nxC + cx]; }
 }
 
 async function m0Uppdatera() {
