@@ -227,6 +227,8 @@ async function m0Isbildning(o, t, d) {
   for (const bit of B) for (let k = bit.a; k <= bit.b; k++) { const j0 = (k - bit.a) * nC;
     for (let i = 0; i < nC; i++) { const r = isbHastighet(bit.T[j0 + i], ab.ap[k] + ab.b[k] * ps[i], bit.q[j0 + i]); if (r > mx[i]) mx[i] = r; } }
   for (let y = 0; y < o.ny; y++) for (let x = 0; x < o.nx; x++) { const cy = Math.min(nyC - 1, Math.round(y / ISB.s)), cx = Math.min(nxC - 1, Math.round(x / ISB.s)); d[y * o.nx + x] = mx[cy * nxC + cx]; }
+  let hogst = 0; for (const r of mx) if (r > hogst) hogst = r;
+  m0Status("Isbildning klar (nivå " + kTop + "–64, var 10 km): högst " + hogst.toFixed(1).replace(".", ",") + " cm/h. Egen beräkning (Makkonen) – antaget droppantal 100/cm³, kan avvika från SMHI.");
 }
 
 async function m0Uppdatera() {
