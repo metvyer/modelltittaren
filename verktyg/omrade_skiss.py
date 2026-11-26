@@ -51,7 +51,7 @@ for namn, (la, lo) in KAND.items():
     lc = np.array(lc); lc = lc / 100 if lc.max() > 1.5 else lc
     zs = np.array(ds.variables["surface_geopotential"][0, 0, iy - HALV:iy + HALV + 1, ix - HALV:ix + HALV + 1]) / 9.80665
     m = lc.mean(); varr = lc.mean(axis=(1, 2)).std(); spann = zs.max() - zs.min()
-    poang = (m * (1 - m)) * 4 + varr + min(spann, 1200) / 1200
+    poang = (m * (1 - m)) * 4 + varr + min(spann, 1200) / 1200 - (5 if (spann < 400 or zs.min() < 1) else 0)   # kuperat och bara land
     print(f"{namn}: laga moln {m:.2f} variation {varr:.2f} terrang {zs.min():.0f}-{zs.max():.0f} m poang {poang:.2f}")
     if not bast or poang > bast[0]: bast = (poang, namn, iy, ix)
 _, NAMN, iy, ix = bast; print("valt:", NAMN)
