@@ -397,7 +397,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 .testskylt { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
 .testskylt[hidden] { display: none; }
 .rubknappar { float: right; display: inline-flex; gap: 6px; } .valkruta ul { margin: 6px 0 8px 18px; padding: 0; } .valkruta li { margin: 3px 0; } .valkvarn { background: #fef2f2; border-left: 3px solid #b91c1c; padding: 6px 8px; font-size: 13px; }
-.testruta { background: var(--panel, #fff); color: var(--fg, #111); border: 3px solid #b91c1c; border-radius: 10px; max-width: 460px; padding: 16px 18px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.testruta { background: var(--panel, #fff); color: var(--fg, #111); border: 3px solid #b91c1c; border-radius: 10px; max-width: 560px; max-height: calc(100vh - 40px); overflow-y: auto; padding: 16px 18px; box-shadow: 0 10px 30px rgba(0,0,0,.35); }
 .testruta h2 { margin: 0 0 8px; color: #b91c1c; font-size: 18px; }
 .testruta p { font-size: 14px; line-height: 1.45; margin: 6px 0; }
 .testruta button { margin-top: 8px; }
@@ -415,22 +415,14 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
 </head>
 <body>
 <div class="testrad" role="note">TESTSIDA – under utveckling, inte för operativt bruk</div>
-<h1>Modelltittaren <small id="underrubrik">Tid-höjd · AROME 2,5 km (MEPS medlem 0)</small> <span class="rubknappar"><button class="sek liten" id="omKnapp" title="Vad finns på sidan?">ℹ Om sidan</button><button class="sek liten" id="ideKnapp" title="Har du en idé eller ett önskemål? Skicka det till JIn.">💡 Idé</button></span></h1>
+<h1>Modelltittaren <small id="underrubrik">Tid-höjd · AROME 2,5 km (MEPS medlem 0)</small> <span class="rubknappar"><button class="sek liten" id="omKnapp" title="Vad finns på sidan?">ℹ Om sidan</button></span></h1>
 <!-- Testskylt: vid start och vid flikbyte, hogst var 30:e minut (24/11) -->
+<!-- 27/11 (Jakob): EN ruta - samma text vid start och nar den kommer igen (vid flikbyte, hogst var 30:e minut) och via "Om sidan".
+     Ideladan borttagen. -->
 <div id="testskylt" class="testskylt" hidden role="dialog" aria-modal="true" aria-labelledby="testskyltRubrik">
-  <div class="testruta">
-    <h2 id="testskyltRubrik">Testsida – inte för operativt bruk</h2>
-    <p>Modelltittaren är en testsida och den är under utveckling. Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning.</p>
-    <p><b>Använd inte sidan som underlag för operativa beslut eller prognoser.</b> Använd ordinarie verktyg och produkter.</p>
-    <p><b>Det du tittar på kan andra se.</b> Med standardvalet går hämtningarna via en gemensam mellanserver, och andra användare kan se vilka områden och punkter som hämtats. En delad vy ser alla som har länken. Vill du lämna färre spår: välj <i>Osynligt</i> eller <i>Av</i> under ”Hämta MEPS via mellanservern” längst ner, och använd inte Dela. Helt spårlöst blir det inte – met.no, Cloudflare och övriga källor ser vad som hämtas – men det blir inte samlat och lätt att se för andra.</p>
-    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo. Vägväder: Trafikverket (VViS), CC0. KONRAD3D: Deutscher Wetterdienst, CC BY 4.0. Brandrisk: SMHI (öppna data) och EFFIS/Copernicus. Webbkameror: Windy.com.</p>
-    <button id="testskyltOk">Jag förstår</button>
-  </div>
-</div>
-<!-- NYTT 24/11 kvall: valkomstruta (forsta besoket, sedan via "Om sidan") och ideladan -->
-<div id="valkommen" class="testskylt" hidden role="dialog" aria-modal="true" aria-labelledby="valkommenRubrik">
   <div class="testruta valkruta">
-    <h2 id="valkommenRubrik">Välkommen till Modelltittaren</h2>
+    <h2 id="testskyltRubrik">Välkommen till Modelltittaren</h2>
+    <p class="valkvarn"><b>Testsida under utveckling – inte för operativt bruk.</b> Data kan saknas, vara försenade eller tolkas fel, och funktioner ändras utan förvarning. Använd ordinarie verktyg och produkter som underlag för beslut och prognoser.</p>
     <p>Här kan du titta på MEPS – både ensemblen och medlem 000 (det-körningen) – i 2,5 km, och en hel del annat.</p>
     <ul>
       <li><b>★ Favoriter</b> – det bästa samlat och lättåtkomligt, förhämtat så att det laddas direkt.</li>
@@ -441,20 +433,11 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
       <li><b>Experiment, Ledskikt och Brandrisk</b> – graupel i kolumnen, radiovågornas brytning och SMHI:s/EFFIS brandriskprognos.</li>
       <li><b>📡 Sändning</b> – visa det du ser för andra, eller följ någon annan. Mottagarna ser din muspekare, det du ritar och skriver, och de fält du väljer.</li>
     </ul>
-    <p>Nya saker dyker upp titt som tätt – titta in ibland. Har du en idé eller ett önskemål? Tryck på <b>💡 Idé</b> uppe till höger.</p>
+    <p>Nya saker dyker upp titt som tätt – titta in ibland.</p>
+    <p><b>Det du tittar på kan andra se.</b> Med standardvalet går hämtningarna via en gemensam mellanserver, och andra användare kan se vilka områden och punkter som hämtats. En delad vy ser alla som har länken. Vill du lämna färre spår: välj <i>Osynligt</i> eller <i>Av</i> under ”Hämta MEPS via mellanservern” längst ner, och använd inte Dela. Helt spårlöst blir det inte – met.no, Cloudflare och övriga källor ser vad som hämtas – men det blir inte samlat och lätt att se för andra.</p>
+    <p class="dim">Data: MET Norway (thredds.met.no), CC BY 4.0. METAR/TAF: aviationweather.gov, IMGW. Satellit: EUMETSAT. Radar: SMHI, met.no. AIFS/MET Nordic: Open-Meteo. Vägväder: Trafikverket (VViS), CC0. KONRAD3D: Deutscher Wetterdienst, CC BY 4.0. Brandrisk: SMHI (öppna data) och EFFIS/Copernicus. Webbkameror: Windy.com.</p>
     <p style="text-align:right"><i>/JIn</i></p>
-    <p class="valkvarn"><b>Testsida under utveckling – inte för operativt bruk.</b> Data kan saknas, vara försenade eller tolkas fel. Med standardvalet går hämtningarna via en gemensam mellanserver, så andra kan se vilka områden och punkter som hämtats.</p>
-    <button id="valkommenOk">Jag förstår – sätt igång</button>
-  </div>
-</div>
-<div id="ideRuta" class="testskylt" hidden role="dialog" aria-modal="true" aria-labelledby="ideRubrik">
-  <div class="testruta">
-    <h2 id="ideRubrik">💡 Idé eller önskemål till JIn</h2>
-    <p>Saknar du något, har du hittat ett fel eller en idé om vad sidan borde kunna? Skriv gärna – allt läses.</p>
-    <textarea id="ideText" rows="7" maxlength="2000" style="width:100%;box-sizing:border-box" placeholder="Din idé …"></textarea>
-    <input type="text" id="ideNamn" maxlength="60" style="width:100%;box-sizing:border-box;margin-top:6px" placeholder="Ditt namn eller signatur (valfritt)">
-    <p class="dim xst" style="margin:6px 0">Texten sparas på sidans server och läses bara av JIn. Skriv inget känsligt eller sekretessbelagt. Högst 2000 tecken.</p>
-    <div style="display:flex;gap:8px;align-items:center"><button id="ideSkicka">Skicka</button><button class="sek" id="ideStang">Stäng</button><span id="ideSvar"></span></div>
+    <button id="testskyltOk">Jag förstår</button>
   </div>
 </div>
 <div class="flikar" role="tablist" aria-label="Vy">
@@ -675,7 +658,7 @@ body:not(.p) #meteoNedre { display: none; }   /* 22/11: syns aven i Favoriter (e
   <h3 class="exprub">Spara väderfall – under uppbyggnad</h3>
   <p>Tanken är att man här ska kunna <b>välja data på ett smidigt sätt</b> – till exempel ett område, en tidsperiod och vilka källor som ska med (MEPS-körningar och ensemble, radar, satellit, METAR/TAF, åska) – och sedan <b>spara undan</b> det som ett väderfall.</p>
   <p>Ett sparat fall ska gå att öppna igen senare och titta på som om det vore nu, även när datat inte längre finns hos met.no och de andra källorna.</p>
-  <p class="dim">Inget går att spara här än. Har du önskemål om vad ett väderfall ska innehålla? Tryck på 💡 Idé uppe till höger.</p>
+  <p class="dim">Inget går att spara här än.</p>
 </div>
 <div id="vyTAF" hidden>
   <div class="tafinst">
@@ -912,27 +895,10 @@ const TESTSKYLT_MIN = 30;
 const testskyltSen = () => +(lasa("mt:testskylt") || 0);
 function visaTestskylt(start) { const t = $("testskylt"); if (!t) return; if (!start && typeof DELA !== "undefined" && (DELA.folj || DELA.sander || DELA.jagStyr)) return;
   if (Date.now() - testskyltSen() < TESTSKYLT_MIN * 60e3) return;
-  if (!lasa("mt:valkommen") && !new URLSearchParams(location.search).has("prov")) return;   // forsta besoket: valkomstrutan visar varningen
-  const vk = $("valkommen"); if (vk && !vk.hidden) return;
   t.hidden = false; lagra("mt:testskylt", String(Date.now())); const b = $("testskyltOk"); if (b) setTimeout(() => b.focus(), 0); }
 document.addEventListener("DOMContentLoaded", () => { const b = $("testskyltOk"); if (b) b.addEventListener("click", () => { $("testskylt").hidden = true; });
-  // 24/11 kvall: forsta besoket far valkomstrutan (med testvarningen) i stallet for testskylten
-  const vk = $("valkommen"), visaV = () => { vk.hidden = false; lagra("mt:testskylt", String(Date.now())); setTimeout(() => $("valkommenOk").focus(), 0); };
-  $("valkommenOk").addEventListener("click", () => { vk.hidden = true; lagra("mt:valkommen", "ja"); });
-  $("omKnapp").addEventListener("click", visaV);
-  if (!lasa("mt:valkommen") && !new URLSearchParams(location.search).has("prov")) visaV(); else visaTestskylt(true);
-  // ideladan -> mellanserverns /ide (sparas i D1, lases pa statistiksidan med nyckeln)
-  const ir = $("ideRuta"), svar = t => { $("ideSvar").textContent = t; };
-  $("ideKnapp").addEventListener("click", () => { ir.hidden = false; svar(""); $("ideNamn").value = lasa("mt:ideNamn") || ""; setTimeout(() => $("ideText").focus(), 0); });
-  $("ideStang").addEventListener("click", () => { ir.hidden = true; });
-  $("ideSkicka").addEventListener("click", async () => {
-    const text = $("ideText").value.trim(), namn = $("ideNamn").value.trim(); if (text.length < 3) { svar("Skriv lite mer först."); return; }
-    $("ideSkicka").disabled = true; svar("Skickar …"); lagra("mt:ideNamn", namn);
-    try { const r = await fetch("https://modelltittaren.metvyer.workers.dev/ide", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, namn, flik: typeof lage !== "undefined" ? lage : "" }) });
-      const j = await r.json().catch(() => ({}));
-      if (r.ok) { $("ideText").value = ""; svar("Tack! Idén är skickad ✓"); setTimeout(() => { ir.hidden = true; }, 1800); } else svar("Gick inte: " + (j.fel || r.status));
-    } catch (e) { svar("Gick inte att skicka (ingen kontakt med servern)."); }
-    $("ideSkicka").disabled = false; });
+  $("omKnapp").addEventListener("click", () => { $("testskylt").hidden = false; lagra("mt:testskylt", String(Date.now())); });   // "Om sidan" visar samma ruta
+  visaTestskylt(true);
 });
 let visaNiv = lasa("mt:visaNiv") === "ja";
 let visaHovring = lasa("mt:visaHovring") !== "nej";   // NYTT 19/11 kvall: hovringsrutan i tid-hojd (diagram + tabell) av/pa
@@ -1095,6 +1061,7 @@ async function hamta(url, medRetry = true, binar = false, maxS = 0, sig = null) 
       }
     }
     if (st === 200) return { st, txt, buf, cache };
+    if (st === 404 && typeof korningBorta === "function") korningBorta(orig);   // 27/11: tid-hojdens korning kan ha tagits bort hos met.no
     if (st === 404 || st === 400 || st === 403) return { st, txt };
     if (!medRetry && st !== 429) return { st, txt };
     if (f < 4) {
@@ -1559,6 +1526,7 @@ async function automatiskKoll() {
   kollPagar = true; senastKoll = Date.now();
   try {
     if (visaMetar) await laddaMetar();
+    if (dtgDatum(M.dtg) < Date.now() - 30 * 3600e3) { korningBorta(FIL(M.dtg)); if (korningBortaKoll === M.dtg) return; }   // 27/11: gammal korning - finns den kvar?
     if (!M.vald && !M.nyFinns) {
       const m = M, d = new Date(); d.setUTCMinutes(0, 0, 0); d.setUTCHours(d.getUTCHours() - d.getUTCHours() % INTERVALL);
       for (let i = 0; i <= 3; i++) {
@@ -1568,6 +1536,18 @@ async function automatiskKoll() {
       }
     }
   } catch (e) {} finally { kollPagar = false; }
+}
+// 27/11 (Jakob): en gammal korning (flik som statt oppen lange, sparat val) som met.no tagit bort gav 404 om och om igen.
+// Nu: far en hamtning for tid-hojdens korning 404 och korningen verkligen ar borta -> byt till senaste korningen automatiskt.
+let korningBortaKoll = "";
+async function korningBorta(url) {
+  if (!M || !M.dtg || upptagen || korningBortaKoll === M.dtg || !String(url).includes(FIL(M.dtg))) return;
+  const gammal = M.dtg; korningBortaKoll = gammal;
+  try { const r = await hamta(BAS + FIL(gammal) + ".ascii?time", false); if (r.st !== 404) { korningBortaKoll = ""; return; } } catch (e) { korningBortaKoll = ""; return; }   // bara 404 = borta (natfel raknas inte)
+  if (!M || M.dtg !== gammal) return;
+  const sel = $("korning"); if (sel && sel.value !== "senaste") sel.value = "senaste";
+  status("Körningen " + gammal + " finns inte längre hos met.no – byter till senaste körningen …", "");
+  setTimeout(() => { if (!upptagen && M && M.dtg === gammal) hamtaAllt(); }, 300);
 }
 setInterval(() => { if (Date.now() - senastKoll >= KOLL_MIN * 60e3) automatiskKoll(); }, 60e3);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - senastKoll >= KOLL_MIN * 60e3) automatiskKoll(); });
