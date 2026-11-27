@@ -20,10 +20,10 @@ async def main():
             await s.wait_for_timeout(1500)
         ny = await s.evaluate("M.dtg"); print("laddad:", ny)
         await s.evaluate("M.dtg = '20261120T00Z'; korningBorta(FIL(M.dtg))")
-        await s.wait_for_timeout(1500); print("status:", await s.evaluate("$('status').textContent"))
+        await s.wait_for_timeout(1500); print("status:", await s.evaluate("$('iStatus').textContent"))
         for i in range(40):
             await s.wait_for_timeout(1500)
             if await s.evaluate(f"M && M.dtg !== '20261120T00Z' && !upptagen"): break
-        print("efter:", await s.evaluate("M.dtg + ' | ' + $('status').textContent.slice(0, 120)"))
+        print("efter:", await s.evaluate("M.dtg + ' | ' + $('iStatus').textContent.slice(0, 120)"))
         print("fel:", fel[:5]); await b.close()
 asyncio.run(main())
